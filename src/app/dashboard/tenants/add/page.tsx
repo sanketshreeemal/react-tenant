@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, ChangeEvent as ReactChangeEvent, FormEvent as ReactFormEvent } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../../../lib/hooks/useAuth";
@@ -9,10 +9,6 @@ import { collection, addDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "../../../../lib/firebase/firebase";
 import { Users, ArrowLeft, Upload } from "lucide-react";
-import { uploadFileWithTimeout } from "../../../../lib/firebase/uploadUtils";
-import { addDocumentWithTimeout } from "../../../../lib/firebase/firestoreUtils";
-import { testFirebaseConnections } from "../../../../lib/firebase/testConnection";
-import logger from "../../../../lib/logger";
 
 export default function AddTenantPage() {
   const { user, loading } = useAuth();
@@ -20,11 +16,6 @@ export default function AddTenantPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [debugInfo, setDebugInfo] = useState<any>(null);
-  const [connectionStatus, setConnectionStatus] = useState({
-    firestore: null as boolean | null,
-    storage: null as boolean | null
-  });
   
   // Form state
   const [formData, setFormData] = useState({
@@ -42,7 +33,6 @@ export default function AddTenantPage() {
     rentAmount: "",
     securityDeposit: "",
     paymentMethod: "cash",
-    isActive: true,
   });
   
   // File uploads
@@ -59,67 +49,12 @@ export default function AddTenantPage() {
     }
   }, [user, loading, router]);
 
-  // Test Firebase connections on component mount
-  useEffect(() => {
-    const checkConnections = async () => {
-      try {
-        const result = await testFirebaseConnections();
-        setConnectionStatus({
-          firestore: result.firestore.success,
-          storage: result.storage.success
-        });
-        
-        if (!result.firestore.success || !result.storage.success) {
-          let errorMessage = "Firebase connection issues detected. Please check your network connection and try again.";
-          
-          // Add more detailed error information
-          if (!result.firestore.success) {
-            errorMessage += `\n\nFirestore Error: ${result.firestore.error}`;
-            
-            // Check for permission errors
-            if (result.firestore.details?.code === 'permission-denied') {
-              errorMessage += "\n\nFirebase permission error detected. Please ensure your Firebase security rules allow read/write access.";
-            }
-          }
-          
-          if (!result.storage.success) {
-            errorMessage += `\n\nStorage Error: ${result.storage.error}`;
-            
-            // Check for storage errors
-            if (result.storage.details?.code === 'storage/unknown' || result.storage.details?.code === 'storage/unauthorized') {
-              errorMessage += "\n\nFirebase Storage permission error detected. Please ensure your Firebase Storage security rules allow read/write access.";
-            }
-          }
-          
-          setFormError(errorMessage);
-          setDebugInfo({
-            firestoreDetails: result.firestore.details,
-            storageDetails: result.storage.details
-          });
-        }
-      } catch (error) {
-        logger.error("Error testing Firebase connections", {
-          additionalInfo: {
-            error: error instanceof Error ? error.message : String(error)
-          }
-        });
-        setConnectionStatus({
-          firestore: false,
-          storage: false
-        });
-        setFormError("Failed to test Firebase connections. Please check your network connection and try again.");
-      }
-    };
-    
-    checkConnections();
-  }, []);
-
-  const handleInputChange = (e: ReactChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev: any) => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleFileChange = (e: ReactChangeEvent<HTMLInputElement>, fileType: 'lease' | 'adhaar') => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, fileType: 'lease' | 'adhaar') => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       
@@ -134,37 +69,16 @@ export default function AddTenantPage() {
   };
 
   const uploadFile = async (file: File, path: string) => {
-    try {
-      logger.info(`Uploading file to path: ${path}`, {
-        additionalInfo: {
-          fileName: file.name,
-          fileSize: file.size
-        }
-      });
-      
-      // Use our new utility with timeout
-      const downloadURL = await uploadFileWithTimeout(file, path);
-      
-      logger.info(`File uploaded successfully. Download URL: ${downloadURL}`);
-      return downloadURL;
-    } catch (error) {
-      logger.error(`Error uploading file to ${path}:`, {
-        additionalInfo: {
-          error: error instanceof Error ? error.message : String(error),
-          fileName: file.name,
-          fileSize: file.size
-        }
-      });
-      throw error;
-    }
+    const storageRef = ref(storage, path);
+    await uploadBytes(storageRef, file);
+    return await getDownloadURL(storageRef);
   };
 
-  const handleSubmit = async (e: ReactFormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setFormError("");
     setSuccessMessage("");
-    setDebugInfo(null);
     
     try {
       // Validate form
@@ -177,47 +91,16 @@ export default function AddTenantPage() {
         throw new Error("Please upload the lease agreement");
       }
       
-      // Check Firebase connection status
-      if (connectionStatus.firestore === false || connectionStatus.storage === false) {
-        throw new Error("Firebase connection issues detected. Please check your network connection and try again.");
-      }
-      
-      // Create folder path based on unit number and tenant name
-      const folderName = `${formData.unitNumber}_${formData.lastName}_${formData.firstName}`;
-      logger.info(`Creating folder: ${folderName}`);
-      
-      // Upload files to the dedicated folder with timeout handling
-      logger.info("Starting file uploads...");
-      
-      let leaseAgreementURL = "";
-      let adhaarCardURL = "";
-      
-      try {
-        // Upload lease agreement
-        if (leaseAgreement) {
-          leaseAgreementURL = await uploadFile(
-            leaseAgreement, 
-            `tenants/${folderName}/lease_agreement_${leaseAgreement.name}`
-          );
-        }
+      // Upload files
+      const leaseAgreementURL = leaseAgreement 
+        ? await uploadFile(leaseAgreement, `tenants/${formData.unitNumber}/${formData.lastName}_lease_agreement`)
+        : "";
         
-        // Upload Adhaar card if provided
-        if (adhaarCard) {
-          adhaarCardURL = await uploadFile(
-            adhaarCard, 
-            `tenants/${folderName}/adhaar_card_${adhaarCard.name}`
-          );
-        }
-      } catch (uploadError) {
-        logger.error("File upload failed", {
-          additionalInfo: {
-            error: uploadError instanceof Error ? uploadError.message : String(uploadError)
-          }
-        });
-        throw new Error(`File upload failed: ${uploadError instanceof Error ? uploadError.message : "Unknown error"}`);
-      }
+      const adhaarCardURL = adhaarCard 
+        ? await uploadFile(adhaarCard, `tenants/${formData.unitNumber}/${formData.lastName}_adhaar_card`)
+        : "";
       
-      // Add tenant to Firestore with all the unified data
+      // Add tenant to Firestore
       const tenantData = {
         ...formData,
         rentAmount: parseFloat(formData.rentAmount),
@@ -228,23 +111,10 @@ export default function AddTenantPage() {
         updatedAt: new Date(),
       };
       
-      logger.info("Adding tenant to Firestore:", {
-        additionalInfo: {
-          tenantData: {
-            ...tenantData,
-            // Exclude large URLs from logs
-            leaseAgreementURL: leaseAgreementURL ? "[URL]" : "",
-            adhaarCardURL: adhaarCardURL ? "[URL]" : ""
-          }
-        }
-      });
+      const docRef = await addDoc(collection(db, "tenants"), tenantData);
       
-      // Use our new utility with timeout
-      const docRef = await addDocumentWithTimeout("tenants", tenantData);
-      logger.info("Tenant added with ID:", { additionalInfo: { id: docRef.id } });
-      
-      // Add to leases collection for backward compatibility
-      const leaseData = {
+      // Add to leases collection
+      await addDoc(collection(db, "leases"), {
         tenantId: docRef.id,
         unitNumber: formData.unitNumber,
         tenantName: `${formData.firstName} ${formData.lastName}`,
@@ -254,10 +124,7 @@ export default function AddTenantPage() {
         isActive: true,
         createdAt: new Date(),
         updatedAt: new Date(),
-      };
-      
-      logger.info("Adding lease to Firestore:", { additionalInfo: { leaseData } });
-      await addDocumentWithTimeout("leases", leaseData);
+      });
       
       setSuccessMessage("Tenant added successfully!");
       
@@ -277,7 +144,6 @@ export default function AddTenantPage() {
         rentAmount: "",
         securityDeposit: "",
         paymentMethod: "cash",
-        isActive: true,
       });
       
       setLeaseAgreement(null);
@@ -291,23 +157,8 @@ export default function AddTenantPage() {
       }, 2000);
       
     } catch (error) {
-      logger.error("Error adding tenant:", {
-        additionalInfo: {
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined
-        }
-      });
-      
+      console.error("Error adding tenant:", error);
       setFormError(error instanceof Error ? error.message : "An error occurred while adding the tenant");
-      
-      // Set debug info in development mode
-      if (process.env.NODE_ENV === 'development') {
-        setDebugInfo({
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-          connectionStatus
-        });
-      }
     } finally {
       setIsSubmitting(false);
     }
@@ -345,23 +196,6 @@ export default function AddTenantPage() {
         <main className="max-w-7xl mx-auto">
           <div className="bg-white shadow rounded-lg overflow-hidden">
             <form onSubmit={handleSubmit} className="p-6">
-              {/* Firebase Connection Status */}
-              {(connectionStatus.firestore === false || connectionStatus.storage === false) && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-                  <h3 className="text-lg font-medium text-red-800">Firebase Connection Issues</h3>
-                  <p className="text-sm text-red-700 mt-1">
-                    There are issues connecting to Firebase services. This may affect your ability to add tenants.
-                  </p>
-                  <ul className="mt-2 text-sm text-red-700 list-disc list-inside">
-                    <li>Firestore Database: {connectionStatus.firestore === null ? 'Testing...' : connectionStatus.firestore ? 'Connected' : 'Connection Failed'}</li>
-                    <li>Firebase Storage: {connectionStatus.storage === null ? 'Testing...' : connectionStatus.storage ? 'Connected' : 'Connection Failed'}</li>
-                  </ul>
-                  <p className="text-sm text-red-700 mt-2">
-                    Please check your network connection and try again. If the issue persists, contact support.
-                  </p>
-                </div>
-              )}
-              
               {formError && (
                 <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4">
                   <div className="flex">
@@ -389,16 +223,6 @@ export default function AddTenantPage() {
                       <p className="text-sm text-green-700">{successMessage}</p>
                     </div>
                   </div>
-                </div>
-              )}
-              
-              {/* Debug Information (only in development) */}
-              {debugInfo && process.env.NODE_ENV === 'development' && (
-                <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-md">
-                  <h3 className="text-lg font-medium text-gray-800">Debug Information</h3>
-                  <pre className="mt-2 text-xs text-gray-700 overflow-auto max-h-40">
-                    {JSON.stringify(debugInfo, null, 2)}
-                  </pre>
                 </div>
               )}
               
@@ -735,9 +559,9 @@ export default function AddTenantPage() {
                 </Link>
                 <button
                   type="submit"
-                  disabled={isSubmitting || connectionStatus.firestore === false || connectionStatus.storage === false}
+                  disabled={isSubmitting}
                   className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                    isSubmitting || connectionStatus.firestore === false || connectionStatus.storage === false ? "opacity-75 cursor-not-allowed" : ""
+                    isSubmitting ? "opacity-75 cursor-not-allowed" : ""
                   }`}
                 >
                   {isSubmitting ? (

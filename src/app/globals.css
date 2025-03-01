@@ -4,35 +4,30 @@
 
 :root {
   --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 255, 255, 255;
+  --background-start-rgb: 214, 219, 220;
   --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
 }
 
 body {
   color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-start-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
-  }
-}
-
-@layer components {
-  input, textarea, select {
-    color: #000000;
-    background-color: #ffffff;
-    border-color: #d1d5db;
-  }
-  
-  input:focus, textarea:focus, select:focus {
-    --tw-ring-color: rgb(59 130 246);
-    --tw-ring-opacity: 0.5;
-    border-color: rgb(59 130 246);
-  }
-  
-  input::placeholder, textarea::placeholder {
-    color: rgb(107, 114, 128);
   }
 }
