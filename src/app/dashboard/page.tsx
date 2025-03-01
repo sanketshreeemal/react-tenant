@@ -48,14 +48,14 @@ export default function Dashboard() {
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-xl font-semibold mb-4">Recent Activity</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Recent Activity</h2>
               <div className="border-4 border-dashed border-gray-200 rounded-lg h-64 flex items-center justify-center">
                 <p className="text-gray-500">No recent activity</p>
               </div>
             </div>
             
             <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-xl font-semibold mb-4">Upcoming Lease Expirations</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Upcoming Lease Expirations</h2>
               <div className="border-4 border-dashed border-gray-200 rounded-lg h-64 flex items-center justify-center">
                 <p className="text-gray-500">No upcoming expirations</p>
               </div>
@@ -73,7 +73,7 @@ function StatCard({ title, value, icon }: { title: string; value: string; icon: 
       <div className="text-4xl mr-4">{icon}</div>
       <div>
         <h3 className="text-lg font-medium text-gray-500">{title}</h3>
-        <p className="text-2xl font-semibold">{value}</p>
+        <p className="text-2xl font-semibold text-gray-900">{value}</p>
       </div>
     </div>
   );

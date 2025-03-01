@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../../lib/hooks/useAuth";
 import Navigation from "../../../components/Navigation";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, where, updateDoc, doc } from "firebase/firestore";
 import { db } from "../../../lib/firebase/firebase";
-import { Users, Plus, Search, Filter } from "lucide-react";
+import { Users, Plus, Search, Filter, CheckCircle, XCircle } from "lucide-react";
 
 interface Tenant {
   id: string;
@@ -19,6 +19,17 @@ interface Tenant {
   leaseStart: string;
   leaseEnd: string;
   rentAmount: number;
+  isActive?: boolean;
+  adhaarNumber?: string;
+  panNumber?: string;
+  currentEmployer?: string;
+  permanentAddress?: string;
+  securityDeposit?: number;
+  paymentMethod?: string;
+  leaseAgreementURL?: string;
+  adhaarCardURL?: string;
+  createdAt?: any;
+  updatedAt?: any;
 }
 
 export default function TenantsPage() {
@@ -27,6 +38,7 @@ export default function TenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
 
   useEffect(() => {
     if (!loading && !user) {
@@ -37,15 +49,46 @@ export default function TenantsPage() {
   useEffect(() => {
     const fetchTenants = async () => {
       try {
+        // Get tenants data
         const tenantsQuery = query(collection(db, "tenants"), orderBy("lastName"));
-        const querySnapshot = await getDocs(tenantsQuery);
+        const tenantsSnapshot = await getDocs(tenantsQuery);
         
         const tenantsData: Tenant[] = [];
-        querySnapshot.forEach((doc) => {
-          tenantsData.push({ id: doc.id, ...doc.data() } as Tenant);
+        tenantsSnapshot.forEach((doc) => {
+          tenantsData.push({ 
+            id: doc.id, 
+            ...doc.data(),
+            isActive: true // Default to active
+          } as Tenant);
         });
         
-        setTenants(tenantsData);
+        // Get leases data to update tenant active status
+        const leasesQuery = query(collection(db, "leases"));
+        const leasesSnapshot = await getDocs(leasesQuery);
+        
+        const leasesByTenantId = new Map();
+        leasesSnapshot.forEach((doc) => {
+          const leaseData = doc.data();
+          leasesByTenantId.set(leaseData.tenantId, {
+            isActive: leaseData.isActive,
+            leaseId: doc.id
+          });
+        });
+        
+        // Update tenants with lease status
+        const updatedTenants = tenantsData.map(tenant => {
+          const leaseInfo = leasesByTenantId.get(tenant.id);
+          if (leaseInfo) {
+            return {
+              ...tenant,
+              isActive: leaseInfo.isActive,
+              leaseId: leaseInfo.leaseId
+            };
+          }
+          return tenant;
+        });
+        
+        setTenants(updatedTenants);
         setIsLoading(false);
       } catch (error) {
         console.error("Error fetching tenants:", error);
@@ -58,16 +101,47 @@ export default function TenantsPage() {
     }
   }, [user]);
 
+  const toggleLeaseStatus = async (tenantId: string, leaseId: string, currentStatus: boolean) => {
+    try {
+      const leaseRef = doc(db, "leases", leaseId);
+      await updateDoc(leaseRef, {
+        isActive: !currentStatus,
+        updatedAt: new Date()
+      });
+      
+      // Update local state
+      setTenants(tenants.map(tenant => 
+        tenant.id === tenantId 
+          ? { ...tenant, isActive: !currentStatus } 
+          : tenant
+      ));
+    } catch (error) {
+      console.error("Error updating lease status:", error);
+    }
+  };
+
   const filteredTenants = tenants.filter((tenant) => {
     const fullName = `${tenant.firstName} ${tenant.lastName}`.toLowerCase();
     const searchLower = searchTerm.toLowerCase();
     
-    return (
+    // Apply search filter
+    const matchesSearch = 
       fullName.includes(searchLower) ||
       tenant.email.toLowerCase().includes(searchLower) ||
-      tenant.unitNumber.toLowerCase().includes(searchLower)
-    );
+      tenant.unitNumber.toLowerCase().includes(searchLower);
+    
+    // Apply active/inactive filter
+    const matchesActiveFilter = 
+      activeFilter === "all" || 
+      (activeFilter === "active" && tenant.isActive) || 
+      (activeFilter === "inactive" && !tenant.isActive);
+    
+    return matchesSearch && matchesActiveFilter;
   });
+
+  const isLeaseExpired = (endDate: string) => {
+    return new Date(endDate) < new Date();
+  };
 
   if (loading || !user) {
     return (
@@ -114,6 +188,41 @@ export default function TenantsPage() {
                 />
               </div>
               <div className="flex items-center space-x-2">
+                <div className="inline-flex rounded-md shadow-sm">
+                  <button
+                    type="button"
+                    className={`inline-flex items-center px-4 py-2 rounded-l-md border border-gray-300 text-sm font-medium ${
+                      activeFilter === "all" 
+                        ? "bg-blue-50 text-blue-700 border-blue-500 z-10" 
+                        : "bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                    onClick={() => setActiveFilter("all")}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    className={`inline-flex items-center px-4 py-2 border-t border-b border-r border-gray-300 text-sm font-medium ${
+                      activeFilter === "active" 
+                        ? "bg-blue-50 text-blue-700 border-blue-500 z-10" 
+                        : "bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                    onClick={() => setActiveFilter("active")}
+                  >
+                    Active
+                  </button>
+                  <button
+                    type="button"
+                    className={`inline-flex items-center px-4 py-2 rounded-r-md border-t border-b border-r border-gray-300 text-sm font-medium ${
+                      activeFilter === "inactive" 
+                        ? "bg-blue-50 text-blue-700 border-blue-500 z-10" 
+                        : "bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                    onClick={() => setActiveFilter("inactive")}
+                  >
+                    Inactive
+                  </button>
+                </div>
                 <button className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                   <Filter className="h-4 w-4 mr-2" />
                   Filter
@@ -146,58 +255,91 @@ export default function TenantsPage() {
                         Rent
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredTenants.map((tenant) => (
-                      <tr key={tenant.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
-                              <span className="text-blue-800 font-medium">
-                                {tenant.firstName.charAt(0)}{tenant.lastName.charAt(0)}
-                              </span>
-                            </div>
-                            <div className="ml-4">
-                              <div className="text-sm font-medium text-gray-900">
-                                {tenant.firstName} {tenant.lastName}
+                    {filteredTenants.map((tenant) => {
+                      const expired = isLeaseExpired(tenant.leaseEnd);
+                      
+                      return (
+                        <tr key={tenant.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                <span className="text-blue-800 font-medium">
+                                  {tenant.firstName.charAt(0)}{tenant.lastName.charAt(0)}
+                                </span>
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {tenant.firstName} {tenant.lastName}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{tenant.unitNumber}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{tenant.email}</div>
-                          <div className="text-sm text-gray-500">{tenant.phone}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">
-                            {new Date(tenant.leaseStart).toLocaleDateString()} - {new Date(tenant.leaseEnd).toLocaleDateString()}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ${tenant.rentAmount.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <Link
-                            href={`/dashboard/tenants/${tenant.id}`}
-                            className="text-blue-600 hover:text-blue-900 mr-4"
-                          >
-                            View
-                          </Link>
-                          <Link
-                            href={`/dashboard/tenants/edit/${tenant.id}`}
-                            className="text-indigo-600 hover:text-indigo-900"
-                          >
-                            Edit
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{tenant.unitNumber}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{tenant.email}</div>
+                            <div className="text-sm text-gray-500">{tenant.phone}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">
+                              {new Date(tenant.leaseStart).toLocaleDateString()} - {new Date(tenant.leaseEnd).toLocaleDateString()}
+                            </div>
+                            {expired && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                Expired
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${tenant.rentAmount.toLocaleString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {tenant.isActive ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                Active
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                <XCircle className="h-4 w-4 mr-1" />
+                                Inactive
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <Link
+                              href={`/dashboard/tenants/${tenant.id}`}
+                              className="text-blue-600 hover:text-blue-900 mr-4"
+                            >
+                              View
+                            </Link>
+                            <Link
+                              href={`/dashboard/tenants/edit/${tenant.id}`}
+                              className="text-indigo-600 hover:text-indigo-900 mr-4"
+                            >
+                              Edit
+                            </Link>
+                            {tenant.leaseId && (
+                              <button
+                                onClick={() => toggleLeaseStatus(tenant.id, tenant.leaseId, !!tenant.isActive)}
+                                className="text-gray-600 hover:text-gray-900"
+                              >
+                                {tenant.isActive ? "Deactivate" : "Activate"}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

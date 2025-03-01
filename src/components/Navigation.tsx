@@ -9,7 +9,6 @@ import { useAuth } from "../lib/hooks/useAuth";
 import { 
   Home, 
   Users, 
-  FileText, 
   DollarSign, 
   BarChart2, 
   Mail, 
@@ -32,7 +31,6 @@ export default function Navigation() {
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: Home },
     { name: "Tenants", href: "/dashboard/tenants", icon: Users },
-    { name: "Leases", href: "/dashboard/leases", icon: FileText },
     { name: "Rent", href: "/dashboard/rent", icon: DollarSign },
     { name: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
     { name: "Email Notifications", href: "/dashboard/email", icon: Mail },
