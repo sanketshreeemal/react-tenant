@@ -27,6 +27,10 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.env
+.env.development
+.env.production
+.env.test
 
 # vercel
 .vercel
@@ -35,4 +39,21 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-.env
+# IDE
+.vscode/
+.idea/
+
+# Firebase
+firebase-debug.log*
+firebase-debug.*.log*
+firebase-config.js
+firebase-config.ts
+firebaseConfig.js
+firebaseConfig.ts
+
+# Sensitive files
+**/config/keys.*
+**/config/secrets.*
+**/*config*.json
+**/*secret*.json
+**/credentials.*
