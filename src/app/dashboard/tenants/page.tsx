@@ -180,7 +180,7 @@ export default function TenantsPage() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ${tenant.rentAmount.toLocaleString()}
+                          ${(tenant.rentAmount ?? 0).toLocaleString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <Link
