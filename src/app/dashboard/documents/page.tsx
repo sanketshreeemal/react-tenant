@@ -8,6 +8,7 @@ import Navigation from "../../../components/Navigation";
 import { getDocumentsWithTimeout } from "../../../lib/firebase/firestoreUtils";
 import { FileImage, ExternalLink, Search, Users } from "lucide-react";
 import logger from "../../../lib/logger";
+import { DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
 
 // Define types for tenant documents
 interface TenantDocument {
@@ -40,13 +41,10 @@ export default function DocumentsPage() {
         setIsLoading(true);
         setError(null);
         
-        logger.info("Fetching tenant documents", {
-          component: "DocumentsPage",
-          action: "fetchTenantDocuments"
-        });
+        logger.info("Fetching tenant documents");
         
         const tenantsData = await getDocumentsWithTimeout("tenants");
-        const tenants = tenantsData.docs.map(doc => ({
+        const tenants = tenantsData.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
           id: doc.id,
           ...doc.data()
         })) as TenantDocument[];
@@ -59,17 +57,10 @@ export default function DocumentsPage() {
         });
         
         setTenantDocuments(tenants);
-        logger.info(`Successfully fetched ${tenants.length} tenant documents`, {
-          component: "DocumentsPage",
-          action: "fetchTenantDocuments"
-        });
+        logger.info(`Successfully fetched ${tenants.length} tenant documents`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-        logger.error("Failed to fetch tenant documents", {
-          component: "DocumentsPage",
-          action: "fetchTenantDocuments",
-          error: errorMessage
-        });
+        logger.error(`Failed to fetch tenant documents: ${errorMessage}`);
         setError("Failed to load documents. Please try again later.");
       } finally {
         setIsLoading(false);
@@ -93,18 +84,11 @@ export default function DocumentsPage() {
 
   const handleOpenDocument = (url: string | undefined) => {
     if (!url) {
-      logger.warn("Attempted to open undefined document URL", {
-        component: "DocumentsPage",
-        action: "handleOpenDocument"
-      });
+      logger.warn("Attempted to open undefined document URL");
       return;
     }
     
-    logger.info("Opening document URL", {
-      component: "DocumentsPage",
-      action: "handleOpenDocument",
-      url: url.substring(0, 50) + "..." // Log truncated URL for privacy
-    });
+    logger.info("Opening document URL");
     
     window.open(url, "_blank", "noopener,noreferrer");
   };
@@ -141,7 +125,7 @@ export default function DocumentsPage() {
               <input
                 type="text"
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="Search tenants..."
+                placeholder="Search documents..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -175,18 +159,8 @@ export default function DocumentsPage() {
                 <Users className="mx-auto h-12 w-12 text-gray-400" />
                 <h3 className="mt-2 text-lg font-medium text-gray-900">No documents found</h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  {searchQuery ? "Try adjusting your search query." : "Add tenants to see their documents here."}
+                  {searchQuery ? "Try adjusting your search query." : "No tenant documents are available."}
                 </p>
-                {!searchQuery && (
-                  <div className="mt-6">
-                    <Link
-                      href="/dashboard/tenants/add"
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                      Add Tenant
-                    </Link>
-                  </div>
-                )}
               </div>
             ) : (
               <ul className="divide-y divide-gray-200">

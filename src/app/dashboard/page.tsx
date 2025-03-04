@@ -4,6 +4,7 @@ import React, { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../lib/hooks/useAuth";
 import Navigation from "../../components/Navigation";
+import Link from "next/link";
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -33,16 +34,18 @@ export default function Dashboard() {
       
       <div className="md:ml-64 p-4">
         <header className="bg-white shadow rounded-lg mb-6">
-          <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
             <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+            <Link href="/dashboard/rental-inventory" className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition-colors flex items-center">
+              <span className="mr-1">+</span> Manage Rental Inventory
+            </Link>
           </div>
         </header>
         
         <main className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-            <StatCard title="Total Tenants" value="0" icon="👥" />
-            <StatCard title="Active Leases" value="0" icon="📝" />
-            <StatCard title="Vacant Units" value="0" icon="🏠" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+            <StatCard title="Total Rental Units" value="0" icon="🏠" />
+            <StatCard title="Available Units" value="0" icon="🔑" />
             <StatCard title="Monthly Revenue" value="$0" icon="💰" />
           </div>
           
@@ -55,9 +58,9 @@ export default function Dashboard() {
             </div>
             
             <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-xl font-semibold mb-4">Upcoming Lease Expirations</h2>
+              <h2 className="text-xl font-semibold mb-4">Rental Inventory Overview</h2>
               <div className="border-4 border-dashed border-gray-200 rounded-lg h-64 flex items-center justify-center">
-                <p className="text-gray-500">No upcoming expirations</p>
+                <p className="text-gray-500">No rental inventory data available</p>
               </div>
             </div>
           </div>

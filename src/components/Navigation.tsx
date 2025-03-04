@@ -17,7 +17,8 @@ import {
   FileImage, 
   LogOut, 
   Menu, 
-  X 
+  X,
+  Building
 } from "lucide-react";
 
 export default function Navigation() {
@@ -32,7 +33,7 @@ export default function Navigation() {
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: Home },
     { name: "Tenants", href: "/dashboard/tenants", icon: Users },
-    { name: "Leases", href: "/dashboard/leases", icon: FileText },
+    { name: "Rental Inventory", href: "/dashboard/rental-inventory", icon: Building },
     { name: "Rent", href: "/dashboard/rent", icon: DollarSign },
     { name: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
     { name: "Email Notifications", href: "/dashboard/email", icon: Mail },
