@@ -29,6 +29,13 @@ export default function TenantsManagement() {
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [leaseToDelete, setLeaseToDelete] = useState<string | null>(null);
   
+  // Add effect to scroll to error message when it appears
+  useEffect(() => {
+    if (formError && formRef.current) {
+      formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [formError]);
+  
   // Custom class for input fields - wider with more padding
   const inputClass = "shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md pl-3 py-2 w-[125%]";
   const numberInputClass = "shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md pl-3 py-2 w-[125%] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
@@ -285,6 +292,17 @@ export default function TenantsManagement() {
     
     if (securityDeposit < 0) {
       setFormError("Security deposit must be a positive number");
+      return;
+    }
+
+    // Check for existing active lease on this unit
+    const conflictingLease = leases.find(
+      lease => lease.unitId === unitId && lease.isActive && lease.id !== editingLeaseId
+    );
+
+    if (conflictingLease && isActive) {
+      const displayUnitNumber = getUnitNumber(unitId);
+      setFormError(`Cannot create a new active lease for Unit ${displayUnitNumber}. This unit already has an active lease for tenant ${conflictingLease.tenantName}. Please deactivate the current active lease first.`);
       return;
     }
     
