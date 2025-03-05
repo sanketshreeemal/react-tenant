@@ -35,6 +35,7 @@ export default function TenantsManagement() {
   
   // Form state
   const [unitId, setUnitId] = useState("");
+  const [unitNumber, setUnitNumber] = useState("");
   const [tenantName, setTenantName] = useState("");
   const [countryCode, setCountryCode] = useState("+91");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -161,6 +162,15 @@ export default function TenantsManagement() {
         if (leaseToEdit) {
           setEditingLeaseId(leaseId);
           setUnitId(leaseToEdit.unitId);
+          
+          // Set unitNumber from lease or get it from rental inventory
+          if (leaseToEdit.unitNumber) {
+            setUnitNumber(leaseToEdit.unitNumber);
+          } else {
+            // Fallback to getUnitNumber if unitNumber is not in the lease
+            setUnitNumber(getUnitNumber(leaseToEdit.unitId));
+          }
+          
           setTenantName(leaseToEdit.tenantName);
           setCountryCode(leaseToEdit.countryCode);
           setPhoneNumber(leaseToEdit.phoneNumber);
@@ -190,6 +200,7 @@ export default function TenantsManagement() {
   
   const resetForm = () => {
     setUnitId("");
+    setUnitNumber("");
     setTenantName("");
     setCountryCode("+91");
     setPhoneNumber("");
@@ -216,6 +227,13 @@ export default function TenantsManagement() {
     // Form validation
     if (!unitId) {
       setFormError("Unit Number is required");
+      return;
+    }
+    
+    // Check if the unit exists in the rental inventory
+    const unitExists = rentalInventory.some(unit => unit.id === unitId);
+    if (!unitExists) {
+      setFormError("The selected unit does not exist in the rental inventory. Please select a valid unit.");
       return;
     }
     
@@ -273,6 +291,7 @@ export default function TenantsManagement() {
     try {
       const leaseData = {
         unitId,
+        unitNumber: unitNumber || getUnitNumber(unitId),
         tenantName: tenantName.trim(),
         countryCode: countryCode.trim(),
         phoneNumber: phoneNumber.trim(),
@@ -314,7 +333,8 @@ export default function TenantsManagement() {
         const leaseToActivate = leases.find(lease => lease.id === leaseId);
         if (leaseToActivate) {
           const unitId = leaseToActivate.unitId;
-          const unitNumber = getUnitNumber(unitId);
+          // Use unitNumber from lease or get it from getUnitNumber as fallback
+          const displayUnitNumber = leaseToActivate.unitNumber || getUnitNumber(unitId);
           
           // Check for existing active leases for this unit
           const conflictingLease = leases.find(
@@ -323,7 +343,7 @@ export default function TenantsManagement() {
           
           if (conflictingLease) {
             // Create a more friendly error message with tenant names
-            alert(`Cannot activate this lease for ${leaseToActivate.tenantName}.\n\nUnit ${unitNumber} already has an active lease for tenant ${conflictingLease.tenantName}.\n\nPlease deactivate the current active lease first.`);
+            alert(`Cannot activate this lease for ${leaseToActivate.tenantName}.\n\nUnit ${displayUnitNumber} already has an active lease for tenant ${conflictingLease.tenantName}.\n\nPlease deactivate the current active lease first.`);
             return;
           }
         }
@@ -381,6 +401,7 @@ export default function TenantsManagement() {
     return (
       lease.tenantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       lease.unitId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      lease.unitNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       lease.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
   });
@@ -411,7 +432,7 @@ export default function TenantsManagement() {
     );
   };
   
-  // Get unit number from inventory based on unitId
+  // Get unit number from inventory based on unitId - used only as fallback
   const getUnitNumber = (unitId: string) => {
     if (!unitId) {
       console.warn("Empty unitId passed to getUnitNumber");
@@ -495,7 +516,16 @@ export default function TenantsManagement() {
                         id="unitId"
                         value={unitId}
                         onChange={(e) => {
-                          setUnitId(e.target.value);
+                          const selectedUnitId = e.target.value;
+                          setUnitId(selectedUnitId);
+                          
+                          // Get the unitNumber from the selected unit
+                          const selectedUnit = rentalInventory.find(unit => unit.id === selectedUnitId);
+                          if (selectedUnit) {
+                            setUnitNumber(selectedUnit.unitNumber);
+                          } else {
+                            setUnitNumber("");
+                          }
                         }}
                         className={inputClass}
                         required
@@ -893,7 +923,7 @@ export default function TenantsManagement() {
                     filteredLeases.map((lease) => (
                       <tr key={lease.id} className={`hover:bg-gray-50 ${!lease.isActive ? 'bg-gray-50' : ''}`}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {getUnitNumber(lease.unitId)}
+                          {lease.unitNumber || getUnitNumber(lease.unitId)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {lease.tenantName}

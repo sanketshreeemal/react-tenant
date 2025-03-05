@@ -282,10 +282,21 @@ export const deleteRentalInventory = async (inventoryId: string): Promise<void> 
 export const addLease = async (leaseData: Omit<Lease, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
   try {
     logger.info("firestoreUtils: Adding lease...");
-    console.log("Adding new lease with data:", leaseData);
     
     if (!leaseData.unitId) {
       throw new Error('Unit ID is required');
+    }
+    
+    // Check if unitNumber is missing but unitId is present
+    if (!leaseData.unitNumber && leaseData.unitId) {
+      // Try to get the unit number from rental inventory
+      const inventoryRef = doc(db, 'rental-inventory', leaseData.unitId);
+      const inventoryDoc = await getDoc(inventoryRef);
+      
+      if (inventoryDoc.exists()) {
+        const inventoryData = inventoryDoc.data() as RentalInventory;
+        leaseData.unitNumber = inventoryData.unitNumber;
+      }
     }
     
     // Check if an active lease already exists for this unit
@@ -302,12 +313,13 @@ export const addLease = async (leaseData: Omit<Lease, 'id' | 'createdAt' | 'upda
     
     if (!inventoryDoc.exists()) {
       logger.error(`firestoreUtils: Unit ID ${leaseData.unitId} not found in rental inventory`);
-      console.warn(`Unit ID ${leaseData.unitId} not found in rental inventory. Will create lease anyway.`);
+      throw new Error(`Unit ID ${leaseData.unitId} not found in rental inventory. Cannot create lease for non-existent unit.`);
     }
     
     // Ensure date fields are properly formatted as Dates, not strings
     const processedLeaseData = {
       ...leaseData,
+      unitNumber: leaseData.unitNumber || "Unknown", // Ensure unitNumber is never undefined
       leaseStartDate: leaseData.leaseStartDate instanceof Date 
         ? leaseData.leaseStartDate 
         : new Date(leaseData.leaseStartDate),
@@ -326,11 +338,9 @@ export const addLease = async (leaseData: Omit<Lease, 'id' | 'createdAt' | 'upda
     });
     
     logger.info(`firestoreUtils: Lease added successfully with ID: ${docRef.id}`);
-    console.log(`Successfully added lease with ID: ${docRef.id}`);
     return docRef.id;
   } catch (error: any) {
     logger.error(`firestoreUtils: Error adding lease: ${error.message}`);
-    console.error("Error adding lease:", error);
     throw new Error(error.message || 'Failed to add lease.');
   }
 };
@@ -444,6 +454,7 @@ export const getAllLeases = async (): Promise<Lease[]> => {
         const lease: Lease = {
           id: doc.id,
           unitId: data.unitId || '',
+          unitNumber: data.unitNumber || '',
           tenantName: data.tenantName || 'Unknown Tenant',
           countryCode: data.countryCode || '',
           phoneNumber: data.phoneNumber || '',
@@ -541,6 +552,18 @@ export const updateLease = async (
     
     // Proceed with the update
     const leaseDocRef = doc(db, 'leases', leaseId);
+    
+    // If unitNumber is not provided but unitId is changed, try to get the unitNumber
+    if (!updateData.unitNumber && updateData.unitId) {
+      const inventoryRef = doc(db, 'rental-inventory', updateData.unitId);
+      const inventoryDoc = await getDoc(inventoryRef);
+      
+      if (inventoryDoc.exists()) {
+        const inventoryData = inventoryDoc.data() as RentalInventory;
+        updateData.unitNumber = inventoryData.unitNumber;
+      }
+    }
+    
     await updateDoc(leaseDocRef, {
       ...updateData,
       updatedAt: new Date(),
@@ -568,6 +591,167 @@ export const deleteLease = async (leaseId: string): Promise<void> => {
   } catch (error: any) {
     logger.error(`firestoreUtils: Error deleting lease ${leaseId}: ${error.message}`);
     throw new Error('Failed to delete lease.');
+  }
+};
+
+// ---------------------- Rent Collection Utility Functions ----------------------
+
+/**
+ * Adds a new rent payment to the 'rent-collection' collection in Firestore.
+ * @param {Omit<RentPayment, 'id' | 'createdAt' | 'updatedAt'>} paymentData - Rent payment data (excluding ID and timestamps).
+ * @returns {Promise<string>} The ID of the newly created rent payment document.
+ * @throws {Error} If there is an error adding the rent payment.
+ */
+export const addRentPayment = async (paymentData: Omit<RentPayment, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
+  try {
+    logger.info("firestoreUtils: Adding rent payment...");
+    
+    const rentCollectionRef = collection(db, 'rent-collection');
+    const docRef = await addDoc(rentCollectionRef, {
+      ...paymentData,
+      paymentDate: paymentData.paymentDate || new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    
+    logger.info(`firestoreUtils: Rent payment added successfully with ID: ${docRef.id}`);
+    return docRef.id;
+  } catch (error: any) {
+    logger.error(`firestoreUtils: Error adding rent payment: ${error.message}`);
+    throw new Error(error.message || 'Failed to add rent payment.');
+  }
+};
+
+/**
+ * Retrieves all rent payments from the 'rent-collection' collection.
+ * @returns {Promise<RentPayment[]>} Array of rent payment items.
+ * @throws {Error} If there is an error retrieving the rent payments.
+ */
+export const getAllRentPayments = async (): Promise<RentPayment[]> => {
+  try {
+    logger.info("firestoreUtils: Retrieving all rent payments...");
+    
+    const rentCollectionRef = collection(db, 'rent-collection');
+    const q = query(rentCollectionRef, orderBy('createdAt', 'desc'));
+    const querySnapshot = await getDocs(q);
+    
+    const rentPayments: RentPayment[] = [];
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      
+      // Convert Firestore Timestamps to JavaScript Date objects
+      const rentPayment: RentPayment = {
+        id: doc.id,
+        ...data,
+        paymentDate: data.paymentDate instanceof Timestamp 
+          ? data.paymentDate.toDate() 
+          : new Date(data.paymentDate),
+        createdAt: data.createdAt instanceof Timestamp 
+          ? data.createdAt.toDate() 
+          : new Date(data.createdAt),
+        updatedAt: data.updatedAt instanceof Timestamp 
+          ? data.updatedAt.toDate() 
+          : new Date(data.updatedAt)
+      } as RentPayment;
+      
+      rentPayments.push(rentPayment);
+    });
+    
+    logger.info(`firestoreUtils: Retrieved ${rentPayments.length} rent payments.`);
+    return rentPayments;
+  } catch (error: any) {
+    logger.error(`firestoreUtils: Error retrieving rent payments: ${error.message}`);
+    throw new Error('Failed to retrieve rent payments.');
+  }
+};
+
+/**
+ * Retrieves rental inventory details for a unit, including owner and bank details.
+ * @param {string} unitId - The ID of the unit to retrieve details for.
+ * @returns {Promise<RentalInventory | null>} The rental inventory data or null if not found.
+ */
+export const getRentalInventoryDetails = async (unitId: string): Promise<RentalInventory | null> => {
+  try {
+    logger.info(`firestoreUtils: Getting rental inventory details for unit ${unitId}...`);
+    
+    const inventoryDocRef = doc(db, 'rental-inventory', unitId);
+    const docSnap = await getDoc(inventoryDocRef);
+    
+    if (!docSnap.exists()) {
+      logger.info(`firestoreUtils: No rental inventory found for unit ${unitId}.`);
+      return null;
+    }
+    
+    const data = docSnap.data();
+    const inventoryData: RentalInventory = {
+      id: docSnap.id,
+      ...data,
+      createdAt: data.createdAt instanceof Timestamp 
+        ? data.createdAt.toDate() 
+        : new Date(data.createdAt),
+      updatedAt: data.updatedAt instanceof Timestamp 
+        ? data.updatedAt.toDate() 
+        : new Date(data.updatedAt)
+    } as RentalInventory;
+    
+    logger.info(`firestoreUtils: Found rental inventory for unit ${unitId}.`);
+    return inventoryData;
+  } catch (error: any) {
+    logger.error(`firestoreUtils: Error getting rental inventory details for unit ${unitId}: ${error.message}`);
+    throw new Error('Failed to get rental inventory details.');
+  }
+};
+
+/**
+ * Retrieves all active leases.
+ * @returns {Promise<Lease[]>} Array of active lease items.
+ * @throws {Error} If there is an error retrieving the active leases.
+ */
+export const getAllActiveLeases = async (): Promise<Lease[]> => {
+  try {
+    logger.info("firestoreUtils: Retrieving all active leases...");
+    
+    const leasesCollection = collection(db, 'leases');
+    const q = query(
+      leasesCollection,
+      where('isActive', '==', true),
+      orderBy('unitId')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    
+    const leases: Lease[] = [];
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      
+      // Convert Firestore Timestamps to JavaScript Date objects
+      const leaseData: Lease = {
+        id: doc.id,
+        ...data,
+        leaseStartDate: data.leaseStartDate instanceof Timestamp 
+          ? data.leaseStartDate.toDate() 
+          : new Date(data.leaseStartDate),
+        leaseEndDate: data.leaseEndDate instanceof Timestamp 
+          ? data.leaseEndDate.toDate() 
+          : new Date(data.leaseEndDate),
+        createdAt: data.createdAt instanceof Timestamp 
+          ? data.createdAt.toDate() 
+          : new Date(data.createdAt),
+        updatedAt: data.updatedAt instanceof Timestamp 
+          ? data.updatedAt.toDate() 
+          : new Date(data.updatedAt)
+      } as Lease;
+      
+      leases.push(leaseData);
+    });
+    
+    logger.info(`firestoreUtils: Retrieved ${leases.length} active leases.`);
+    return leases;
+  } catch (error: any) {
+    logger.error(`firestoreUtils: Error retrieving active leases: ${error.message}`);
+    throw new Error('Failed to retrieve active leases.');
   }
 };
 

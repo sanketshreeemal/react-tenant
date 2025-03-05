@@ -450,3 +450,66 @@ Use the following format to track test results:
 ```
 
 Happy testing! 
+
+## Unit and Lease Data Integrity Testing
+
+This section focuses on testing the data integrity between units and leases, particularly around the unitNumber field and validation rules.
+
+### Test Cases
+
+1. **Unit Number Storage in Leases**
+   - Add a new lease for an existing unit
+   - Verify the unitNumber field is correctly stored in the lease document
+   - Query the lease and confirm both unitId and unitNumber are present
+   - Verify the unitNumber matches the actual unit number from the rental inventory
+
+2. **Unit Existence Validation**
+   - Attempt to create a lease for a non-existent unit ID
+   - Verify an appropriate error message is displayed
+   - Confirm no lease document is created in the database
+   - Try the same with a unit ID that was recently deleted
+   - Verify the system correctly prevents lease creation
+
+3. **Unit Deletion Impact**
+   - Create a lease for an existing unit
+   - Delete the unit from the rental inventory
+   - Verify existing leases still maintain their unitNumber field
+   - Attempt to create a new lease for the deleted unit
+   - Verify the system prevents creation with an appropriate error
+
+4. **Unit Number Display Consistency**
+   - Create multiple leases for the same unit
+   - Verify all leases display the same unitNumber
+   - Update a unit's details (but not the unitNumber)
+   - Verify all associated leases still display the correct unitNumber
+
+5. **Form Validation for Unit Selection**
+   - Open the lease creation form
+   - Leave the unit selection empty and attempt to submit
+   - Verify the form shows an error message for the required unit
+   - Select a valid unit and verify the form proceeds
+
+6. **Edge Cases**
+   - Test with a very large number of units in the rental inventory
+   - Verify unit selection dropdown performs well
+   - Test with units that have similar or duplicate unit numbers (if allowed)
+   - Verify the system correctly distinguishes between them using unitId
+
+7. **Data Migration Testing**
+   - If applicable, test migration scripts that add unitNumber to existing leases
+   - Verify all existing leases are correctly updated with their corresponding unitNumber
+   - Check for any leases that couldn't be migrated (orphaned leases)
+
+8. **Downstream Impact**
+   - Create a lease with the unitNumber field
+   - Create a rent payment record for this lease
+   - Verify the rent payment correctly references both the lease and the unit
+   - Generate reports that use the unitNumber field
+   - Verify all reports display the correct unit information
+
+When reporting issues related to unit and lease data integrity, include:
+1. The specific test case that failed
+2. The expected unitNumber and unitId values
+3. The actual values stored in the database
+4. Any error messages displayed to the user
+5. Screenshots of the form or error state 

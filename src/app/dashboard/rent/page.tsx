@@ -4,14 +4,16 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
 import Navigation from "../../../components/Navigation";
-import { collection, getDocs, query, orderBy, where, addDoc } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, where, addDoc, doc, getDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase/firebase";
-import { DollarSign, Search, Filter, Plus, Calendar, Check, X } from "lucide-react";
+import { DollarSign, Search, Plus, Calendar, Check, X, ArrowUp, ArrowDown } from "lucide-react";
 import { format, subMonths, addMonths } from "date-fns";
+import { getActiveLeaseForUnit, getRentalInventoryDetails } from "../../../lib/firebase/firestoreUtils";
+import logger from "../../../lib/logger";
 
 interface Lease {
   id: string;
-  tenantId: string;
+  unitId: string;
   unitNumber: string;
   tenantName: string;
   rentAmount: number;
@@ -38,21 +40,36 @@ export default function RentPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showDeleteForm, setShowDeleteForm] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState<RentPayment | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteSuccess, setDeleteSuccess] = useState("");
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [rentWarning, setRentWarning] = useState("");
   
   // Form state
   const [formData, setFormData] = useState({
     leaseId: "",
+    unitId: "",
     unitNumber: "",
     tenantName: "",
-    officialRent: 0,
+    officialRent: "",
     actualRent: "",
     rentalPeriod: format(new Date(), "yyyy-MM"),
+    paymentDate: "",
+    ownerDetails: "",
+    bankDetails: "",
     comments: "",
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  const [sortColumn, setSortColumn] = useState<'rentalPeriod' | 'createdAt'>('rentalPeriod');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
     if (!loading && !user) {
@@ -63,37 +80,84 @@ export default function RentPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setIsLoading(true);
+        logger.info("RentPage: Fetching data...");
+
         // Fetch active leases
         const leasesQuery = query(
           collection(db, "leases"),
           where("isActive", "==", true),
-          orderBy("unitNumber")
+          orderBy("unitId")
         );
         const leasesSnapshot = await getDocs(leasesQuery);
         
         const leasesData: Lease[] = [];
         leasesSnapshot.forEach((doc) => {
-          leasesData.push({ id: doc.id, ...doc.data() } as Lease);
+          const data = doc.data();
+          
+          // Get a more user-friendly unit number
+          // If unitNumber exists in the data, use it, otherwise try to extract from unitId
+          const unitNumber = data.unitNumber || 
+                            (data.unitId && typeof data.unitId === 'string' ? 
+                              // Try to get the last part of the ID if it contains slashes
+                              data.unitId.includes('/') ? 
+                                data.unitId.split('/').pop() : 
+                                data.unitId
+                            : 'Unknown Unit');
+          
+          leasesData.push({ 
+            id: doc.id, 
+            unitId: data.unitId,
+            unitNumber: unitNumber,
+            tenantName: data.tenantName,
+            rentAmount: data.rentAmount,
+            isActive: data.isActive
+          });
         });
         
         setActiveLeases(leasesData);
+        logger.info(`RentPage: Found ${leasesData.length} active leases.`);
         
         // Fetch rent payments
         const paymentsQuery = query(
-          collection(db, "rentPayments"),
+          collection(db, "rent-collection"),
           orderBy("createdAt", "desc")
         );
         const paymentsSnapshot = await getDocs(paymentsQuery);
         
         const paymentsData: RentPayment[] = [];
         paymentsSnapshot.forEach((doc) => {
-          paymentsData.push({ id: doc.id, ...doc.data() } as RentPayment);
+          const data = doc.data();
+          
+          // Get a more user-friendly unit number
+          const unitNumber = data.unitNumber || 
+                            (data.unitId && typeof data.unitId === 'string' ? 
+                              // Try to get the last part of the ID if it contains slashes
+                              data.unitId.includes('/') ? 
+                                data.unitId.split('/').pop() : 
+                                data.unitId
+                            : 'Unknown Unit');
+          
+          paymentsData.push({ 
+            id: doc.id, 
+            leaseId: data.leaseId,
+            unitNumber: unitNumber,
+            tenantName: data.tenantName || "",
+            officialRent: data.officialRent || 0,
+            actualRent: data.actualRentPaid || 0,
+            rentalPeriod: data.rentalPeriod,
+            comments: data.comments || "",
+            createdAt: data.createdAt
+          });
         });
         
         setRentPayments(paymentsData);
+        logger.info(`RentPage: Found ${paymentsData.length} rent payments.`);
+        
         setIsLoading(false);
       } catch (error) {
         console.error("Error fetching data:", error);
+        logger.error(`RentPage: Error fetching data: ${error instanceof Error ? error.message : 'Unknown error'}`);
         setIsLoading(false);
       }
     };
@@ -103,21 +167,73 @@ export default function RentPage() {
     }
   }, [user]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     
     if (name === "leaseId" && value) {
-      const selectedLease = activeLeases.find(lease => lease.id === value);
-      if (selectedLease) {
-        setFormData({
-          ...formData,
-          leaseId: value,
-          unitNumber: selectedLease.unitNumber,
-          tenantName: selectedLease.tenantName,
-          officialRent: selectedLease.rentAmount,
-          actualRent: selectedLease.rentAmount.toString(),
-        });
-        return;
+      try {
+        // Find the selected lease
+        const selectedLease = activeLeases.find(lease => lease.id === value);
+        
+        if (selectedLease) {
+          logger.info(`RentPage: Selected lease with ID ${value}`);
+          
+          // Auto-populate lease-related data
+          setFormData({
+            ...formData,
+            leaseId: value,
+            unitId: selectedLease.unitId,
+            unitNumber: selectedLease.unitNumber,
+            tenantName: selectedLease.tenantName,
+            officialRent: selectedLease.rentAmount.toString(),
+            actualRent: selectedLease.rentAmount.toString(),
+            ownerDetails: "", // Will be populated from inventory details
+            bankDetails: "", // Will be populated from inventory details
+          });
+          
+          // Reset rent warning
+          setRentWarning("");
+
+          // Fetch additional details from rental inventory
+          try {
+            const inventoryDetails = await getRentalInventoryDetails(selectedLease.unitId);
+            
+            if (inventoryDetails) {
+              logger.info(`RentPage: Retrieved inventory details for unit ${selectedLease.unitId}`);
+              
+              // Update form with owner and bank details
+              setFormData(prevData => ({
+                ...prevData,
+                ownerDetails: inventoryDetails.ownerDetails || "",
+                bankDetails: inventoryDetails.bankDetails || "",
+              }));
+            } else {
+              logger.warn(`RentPage: No inventory details found for unit ${selectedLease.unitId}`);
+            }
+          } catch (error) {
+            console.error("Error fetching inventory details:", error);
+            logger.error(`RentPage: Error fetching inventory details: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
+          
+          return;
+        }
+      } catch (error) {
+        console.error("Error handling lease selection:", error);
+        logger.error(`RentPage: Error handling lease selection: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+    
+    // Check rent amount when actualRent changes
+    if (name === "actualRent" && value && formData.officialRent) {
+      const actualRent = parseFloat(value);
+      const officialRent = parseFloat(formData.officialRent);
+      
+      if (actualRent > officialRent * 1.2) {
+        setRentWarning("The rent collected is 20% higher than expected. Please verify if this is correct. Consider adding a comment to explain the difference.");
+      } else if (actualRent < officialRent * 0.8) {
+        setRentWarning("The rent collected is 20% lower than expected. Please verify if this is correct. Consider adding a comment to explain the difference.");
+      } else {
+        setRentWarning("");
       }
     }
     
@@ -131,28 +247,58 @@ export default function RentPage() {
     setSuccessMessage("");
     
     try {
+      logger.info("RentPage: Submitting rent payment form...");
+      
       // Validate form
-      if (!formData.leaseId || !formData.actualRent || !formData.rentalPeriod) {
-        throw new Error("Please fill in all required fields");
+      if (!formData.leaseId || !formData.actualRent || !formData.rentalPeriod || !formData.paymentDate) {
+        const error = "Please fill in all required fields";
+        logger.error(`RentPage: Form validation error: ${error}`);
+        throw new Error(error);
+      }
+      
+      // Check if payment date is in the future
+      const selectedDate = new Date(formData.paymentDate);
+      const currentDate = new Date();
+      
+      if (selectedDate > currentDate) {
+        const error = "Rent paid date cannot be in the future";
+        logger.error(`RentPage: Form validation error: ${error}`);
+        throw new Error(error);
       }
       
       // Add rent payment to Firestore
       const paymentData = {
         leaseId: formData.leaseId,
+        unitId: formData.unitId,
         unitNumber: formData.unitNumber,
         tenantName: formData.tenantName,
-        officialRent: formData.officialRent,
-        actualRent: parseFloat(formData.actualRent),
+        officialRent: formData.officialRent ? parseFloat(formData.officialRent) : 0,
+        actualRentPaid: parseFloat(formData.actualRent),
         rentalPeriod: formData.rentalPeriod,
+        paymentDate: new Date(formData.paymentDate),
+        ownerDetails: formData.ownerDetails,
+        bankDetails: formData.bankDetails,
         comments: formData.comments,
         createdAt: new Date(),
+        updatedAt: new Date(),
       };
       
-      const docRef = await addDoc(collection(db, "rentPayments"), paymentData);
+      const docRef = await addDoc(collection(db, "rent-collection"), paymentData);
+      logger.info(`RentPage: Rent payment added successfully with ID: ${docRef.id}`);
       
       // Add to local state
       setRentPayments([
-        { id: docRef.id, ...paymentData } as RentPayment,
+        { 
+          id: docRef.id, 
+          leaseId: paymentData.leaseId,
+          unitNumber: paymentData.unitNumber,
+          tenantName: paymentData.tenantName,
+          officialRent: paymentData.officialRent,
+          actualRent: paymentData.actualRentPaid,
+          rentalPeriod: paymentData.rentalPeriod,
+          comments: paymentData.comments || "",
+          createdAt: paymentData.createdAt
+        },
         ...rentPayments,
       ]);
       
@@ -161,11 +307,15 @@ export default function RentPage() {
       // Reset form
       setFormData({
         leaseId: "",
+        unitId: "",
         unitNumber: "",
         tenantName: "",
-        officialRent: 0,
+        officialRent: "",
         actualRent: "",
         rentalPeriod: format(new Date(), "yyyy-MM"),
+        paymentDate: "",
+        ownerDetails: "",
+        bankDetails: "",
         comments: "",
       });
       
@@ -178,9 +328,97 @@ export default function RentPage() {
     } catch (error) {
       console.error("Error recording rent payment:", error);
       setFormError(error instanceof Error ? error.message : "An error occurred while recording the rent payment");
+      logger.error(`RentPage: Error recording rent payment: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const initiateDeletePayment = (payment: RentPayment) => {
+    setPaymentToDelete(payment);
+    setShowDeleteForm(true);
+    setDeleteReason("");
+    setDeleteError("");
+    setDeleteSuccess("");
+  };
+
+  const handleDeleteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!deleteReason.trim()) {
+      setDeleteError("Please provide a reason for deletion");
+      return;
+    }
+    
+    // Show confirmation dialog instead of proceeding with deletion
+    setShowDeleteConfirmation(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!paymentToDelete) {
+      return;
+    }
+    
+    setIsDeleting(true);
+    setDeleteError("");
+    
+    try {
+      logger.info(`RentPage: Deleting rent payment ${paymentToDelete.id}...`);
+      
+      // First, get the complete payment data
+      const paymentDocRef = doc(db, "rent-collection", paymentToDelete.id);
+      const paymentDoc = await getDoc(paymentDocRef);
+      
+      if (!paymentDoc.exists()) {
+        throw new Error("Payment record not found");
+      }
+      
+      const paymentData = paymentDoc.data();
+      
+      // Add to deleted-rents collection with reason
+      const deletedRentData = {
+        ...paymentData,
+        id: paymentToDelete.id,
+        reasonForDeletion: deleteReason.trim(),
+        deletedAt: new Date(),
+      };
+      
+      await addDoc(collection(db, "deleted-rents"), deletedRentData);
+      logger.info(`RentPage: Added payment to deleted-rents collection`);
+      
+      // Delete from rent-collection
+      await deleteDoc(paymentDocRef);
+      logger.info(`RentPage: Deleted payment from rent-collection`);
+      
+      // Update local state
+      setRentPayments(rentPayments.filter(payment => payment.id !== paymentToDelete.id));
+      
+      setDeleteSuccess("Payment deleted successfully");
+      
+      // Close form after a delay
+      setTimeout(() => {
+        setShowDeleteForm(false);
+        setPaymentToDelete(null);
+        setDeleteReason("");
+        setDeleteSuccess("");
+        setShowDeleteConfirmation(false);
+      }, 2000);
+      
+    } catch (error) {
+      console.error("Error deleting rent payment:", error);
+      setDeleteError(error instanceof Error ? error.message : "An error occurred while deleting the payment");
+      logger.error(`RentPage: Error deleting rent payment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteForm(false);
+    setPaymentToDelete(null);
+    setDeleteReason("");
+    setDeleteError("");
+    setShowDeleteConfirmation(false);
   };
 
   const filteredPayments = rentPayments.filter((payment) => {
@@ -189,6 +427,47 @@ export default function RentPage() {
       payment.unitNumber.toLowerCase().includes(searchTerm.toLowerCase());
     
     return matchesSearch;
+  });
+
+  const handleSort = (column: 'rentalPeriod' | 'createdAt') => {
+    if (sortColumn === column) {
+      // If clicking the same column, toggle direction
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // If clicking a different column, set it with desc direction
+      setSortColumn(column);
+      setSortDirection('desc');
+    }
+  };
+
+  const sortedPayments = [...filteredPayments].sort((a, b) => {
+    if (sortColumn === 'rentalPeriod') {
+      const [yearA, monthA] = a.rentalPeriod.split('-').map(Number);
+      const [yearB, monthB] = b.rentalPeriod.split('-').map(Number);
+      
+      const dateA = new Date(yearA, monthA - 1);
+      const dateB = new Date(yearB, monthB - 1);
+      
+      return sortDirection === 'asc' 
+        ? dateA.getTime() - dateB.getTime()
+        : dateB.getTime() - dateA.getTime();
+    } else {
+      const dateA = a.createdAt instanceof Date 
+        ? a.createdAt.getTime()
+        : a.createdAt.toDate 
+          ? a.createdAt.toDate().getTime()
+          : new Date(a.createdAt.seconds * 1000).getTime();
+      
+      const dateB = b.createdAt instanceof Date 
+        ? b.createdAt.getTime()
+        : b.createdAt.toDate 
+          ? b.createdAt.toDate().getTime()
+          : new Date(b.createdAt.seconds * 1000).getTime();
+      
+      return sortDirection === 'asc'
+        ? dateA - dateB
+        : dateB - dateA;
+    }
   });
 
   // Generate rental period options (4 months before and after current month)
@@ -277,6 +556,21 @@ export default function RentPage() {
                   </div>
                 )}
                 
+                {rentWarning && (
+                  <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-500 p-4">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-yellow-700">{rentWarning}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 <form onSubmit={handleSubmit}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
@@ -321,8 +615,40 @@ export default function RentPage() {
                     </div>
                     
                     <div>
+                      <label htmlFor="tenantName" className="block text-sm font-medium text-gray-700 mb-1">
+                        Tenant Name
+                      </label>
+                      <input
+                        type="text"
+                        id="tenantName"
+                        name="tenantName"
+                        value={formData.tenantName}
+                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md bg-gray-50"
+                        placeholder="Auto-populated from lease"
+                        disabled
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="paymentDate" className="block text-sm font-medium text-gray-700 mb-1">
+                        Rent Paid Date <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        id="paymentDate"
+                        name="paymentDate"
+                        value={formData.paymentDate}
+                        onChange={handleInputChange}
+                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                        placeholder="Select date"
+                        max={format(new Date(), "yyyy-MM-dd")}
+                        required
+                      />
+                    </div>
+                    
+                    <div>
                       <label htmlFor="officialRent" className="block text-sm font-medium text-gray-700 mb-1">
-                        Official Rent (₹)
+                        Expected Rent (₹)
                       </label>
                       <input
                         type="text"
@@ -330,13 +656,14 @@ export default function RentPage() {
                         name="officialRent"
                         value={formData.officialRent}
                         className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md bg-gray-50"
+                        placeholder="Auto-populated from lease"
                         disabled
                       />
                     </div>
                     
                     <div>
                       <label htmlFor="actualRent" className="block text-sm font-medium text-gray-700 mb-1">
-                        Actual Rent Paid (₹) <span className="text-red-500">*</span>
+                        Rent Collected (₹) <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="number"
@@ -346,6 +673,36 @@ export default function RentPage() {
                         onChange={handleInputChange}
                         className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
                         required
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="ownerDetails" className="block text-sm font-medium text-gray-700 mb-1">
+                        Unit Owner
+                      </label>
+                      <input
+                        type="text"
+                        id="ownerDetails"
+                        name="ownerDetails"
+                        value={formData.ownerDetails}
+                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md bg-gray-50"
+                        placeholder="Auto-populated from lease"
+                        disabled
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="bankDetails" className="block text-sm font-medium text-gray-700 mb-1">
+                        Bank Details
+                      </label>
+                      <input
+                        type="text"
+                        id="bankDetails"
+                        name="bankDetails"
+                        value={formData.bankDetails}
+                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md bg-gray-50"
+                        placeholder="Auto-populated from lease"
+                        disabled
                       />
                     </div>
                     
@@ -397,6 +754,157 @@ export default function RentPage() {
             </div>
           )}
           
+          {showDeleteForm && paymentToDelete && (
+            <div className="bg-white shadow rounded-lg overflow-hidden mb-6">
+              <div className="p-6">
+                <h2 className="text-lg font-medium text-gray-900 mb-4">Delete Rent Payment</h2>
+                
+                {deleteError && (
+                  <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-red-700">{deleteError}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {deleteSuccess && (
+                  <div className="mb-6 bg-green-50 border-l-4 border-green-500 p-4">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-green-700">{deleteSuccess}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <form onSubmit={handleDeleteSubmit}>
+                  <div className="mb-6">
+                    <h3 className="text-md font-medium text-gray-700 mb-2">Payment Details</h3>
+                    <div className="bg-gray-50 p-4 rounded-md">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-500">Unit</p>
+                          <p className="text-sm font-medium">{paymentToDelete.unitNumber}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Tenant</p>
+                          <p className="text-sm font-medium">{paymentToDelete.tenantName}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Rental Period</p>
+                          <p className="text-sm font-medium">
+                            {(() => {
+                              const [year, month] = paymentToDelete.rentalPeriod.split('-');
+                              const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                              return `${months[parseInt(month, 10) - 1]} ${year}`;
+                            })()}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Amount</p>
+                          <p className="text-sm font-medium">₹{paymentToDelete.actualRent.toLocaleString()}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mb-6">
+                    <label htmlFor="deleteReason" className="block text-sm font-medium text-gray-700 mb-1">
+                      Reason For Deletion <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      id="deleteReason"
+                      name="deleteReason"
+                      value={deleteReason}
+                      onChange={(e) => setDeleteReason(e.target.value)}
+                      rows={3}
+                      className="shadow-sm focus:ring-red-500 focus:border-red-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                      placeholder="Please provide a reason for deleting this payment record"
+                      required
+                    />
+                  </div>
+                  
+                  <div className="flex justify-end space-x-3">
+                    <button
+                      type="button"
+                      onClick={cancelDelete}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isDeleting}
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    >
+                      {isDeleting ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Deleting...
+                        </>
+                      ) : (
+                        "Delete Payment"
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+          
+          {showDeleteConfirmation && (
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Confirm Deletion</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Are you sure you want to delete this rent payment? This action cannot be undone.
+                </p>
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirmation(false)}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmDelete}
+                    disabled={isDeleting}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  >
+                    {isDeleting ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Deleting...
+                      </>
+                    ) : (
+                      "Yes, Delete Payment"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div className="bg-white shadow rounded-lg overflow-hidden">
             <div className="p-4 border-b flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
               <div className="relative flex-1 max-w-md">
@@ -411,19 +919,13 @@ export default function RentPage() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <div className="flex items-center space-x-2">
-                <button className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filter
-                </button>
-              </div>
             </div>
             
             {isLoading ? (
               <div className="flex justify-center items-center h-64">
                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
               </div>
-            ) : filteredPayments.length > 0 ? (
+            ) : sortedPayments.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -434,24 +936,63 @@ export default function RentPage() {
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Tenant
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Rental Period
+                      <th 
+                        scope="col" 
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
+                        onClick={() => handleSort('rentalPeriod')}
+                      >
+                        <div className="flex items-center">
+                          Rental Period
+                          <span className="ml-2">
+                            {sortColumn === 'rentalPeriod' ? (
+                              sortDirection === 'asc' ? (
+                                <ArrowUp className="h-4 w-4 text-blue-500" />
+                              ) : (
+                                <ArrowDown className="h-4 w-4 text-blue-500" />
+                              )
+                            ) : (
+                              <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
+                            )}
+                          </span>
+                        </div>
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Official Rent
+                        Expected Rent
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actual Rent
+                        Rent Collected
+                      </th>
+                      <th 
+                        scope="col" 
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
+                        onClick={() => handleSort('createdAt')}
+                      >
+                        <div className="flex items-center">
+                          Date Recorded
+                          <span className="ml-2">
+                            {sortColumn === 'createdAt' ? (
+                              sortDirection === 'asc' ? (
+                                <ArrowUp className="h-4 w-4 text-blue-500" />
+                              ) : (
+                                <ArrowDown className="h-4 w-4 text-blue-500" />
+                              )
+                            ) : (
+                              <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
+                            )}
+                          </span>
+                        </div>
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date Recorded
+                        Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredPayments.map((payment) => {
-                      const rentalPeriodDate = new Date(payment.rentalPeriod + "-01");
-                      const formattedRentalPeriod = format(rentalPeriodDate, "MMMM yyyy");
+                    {sortedPayments.map((payment) => {
+                      // Parse the rentalPeriod directly without creating a Date object
+                      const [year, month] = payment.rentalPeriod.split('-');
+                      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                      const formattedRentalPeriod = `${months[parseInt(month, 10) - 1]} ${year}`;
                       const isShort = payment.actualRent < payment.officialRent;
                       
                       return (
@@ -482,7 +1023,19 @@ export default function RentPage() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {payment.createdAt.toDate().toLocaleDateString()}
+                            {payment.createdAt instanceof Date 
+                              ? payment.createdAt.toLocaleDateString()
+                              : payment.createdAt.toDate 
+                                ? payment.createdAt.toDate().toLocaleDateString()
+                                : new Date(payment.createdAt.seconds * 1000).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <button
+                              onClick={() => initiateDeletePayment(payment)}
+                              className="text-red-600 hover:text-red-900 font-medium"
+                            >
+                              Delete
+                            </button>
                           </td>
                         </tr>
                       );
