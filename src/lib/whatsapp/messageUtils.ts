@@ -34,51 +34,36 @@ const isWhatsAppConfigured = (): boolean => {
   );
 
   if (!isConfigured) {
-    logger.warn('WhatsApp Business API is not properly configured. Check your environment variables.', {
-      service: 'WhatsApp',
-      additionalInfo: {
-        missingVariables: [
-          !WHATSAPP_API_KEY && 'WHATSAPP_API_KEY',
-          !WHATSAPP_PHONE_NUMBER_ID && 'WHATSAPP_PHONE_NUMBER_ID',
-          !WHATSAPP_BUSINESS_ACCOUNT_ID && 'WHATSAPP_BUSINESS_ACCOUNT_ID'
-        ].filter(Boolean)
-      }
-    });
+    logger.warn('WhatsApp Business API is not properly configured. Check your environment variables.');
   }
 
   return isConfigured;
 };
 
 /**
- * Send a WhatsApp message
- * In a real implementation, this would use the WhatsApp Business API
+ * Sends a WhatsApp message to a single recipient
+ * @param phoneNumber The recipient's phone number in international format
+ * @param message The message content
+ * @returns Response with success status and message details
  */
 export const sendWhatsAppMessage = async (
   phoneNumber: string,
   message: string
 ): Promise<SendMessageResponse> => {
   try {
-    logger.apiRequest('WhatsApp', 'sendWhatsAppMessage', {
-      phoneNumber: phoneNumber.replace(/\d(?=\d{4})/g, '*'), // Mask phone number for privacy
-      messageLength: message.length
-    });
-    
+    // Log the API request (with masked phone number for privacy)
+    logger.info(`WhatsApp API Request: Sending message to ${phoneNumber.replace(/\d(?=\d{4})/g, '*')}`);
+
     // Check if WhatsApp API is configured
     if (!isWhatsAppConfigured()) {
-      logger.warn('Using mock implementation for WhatsApp sendWhatsAppMessage', {
-        service: 'WhatsApp',
-        endpoint: 'sendWhatsAppMessage'
-      });
+      logger.warn('Using mock implementation for WhatsApp sendWhatsAppMessage');
       return mockSendWhatsAppMessage(phoneNumber, message);
     }
-    
-    // Validate phone number (basic validation)
+
+    // Validate phone number
     if (!phoneNumber || !/^\+?[0-9]{10,15}$/.test(phoneNumber)) {
       const error = 'Invalid phone number format. Please use international format (e.g., +1234567890).';
-      logger.error(`WhatsApp validation error: ${error}`, {
-        service: 'WhatsApp',
-        endpoint: 'sendWhatsAppMessage'
-      });
+      logger.error(`WhatsApp validation error: ${error}`);
       
       return {
         success: false,
@@ -89,41 +74,79 @@ export const sendWhatsAppMessage = async (
     // Validate message
     if (!message || message.trim().length === 0) {
       const error = 'Message cannot be empty.';
-      logger.error(`WhatsApp validation error: ${error}`, {
-        service: 'WhatsApp',
-        endpoint: 'sendWhatsAppMessage'
-      });
+      logger.error(`WhatsApp validation error: ${error}`);
       
       return {
         success: false,
         error
       };
     }
-    
-    // In a real implementation, this would call the WhatsApp Business API
-    // For now, we'll use the mock implementation
-    logger.info('WhatsApp API is configured, but using mock implementation for development', {
-      service: 'WhatsApp',
-      endpoint: 'sendWhatsAppMessage'
-    });
-    
-    return mockSendWhatsAppMessage(phoneNumber, message);
-  } catch (error: any) {
-    logger.apiError(error, 'WhatsApp', 'sendWhatsAppMessage', {
-      phoneNumber: phoneNumber.replace(/\d(?=\d{4})/g, '*'), // Mask phone number for privacy
-      messageLength: message.length
-    });
+
+    // Ensure phone number is in correct format for WhatsApp API
+    const formattedPhoneNumber = phoneNumber.startsWith('+') 
+      ? phoneNumber.substring(1) 
+      : phoneNumber;
+
+    // Prepare API request to WhatsApp Cloud API
+    const response = await fetch(
+      `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${WHATSAPP_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: formattedPhoneNumber,
+          type: 'text',
+          text: {
+            preview_url: false,
+            body: message
+          }
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      logger.error(`WhatsApp API error: ${JSON.stringify(data)}`);
+      return {
+        success: false,
+        error: data.error?.message || 'Failed to send WhatsApp message'
+      };
+    }
+
+    // Handle successful response
+    logger.info(`WhatsApp message sent successfully to ${phoneNumber.replace(/\d(?=\d{4})/g, '*')}`);
     
     return {
+      success: true,
+      messageId: data.messages?.[0]?.id,
+      message: {
+        to: phoneNumber,
+        message,
+        timestamp: new Date().toISOString(),
+        status: 'sent'
+      }
+    };
+  } catch (error: any) {
+    logger.error(`WhatsApp API error: ${error.message}`);
+
+    return {
       success: false,
-      error: error.message || 'Failed to send WhatsApp message'
+      error: error.message || 'An unexpected error occurred'
     };
   }
 };
 
 /**
- * Send WhatsApp messages to multiple recipients
- * In a real implementation, this would use the WhatsApp Business API
+ * Sends a WhatsApp message to multiple recipients
+ * @param phoneNumbers Array of recipient phone numbers in international format
+ * @param message The message content
+ * @returns Aggregated results of all send operations
  */
 export const sendBulkWhatsAppMessages = async (
   phoneNumbers: string[],
@@ -133,69 +156,59 @@ export const sendBulkWhatsAppMessages = async (
   totalSent: number;
   totalFailed: number;
   results: SendMessageResponse[];
+  error?: string;
 }> => {
   try {
-    logger.apiRequest('WhatsApp', 'sendBulkWhatsAppMessages', {
-      recipientCount: phoneNumbers.length,
-      messageLength: message.length
-    });
-    
+    logger.info(`WhatsApp API Request: Sending bulk messages to ${phoneNumbers.length} recipients`);
+
     // Validate input
     if (!phoneNumbers || phoneNumbers.length === 0) {
-      logger.error('WhatsApp validation error: No recipients specified', {
-        service: 'WhatsApp',
-        endpoint: 'sendBulkWhatsAppMessages'
-      });
+      logger.error('WhatsApp validation error: No recipients specified');
       
       return {
         success: false,
         totalSent: 0,
         totalFailed: 0,
-        results: []
+        results: [],
+        error: 'No recipients specified'
       };
     }
-    
-    // Send messages to each phone number
-    const results: SendMessageResponse[] = [];
-    
-    for (const phoneNumber of phoneNumbers) {
-      const result = await sendWhatsAppMessage(phoneNumber, message);
-      results.push(result);
-    }
-    
-    // Count successes and failures
-    const totalSent = results.filter(r => r.success).length;
+
+    // Send messages in parallel
+    const results = await Promise.all(
+      phoneNumbers.map(phoneNumber => sendWhatsAppMessage(phoneNumber, message))
+    );
+
+    // Count successful sends
+    const totalSent = results.filter(result => result.success).length;
     const totalFailed = results.length - totalSent;
     
-    logger.apiSuccess('WhatsApp', 'sendBulkWhatsAppMessages', 
-      { recipientCount: phoneNumbers.length }, 
-      { totalSent, totalFailed }
-    );
-    
+    logger.info(`WhatsApp bulk message results: ${totalSent} sent, ${totalFailed} failed`);
+
     return {
       success: totalSent > 0,
       totalSent,
       totalFailed,
-      results
+      results,
+      error: undefined
     };
   } catch (error: any) {
-    logger.apiError(error, 'WhatsApp', 'sendBulkWhatsAppMessages', {
-      recipientCount: phoneNumbers.length,
-      messageLength: message.length
-    });
-    
+    logger.error(`WhatsApp API error during bulk send: ${error.message}`);
+
     return {
       success: false,
       totalSent: 0,
       totalFailed: phoneNumbers.length,
-      results: []
+      results: [],
+      error: error.message
     };
   }
 };
 
 /**
- * Get the status of a WhatsApp message
- * In a real implementation, this would use the WhatsApp Business API
+ * Checks the delivery status of a WhatsApp message
+ * @param messageId The ID of the message to check
+ * @returns Current status of the message
  */
 export const getWhatsAppMessageStatus = async (
   messageId: string
@@ -205,99 +218,111 @@ export const getWhatsAppMessageStatus = async (
   error?: string;
 }> => {
   try {
-    logger.apiRequest('WhatsApp', 'getWhatsAppMessageStatus', { messageId });
+    logger.info(`WhatsApp API Request: Checking status for message ${messageId}`);
     
     // Check if WhatsApp API is configured
     if (!isWhatsAppConfigured()) {
-      logger.warn('Using mock implementation for WhatsApp getWhatsAppMessageStatus', {
-        service: 'WhatsApp',
-        endpoint: 'getWhatsAppMessageStatus'
-      });
+      logger.warn('Using mock implementation for WhatsApp getWhatsAppMessageStatus');
       return mockGetWhatsAppMessageStatus(messageId);
     }
-    
+
     // Validate message ID
     if (!messageId) {
       const error = 'Invalid message ID.';
-      logger.error(`WhatsApp validation error: ${error}`, {
-        service: 'WhatsApp',
-        endpoint: 'getWhatsAppMessageStatus'
-      });
+      logger.error(`WhatsApp validation error: ${error}`);
       
       return {
         success: false,
         error
       };
     }
+
+    // Make API request to check message status
+    const response = await fetch(
+      `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${messageId}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${WHATSAPP_API_KEY}`,
+          'Content-Type': 'application/json',
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      logger.error(`WhatsApp API error: ${JSON.stringify(data)}`);
+      return {
+        success: false,
+        error: data.error?.message || 'Failed to check message status'
+      };
+    }
+
+    // Map status from WhatsApp API to our status format
+    let status: 'sent' | 'delivered' | 'read' | 'failed' = 'sent';
     
-    // In a real implementation, this would call the WhatsApp Business API
-    // For now, we'll use the mock implementation
-    logger.info('WhatsApp API is configured, but using mock implementation for development', {
-      service: 'WhatsApp',
-      endpoint: 'getWhatsAppMessageStatus'
-    });
+    if (data.status) {
+      switch (data.status) {
+        case 'sent':
+          status = 'sent';
+          break;
+        case 'delivered':
+          status = 'delivered';
+          break;
+        case 'read':
+          status = 'read';
+          break;
+        case 'failed':
+          status = 'failed';
+          break;
+        default:
+          status = 'sent';
+      }
+    }
+
+    logger.info(`WhatsApp message status for ${messageId}: ${status}`);
     
-    return mockGetWhatsAppMessageStatus(messageId);
+    return {
+      success: true,
+      status
+    };
   } catch (error: any) {
-    logger.apiError(error, 'WhatsApp', 'getWhatsAppMessageStatus', { messageId });
+    logger.error(`WhatsApp API error: ${error.message}`);
     
     return {
       success: false,
-      error: error.message || 'Failed to get WhatsApp message status'
+      error: error.message || 'An unexpected error occurred'
     };
   }
 };
 
-// Mock implementations for development and testing
-
 /**
- * Mock function to simulate sending a WhatsApp message
+ * Mock implementation for sending WhatsApp messages when testing
+ * @param phoneNumber The recipient's phone number
+ * @param message The message content
+ * @returns Simulated response
  */
 const mockSendWhatsAppMessage = async (
   phoneNumber: string,
   message: string
 ): Promise<SendMessageResponse> => {
-  // Simulate API delay
+  // Generate a mock message ID
+  const messageId = `mock_msg_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  
+  // Simulate network delay
   await new Promise(resolve => setTimeout(resolve, 800));
   
-  // Validate phone number (basic validation)
-  if (!phoneNumber || !/^\+?[0-9]{10,15}$/.test(phoneNumber)) {
-    return {
-      success: false,
-      error: 'Invalid phone number format. Please use international format (e.g., +1234567890).'
-    };
-  }
-  
-  // Validate message
-  if (!message || message.trim().length === 0) {
-    return {
-      success: false,
-      error: 'Message cannot be empty.'
-    };
-  }
-  
-  // Generate a mock message ID
-  const messageId = Math.random().toString(36).substring(2, 15);
-  
-  // Create a mock message object
+  // Create a mock message with random status (mostly successful)
   const mockMessage: WhatsAppMessage = {
     to: phoneNumber,
     message,
     timestamp: new Date().toISOString(),
-    status: Math.random() > 0.1 ? 'sent' : 'failed' // 90% success rate
+    status: Math.random() > 0.2 ? 'sent' : 'failed'
   };
   
   // Log mock implementation usage
-  logger.debug('Using mock implementation for WhatsApp sendWhatsAppMessage', {
-    service: 'WhatsApp Mock',
-    endpoint: 'sendWhatsAppMessage',
-    additionalInfo: {
-      phoneNumber: phoneNumber.replace(/\d(?=\d{4})/g, '*'), // Mask phone number for privacy
-      messageLength: message.length,
-      status: mockMessage.status,
-      messageId
-    }
-  });
+  logger.debug(`Using mock implementation for WhatsApp sendWhatsAppMessage`);
   
   // Return success or failure
   if (mockMessage.status === 'sent') {
@@ -309,14 +334,16 @@ const mockSendWhatsAppMessage = async (
   } else {
     return {
       success: false,
-      error: 'Failed to send message. Please try again later.',
+      error: 'Mock implementation simulated failure',
       messageId
     };
   }
 };
 
 /**
- * Mock function to simulate getting the status of a WhatsApp message
+ * Mock implementation for checking WhatsApp message status when testing
+ * @param messageId The ID of the message to check
+ * @returns Simulated status
  */
 const mockGetWhatsAppMessageStatus = async (
   messageId: string
@@ -325,34 +352,28 @@ const mockGetWhatsAppMessageStatus = async (
   status?: 'sent' | 'delivered' | 'read' | 'failed';
   error?: string;
 }> => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 500));
+  // Simulate network delay
+  await new Promise(resolve => setTimeout(resolve, 600));
   
-  // Validate message ID
-  if (!messageId) {
-    return {
-      success: false,
-      error: 'Invalid message ID.'
-    };
+  // Randomly assign a status
+  const randomValue = Math.random();
+  let randomStatus: 'sent' | 'delivered' | 'read' | 'failed';
+  
+  if (randomValue < 0.1) {
+    randomStatus = 'failed';
+  } else if (randomValue < 0.4) {
+    randomStatus = 'sent';
+  } else if (randomValue < 0.7) {
+    randomStatus = 'delivered';
+  } else {
+    randomStatus = 'read';
   }
   
-  // Generate a random status (for mock purposes)
-  const statuses: ('sent' | 'delivered' | 'read' | 'failed')[] = ['sent', 'delivered', 'read', 'failed'];
-  const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
-  
   // Log mock implementation usage
-  logger.debug('Using mock implementation for WhatsApp getWhatsAppMessageStatus', {
-    service: 'WhatsApp Mock',
-    endpoint: 'getWhatsAppMessageStatus',
-    additionalInfo: {
-      messageId,
-      status: randomStatus
-    }
-  });
+  logger.debug(`Using mock implementation for WhatsApp getWhatsAppMessageStatus`);
   
   return {
     success: randomStatus !== 'failed',
-    status: randomStatus,
-    error: randomStatus === 'failed' ? 'Message delivery failed.' : undefined
+    status: randomStatus
   };
 }; 

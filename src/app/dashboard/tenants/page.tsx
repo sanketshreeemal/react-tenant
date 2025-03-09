@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
 import Navigation from "../../../components/Navigation";
@@ -13,7 +13,8 @@ import {
   getAllRentalInventory
 } from "@/lib/firebase/firestoreUtils";
 import { format, formatDistance, formatRelative, formatDuration, intervalToDuration } from 'date-fns';
-import { Search, Filter, CalendarIcon, CheckCircle, XCircle } from "lucide-react";
+import { Search, Filter, CalendarIcon, CheckCircle, XCircle, FileUp, FileDown, Loader2, AlertTriangle } from "lucide-react";
+import { downloadTenantTemplate, uploadTenantExcel } from "@/lib/excelUtils";
 
 export default function TenantsManagement() {
   const { user, loading } = useAuth();
@@ -29,12 +30,38 @@ export default function TenantsManagement() {
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [leaseToDelete, setLeaseToDelete] = useState<string | null>(null);
   
+  // Excel upload state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadResults, setUploadResults] = useState<{
+    success: boolean;
+    successful?: number;
+    failed?: number;
+    skipped?: number;
+    errors?: string[];
+    error?: string;
+    message?: string;
+  } | null>(null);
+  const [showUploadResults, setShowUploadResults] = useState(false);
+  const [isInstructionsExpanded, setIsInstructionsExpanded] = useState(false);
+  
   // Add effect to scroll to error message when it appears
   useEffect(() => {
     if (formError && formRef.current) {
       formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [formError]);
+  
+  // Hide upload results after 10 seconds
+  useEffect(() => {
+    if (showUploadResults) {
+      const timer = setTimeout(() => {
+        setShowUploadResults(false);
+      }, 10000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [showUploadResults]);
   
   // Custom class for input fields - wider with more padding
   const inputClass = "shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md pl-3 py-2 w-[125%]";
@@ -479,6 +506,69 @@ export default function TenantsManagement() {
     return unitId;
   };
   
+  // Handle template download
+  const handleDownloadTemplate = async () => {
+    const result = await downloadTenantTemplate();
+    if (!result.success) {
+      alert(result.error || "Failed to download template. Please try again.");
+    }
+  };
+
+  // Handle file selection for upload
+  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    const file = files[0];
+    handleUploadFile(file);
+  };
+
+  // Trigger file input click
+  const triggerFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  // Handle file upload
+  const handleUploadFile = async (file: File) => {
+    try {
+      setIsUploading(true);
+      setUploadResults(null);
+      
+      const result = await uploadTenantExcel(file);
+      setUploadResults(result);
+      setShowUploadResults(true);
+      
+      if (result.success && result.successful && result.successful > 0) {
+        await loadData(); // Reload data if any items were added successfully
+      }
+    } catch (error: any) {
+      setUploadResults({
+        success: false,
+        error: error.message || "Failed to upload file",
+        errors: [error.message || "Unknown error occurred"]
+      });
+      setShowUploadResults(true);
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  // Close upload results
+  const closeUploadResults = () => {
+    setShowUploadResults(false);
+  };
+
+  // Toggle instructions expand/collapse
+  const toggleInstructions = () => {
+    setIsInstructionsExpanded(!isInstructionsExpanded);
+  };
+  
   if (loading || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -497,16 +587,149 @@ export default function TenantsManagement() {
       
       <div className="md:ml-64 p-4">
         <header className="bg-white shadow rounded-lg mb-6">
-          <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+          <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <h1 className="text-3xl font-bold text-gray-900">Tenants & Leases</h1>
-            <button
-              onClick={() => toggleForm()}
-              className="flex items-center bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition-colors"
-            >
-              <span className="mr-1">{isFormOpen ? 'Cancel' : '+ Add Tenant'}</span>
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {/* Excel Template Download Button */}
+              <div className="relative group">
+                <button
+                  onClick={handleDownloadTemplate}
+                  className="flex items-center justify-center w-12 h-12 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200"
+                  aria-label="Download template"
+                >
+                  <div className="w-full h-full flex items-center justify-center bg-green-100 rounded-lg">
+                    <FileDown className="h-6 w-6 text-green-600" />
+                  </div>
+                </button>
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute -bottom-8 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap z-10">
+                  Download template
+                </div>
+              </div>
+              
+              {/* Excel Upload Button */}
+              <div className="relative group">
+                <button
+                  onClick={triggerFileInput}
+                  className="flex items-center justify-center w-12 h-12 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200"
+                  aria-label="Upload template"
+                  disabled={isUploading}
+                >
+                  <div className="w-full h-full flex items-center justify-center bg-amber-100 rounded-lg">
+                    {isUploading ? (
+                      <Loader2 className="h-6 w-6 text-amber-600 animate-spin" />
+                    ) : (
+                      <FileUp className="h-6 w-6 text-amber-600" />
+                    )}
+                  </div>
+                </button>
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute -bottom-8 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap z-10">
+                  Upload template
+                </div>
+              </div>
+              
+              {/* Hidden file input */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                accept=".xlsx,.xls"
+                className="hidden"
+              />
+              
+              {/* Add Tenant Button */}
+              <button
+                onClick={() => toggleForm()}
+                className="flex items-center bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition-colors"
+              >
+                <span className="mr-1">{isFormOpen ? 'Cancel' : '+ Add Tenant'}</span>
+              </button>
+            </div>
           </div>
         </header>
+        
+        {/* Excel Import Instructions & Upload Results */}
+        <div className="max-w-7xl mx-auto">
+          {/* Bulk Upload Instructions Panel */}
+          <div className="bg-white shadow rounded-lg mb-6 overflow-hidden">
+            <div 
+              className="px-4 py-3 bg-gray-50 flex justify-between items-center cursor-pointer"
+              onClick={toggleInstructions}
+            >
+              <div className="flex items-center">
+                <FileDown className="text-gray-500 h-5 w-5 mr-2" />
+                <h3 className="text-md font-medium text-gray-700">
+                  Bulk upload tenants by downloading the template, filling it out, and uploading it
+                </h3>
+              </div>
+              <span className="text-blue-500">
+                {isInstructionsExpanded ? '− Hide' : '+ Show'}
+              </span>
+            </div>
+            
+            {isInstructionsExpanded && (
+              <div className="p-4 border-t border-gray-200">
+                <p className="mb-2">You can add multiple tenants at once by following these steps:</p>
+                <ol className="list-decimal pl-5 space-y-2">
+                  <li>Click the <FileDown className="h-4 w-4 text-green-600 inline" /> icon to download the Excel template</li>
+                  <li>Fill in your tenant details in the template following the instructions</li>
+                  <li>For <strong>Deposit Method</strong>, you must enter one of: "Cash", "Bank transfer", "UPI", or "Check" exactly as shown</li>
+                  <li>Save the file and click the <FileUp className="h-4 w-4 text-amber-600 inline" /> icon to import your tenants</li>
+                </ol>
+                <div className="mt-4 text-sm text-gray-500">
+                  <p className="font-medium">Note:</p>
+                  <p>The template includes examples and instructions to guide you. You don't need to delete these rows — our system will automatically detect and skip them during import.</p>
+                  <p className="mt-2">Required fields are marked with an asterisk (*) in the template.</p>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Upload Results */}
+          {showUploadResults && uploadResults && (
+            <div className={`bg-white shadow rounded-lg mb-6 p-4 border-l-4 ${
+              uploadResults.success ? 'border-green-500' : 'border-red-500'
+            }`}>
+              <div className="flex justify-between">
+                <div className="flex items-start">
+                  {uploadResults.success ? (
+                    <CheckCircle className="text-green-500 h-6 w-6 mr-3 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="text-red-500 h-6 w-6 mr-3 flex-shrink-0 mt-0.5" />
+                  )}
+                  <div>
+                    <h3 className="text-md font-medium">
+                      {uploadResults.success ? 'Upload Complete' : 'Upload Failed'}
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {uploadResults.message || 
+                       (uploadResults.success 
+                        ? `${uploadResults.successful} tenant(s) added successfully, ${uploadResults.failed} failed, ${uploadResults.skipped} skipped.` 
+                        : uploadResults.error)}
+                    </p>
+                    
+                    {/* Display errors if any */}
+                    {uploadResults.errors && uploadResults.errors.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-sm font-medium text-red-700">Issues:</p>
+                        <ul className="text-xs text-red-600 mt-1 list-disc pl-5 max-h-32 overflow-y-auto">
+                          {uploadResults.errors.map((error, index) => (
+                            <li key={index}>{error}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <button 
+                  onClick={closeUploadResults}
+                  className="text-gray-400 hover:text-gray-500"
+                >
+                  <XCircle className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         
         <main className="max-w-7xl mx-auto">
           {/* Add/Edit Lease Form - Embedded directly in the page */}

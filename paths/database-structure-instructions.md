@@ -99,6 +99,8 @@ This document provides a comprehensive, step-by-step roadmap for rebuilding the 
 - Do not have a popup form. Instead, have the form embedded within the page. Easier UI and better for mobile interactions. 
 - The button on the dashboard page should be identical to the add tenant button. Right now it is slightly off. The "+" in front is a great design element. 
 - In addition to the button, there is also a new tab created in the navigation bar. This should not be there. Can add the buildign logo to the button itself, that is a nice touch.
+- Add a feature where a user can download an excel file with the pre-populated template and then use that excel file to add all the data and when they upload the excel file the database in the back end for this website gets automatically updated in the right fields and usable immediately. 
+- When submitting the form, have the button say "add property" instead of "add unit"
 
 ---
 
@@ -192,6 +194,11 @@ This document provides a comprehensive, step-by-step roadmap for rebuilding the 
 - Form validation ensures data integrity before submission to Firebase.
 - Added to the Navigation component with proper icon and routing.
 
+
+**Tweaks to be made later:**
+- I dont like the time under the lease end date. Can we remove it?
+- Can we add a feature where a user can download an excel file with the pre-populated template for all tenants and leases
+
 ---
 
 ## Phase 4.5: Tenant Edit/Delete & Lease Toggle Functionality
@@ -199,30 +206,27 @@ This document provides a comprehensive, step-by-step roadmap for rebuilding the 
 1. **Tenant Table Enhancements:**  
    - In the Tenant tab, display rows with key tenant information.
    - Include an **Actions** column with buttons for:
-     - **View:** Navigate to a detailed lease view page.
-     - **Edit:** Open a pre-populated form for editing lease details.
-     - **Toggle Lease Status:** Enable toggling between active and inactive status.
-  
-2. **View Lease Details:**  
-   - On clicking **View**, redirect the user to a dedicated page that displays all lease agreement details fetched from the `lease` collection in a user-friendly, modern UI.
+     - **Edit:** Opens a pre-populated form for editing lease details.
+     - **Dynamic Toggle:** A dynamic toggle control for lease status.  
+       - When a lease is created, the default state is active (toggle on).
+       - Removing the separate status column, this toggle is placed next to the Edit button.
+       - Toggling the lease off should immediately update the visual state (e.g., change toggle color to grey) and update the corresponding boolean value in Firebase.
+       - When toggling on a lease, the system must check that no other lease for the same unit is active. If an active lease already exists, display a user-friendly error message with tenant name and lease duration details, prompting the user to deactivate the conflicting lease first.
 
-3. **Edit Lease Details:**  
-   - When **Edit** is clicked, open the existing Add Tenant (or Lease) form pre-populated with data from the specific lease.
+2. **Edit Lease Details:**  
+   - When the **Edit** button is clicked, open the existing Add Tenant/Lease form pre-populated with data from the specific lease.
    - All fields are editable except for the Unit Number.
-   - Updates should modify the existing record rather than creating a new lease.
-   - Include a red **Delete** button at the bottom of the form.
-     - On clicking **Delete**, display a confirmation popup.
+   - Any updates should modify the existing record rather than creating a new one.
+   - The form should include a red **Delete** button at the bottom.
+     - Clicking **Delete** should trigger a confirmation popup.
      - Upon confirmation, delete the lease from Firebase and redirect the user back to the Tenant tab with a success message.
 
-4. **Lease Toggle Functionality:**  
-   - Implement an interactive toggle element reflecting the lease's active status.
-   - Toggling off a lease should occur immediately.
-   - When toggling on a lease, cross-check the database:
-     - If another lease for the same unit is already active, display a UI-friendly error message with tenant name and lease duration details.
-     - The error must prompt the user to deactivate the conflicting lease before activating another.
+3. **UI Consistency:**  
+   - Ensure all pages, tables, and forms follow the established design rules: clean, modern, responsive, and consistent with existing styles.
 
-5. **UI Consistency:**  
-   - Ensure all pages and forms follow the design rules (clean, modern, responsive, and consistent with existing styles).
+4. **Tweaks to be made later:**
+- When a lease is deleted, the user should be redirected to the tenant tab. Make sure that when a user tries to active a lease for a unit that already has an active lease, the error messages always show the tenant name, not the leaseID or unit ID or some numerical code. key for UI. 
+- THe toggle button should be a pastel green when active, and grey when not active. Right now, there is no way to know what the toggle does. Find a way to intuitively show the user that the toggle is for lease status. The toggle is also not centered. 
 
 ---
 
@@ -235,27 +239,29 @@ This document provides a comprehensive, step-by-step roadmap for rebuilding the 
 2. **Add Rent Entry Form – Enhancements:**  
 
    - **Process Flow:**  
-     - **Step 1:** User clicks the **"Add Rent Entry"** button (located at the top left) to open the form.
+     - **Step 1:** User clicks the **"Add Rent Entry"** button (located at the top left) to open the form. If there are no entries, there is a message and button at the center of the page inviting the user to add their first rent entry.
      - **Step 2:**  
-       - **Unit Number Field:** Provide a dropdown populated by querying the `rental-inventory` collection.
-       - **Auto-Populate:** Once a unit is selected, query the `lease` collection in Firebase for the active lease to auto-fill:
-         - Tenant Name
-         - Expected Rent
-         - Bank Details
-         - Unit Owner information
+       - **Unit Number Field:** Provide a dropdown populated by querying the `leases` collection and filter only by those leases that are active. The drop down should be the unit number followed by the name of the tenant on file for that lease.
+       - **Auto-Populate:** Once a unit is selected, query the `leases` collection in Firebase for the active lease to auto-fill:
+         - Tenant Name (Tenant Name on File)
+         - Expected Rent (Rent Amount on File)
+         - Bank Details (Bank Details on File)
+         - Unit Owner information (Owner Details on File)
      - **Step 3:** Additional Form Fields for User Input:
        - **Rental Period:** Dropdown listing month-year values from 4 months before to 4 months after the current month.
-       - **Rent Received:** (Currency/Number)
+       - **Rent Collected:** (Number)
        - **Rent Paid Date:** (Date)
        - **Comments:** (String)
      - **Step 4:** Validate all inputs on submission. On success, redirect the user back to the Rent Collection tab with an updated table view.
-   - **AI Agent Implementation Note:**  
-     - Some form fields may already exist; identify any missing fields and integrate the process logic.
-     - Consult relevant design and process documents to fill in any missing pieces.
 
 ---
+## Phase 6: Backend Data Management 
 
-## Phase 6: Build Process, Testing, and Deployment
+
+
+
+
+## Phase 7: Build Process, Testing, and Deployment
 
 1. **Local Build & CI/CD Pipeline:**  
    - Set up a local development environment mirroring production.

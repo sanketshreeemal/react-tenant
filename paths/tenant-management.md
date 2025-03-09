@@ -1,55 +1,308 @@
-# Tenant Management System
+# .cursorrules – Tenant Management System
 
-You are an expert in TypeScript, Next.js App Router, React, and Tailwind. Follow @Next.js docs for Data Fetching, Rendering, and Routing. 
+This file contains comprehensive instructions for building a robust, efficient, and secure Tenant Management System for landlords managing multiple properties. The application leverages modern web technologies and best practices for development, testing, deployment, error handling, and analytics/reporting. It is designed to run with minimal supervision and provides a complete, automated workflow from build to deployment.
 
-Tech stack to follow 
-Typescript, next.js, react, tailwind
-use Firebase for storage 
-use google for authentication and email integration 
-use vercel for deployment 
+---
 
-Your job is to create a tenant management system for landlords that have dozens of properties with the following features 
-1. Authentication: Use google auth- landlords can sign up and login to the application
-2. Tenant Dashboard - Landlord can view all existing tenants and their information across all properties. THe table must be model and usable on large and small screens. The table provides all relevant information for each property. The landlord should be able to see historic changes in the leases of a single unit. For example if new tenants move into the same unit, historical context of old data must be maintained for record keeping and comparisons. 
-3. Add - Landlords can add new tenants to the database with a modern and clean UI form that requires the following infomration:
-    1. Unit Number
-    2. First Name 
-    3. last Name 
-    4. Email address 
-    5. Adhaar Number
-    6. Phone Number 
-    7. PAN Number
-    8. Current Employer 
-    9. Permanent Address 
-    10. Lease Start Date
-    11. Lease End Date
-    12Rent Amount 
-    13Security Deposit and option for cash/cheque/Other
-    14. Upload the following documents in separate fields
-        1. Lease Agreement 
-        2. Adhaar Card copy 
-    These uploaded documents should be stored in the speciified google drive account logic which will be provided. 
+## Table of Contents
+1. [Project Overview](#project-overview)
+2. [Tech Stack](#tech-stack)
+3. [Project Structure](#project-structure)
+4. [Feature Specifications](#feature-specifications)
+    - [Authentication](#authentication)
+    - [Tenant Dashboard](#tenant-dashboard)
+    - [Add Tenant](#add-tenant)
+    - [Edit Tenant](#edit-tenant)
+    - [Lease Management](#lease-management)
+    - [Rent Management](#rent-management)
+    - [Analytics & Reporting](#analytics--reporting)
+    - [Email Notifications](#email-notifications)
+    - [WhatsApp Messaging Integration](#whatsapp-messaging-integration)
+    - [Google Drive Integration](#google-drive-integration)
+5. [UI/UX Design Guidelines](#uiux-design-guidelines)
+6. [Build Process & Deployment](#build-process--deployment)
+7. [Testing & Quality Assurance](#testing--quality-assurance)
+8. [Logging, Error Handling, and Monitoring](#logging-error-handling-and-monitoring)
+9. [Conflict Resolution & Git Best Practices](#conflict-resolution--git-best-practices)
+10. [Additional Best Practices](#additional-best-practices)
 
-This rental database should be the central database that is connected to all other tables in the database. This is the source of truth for all tenant information. 
-4. Edit Tenants - Landlord must be able to select the unit number and tenant name associated with the unit (multiple if multiple people have lived there) to edit the tenant information. When the user selects the desired unit and name to edit, the same form as add tenant appears autofilled with the existing data and allows the user to edit any field they prefer, except the unit number. In the same edit tenant page, ther must be a button to confirm edit as well as delete the tenant and unit number entry from the database. Ensure that a popup or other form of confirmation is used to prevent accidental deletion. 
-5. Ability to view a unit's history - If a landlord selects a particular unit from the database, they should be able to see the information of all tenants who have lived there, including their names, phone numbers, when that specifically started, when it ended, what rent that tenant was paying. This allows the landlord to understand the trends and in rents over time for a specific unit. 
-6. Rent Management - A separate area of the website that has a form to add the following information:
-    1. Drop down with all the units in the database with the most recent lease start date (to avoid seeing tenants that have already moved out). One a landlord selects a unit from the drop down, the following fields are autopopualted from the tenant database:
-        1. Tenant Name 
-        2. Official Rent (the rent on the lease in the tenant database)
-    The landlord then popualtes the following fields on the form
-        1. Actual Rent Paid 
-        2. Rental Period (drop down for 4 months before current date and 4 month after current date). FOr example if the rent is being added in May 13th, subtract four months which would  woudl start in January of the same yearand end in September of the same year. Only give months and years in the drop down, not specific days. 
-        3. Any comments about the rental payment from the landlord 
-The rent management dashboard should have a complete table of all the rent entries that were made. so every time a landlord inputs rent the information should populate in a table with all the data in the rent management form. landlord should be able to filter this table by unit number to see all the rent entires for that unit over time. This table should live in teh rent management section of the website.
+---
 
-7. Connection to google accounts - For every landlord that is signed up, the google SMTP server should be used to Send emails to the registered landlords every time the following actions are taken on the database. 
-    1. A new tenant/lease is added
-    2. A new rent payment is added 
+## Project Overview
 
-8. Google Drive integration. The Google Drive account logic will be provided. The Google Drive account should be used to store all the documents uploaded by the landlord in the add tenant section of the website. ALl other data to be stored in google firebase.
+Build a tenant management system that centralizes tenant, lease, and rent data for landlords with multiple properties. The system provides:
+- Secure, Google-based authentication.
+- A modern, responsive dashboard for managing tenant data.
+- Full CRUD operations on tenant, lease, and rent data.
+- Historical tracking of tenant leases per unit.
+- Robust analytics with beautiful, responsive tables and charts.
+- Automated email reporting and WhatsApp messaging capabilities.
+- Integration with Google Drive for secure document storage.
 
-The UI must be modern and clean, use pastel colours, animations and transitions where necessary, VERY important to ensure the applicaiton is user firendly for small screens like mobile phones where it will be used the most. 
+---
+
+## Tech Stack
+
+- **Languages & Frameworks:**  
+  - TypeScript
+  - Next.js (App Router) with React
+- **Styling:**  
+  - Tailwind CSS (modern, clean, pastel-themed UI with animations and transitions)
+- **Backend & Storage:**  
+  - Firebase (central database for tenant, lease, and rent information)
+  - Google Drive API (for document storage)
+- **Authentication & Email:**  
+  - Google Authentication (for login/signup)
+  - Google SMTP server (for transactional and monthly summary email notifications)
+- **Deployment:**  
+  - Vercel
+
+---
+
+## Project Structure
+
+Adopt a clear folder structure for maintainability and scalability
 
 
-Modify the existing functions in the SRC folder to transform the Existing code base into the rental management system specified in this File. Create any necessary components for the user interface and interactions. 
+---
+
+## Feature Specifications
+
+### Authentication
+- **Functionality:**
+  - Implement Google authentication using Firebase.
+  - Allow landlords to sign up and log in securely.
+- **Instructions:**
+  - Integrate Firebase Authentication with Google as a provider.
+  - Use Next.js middleware for route protection.
+  - Utilize secure cookies/sessions for maintaining user state.
+
+### Tenant Dashboard
+- **Features & Assets:**
+  - Responsive table view listing all tenants across properties.
+  - Detailed columns: tenant name, unit number, contact info, lease dates, and historical lease data.
+- **Purpose:**
+  - Enable landlords to quickly view and analyze tenant data.
+- **Instructions:**
+  - Use Next.js data fetching methods (Server Components or SWR) as per [Next.js documentation](https://nextjs.org/docs/app/building-your-application/data-fetching).
+  - Implement mobile responsiveness with Tailwind’s utilities.
+  - Include pagination or infinite scroll for large datasets.
+
+### Add Tenant
+- **Features & Assets:**
+  - Modern UI form with required fields:
+    - Unit Number, First Name, Last Name, Email, Adhaar Number, Phone Number, PAN Number, Current Employer, Permanent Address, Lease Start Date, Lease End Date, Rent Amount, Security Deposit (with payment method options)
+    - File upload fields for: Lease Agreement, Adhaar Card copy.
+- **Purpose:**
+  - Allow landlords to add new tenants and store related data in Firebase.
+- **Instructions:**
+  - Validate all fields using libraries such as [React Hook Form](https://react-hook-form.com/).
+  - Store data in Firebase Firestore.
+  - Use Firebase Storage and Google Drive API for document uploads.
+  - Implement error handling and UI feedback (loading spinners, toasts).
+
+### Edit Tenant
+- **Features & Assets:**
+  - Pre-populated form with existing tenant data (editable except unit number).
+  - Options for updating tenant data or deleting a record.
+  - Confirmation dialogs to prevent accidental deletions.
+- **Purpose:**
+  - Allow landlords to update or remove tenant records securely.
+- **Instructions:**
+  - Reuse and modify the Add Tenant form for editing.
+  - Use optimistic UI updates and secure deletion flows.
+
+### Lease Management
+- **Features & Assets:**
+  - **Two Tables:**
+    - A master table containing all leases (historical and current).
+    - An "Active Leases" table that landlords tag for current leases.
+  - **Data Stored:**
+    - Lease details including unit number, tenant names, lease start/end dates, rent details, and document links.
+- **Purpose:**
+  - Maintain a complete record of all leases while enabling focused analytics, messaging, and reporting on active leases.
+- **Instructions:**
+  - Design database schemas in Firebase to distinguish between historical and active leases.
+  - Provide UI filters for landlords to tag and view active leases.
+  - Ensure the active leases table is the source for analytics and messaging.
+
+### Rent Management
+- **Features & Assets:**
+  - Form for entering rent payments:
+    - Dropdown for selecting a unit (from active leases).
+    - Auto-populate Tenant Name and Official Rent.
+    - Fields for Actual Rent Paid, Rental Period (dropdown with a 4-month window before and after the current month), and landlord comments.
+  - Dashboard table displaying all rent entries with filtering options by unit number.
+- **Purpose:**
+  - Enable landlords to record and review rent payments in a structured and responsive manner.
+- **Instructions:**
+  - Use controlled components for form management.
+  - Validate and store rent entries in Firebase.
+  - Display the rent entries table using responsive UI components.
+
+### Analytics & Reporting
+- **Features & Assets:**
+  - **Analytics Page:**
+    - Beautiful, responsive tables and charts that display time-series data on:
+      - Rent collected over time.
+      - Number of occupied vs. vacant units.
+      - Estimated foregone rent per month for vacant units.
+    - Additional analytics such as occupancy trends, tenant turnover rates, and predictive insights.
+- **Purpose:**
+  - Provide landlords with actionable insights into property performance and rent trends.
+- **Instructions:**
+  - Integrate charting libraries (e.g., Chart.js or Recharts) for dynamic data visualization.
+  - Use Firebase data queries to populate charts and tables in real time.
+  - Ensure charts are fully responsive and intuitive.
+  - Create logic to calculate foregone rent for vacant units based on historical rent data.
+
+### Email Notifications
+- **Features & Assets:**
+  - **Transactional Emails:**
+    - Immediate notifications when a new tenant/lease or rent payment is added.
+  - **Monthly Summary Report:**
+    - On the first of every month, automatically email the landlord a detailed report including:
+      - A list of current vs. expired leases.
+      - Alerts for tenants paying on expired leases with a reminder to refresh leases.
+      - Expected rent income for the month based on occupied vs. vacant units.
+      - Additional metrics as per analytics.
+- **Purpose:**
+  - Keep landlords informed about critical updates and provide monthly performance insights.
+- **Instructions:**
+  - Use Next.js API routes or Cloud Functions to trigger emails via the Google SMTP server.
+  - Secure endpoints and log email events.
+  - Automate monthly reports using scheduled functions (e.g., Firebase Cloud Functions with Pub/Sub or cron jobs).
+
+### WhatsApp Messaging Integration
+- **Features & Assets:**
+  - **Messaging UI:**
+    - Intuitive interface for composing, editing, and sending messages.
+    - A “Send” button that broadcasts the message to all phone numbers in the active leases table.
+  - **Husk of Messaging Logic:**
+    - Basic integration logic to simulate WhatsApp messaging reminders for rental dues on the first of every month.
+- **Purpose:**
+  - Allow landlords to send timely reminders directly to tenants.
+- **Instructions:**
+  - Create a messaging component that retrieves phone numbers from active leases.
+  - Develop a basic messaging API that can be integrated with WhatsApp Business API (or a placeholder service) for sending messages.
+  - Include an editing interface on the website for message customization.
+  - Log sent messages and provide confirmation notifications to the landlord.
+
+### Google Drive Integration
+- **Features & Assets:**
+  - Upload and store documents (Lease Agreement, Adhaar Card copy) to a designated Google Drive account.
+- **Purpose:**
+  - Offload document storage from Firebase while centralizing file management.
+- **Instructions:**
+  - Use the provided Google Drive API logic.
+  - Validate file types and sizes before uploading.
+  - Secure authentication and authorization for Google Drive access.
+
+---
+
+## UI/UX Design Guidelines
+
+- **Modern & Clean Design:**
+  - Use pastel color palettes with Tailwind CSS.
+  - Consistent typography, spacing, and iconography.
+- **Responsiveness:**
+  - Mobile-first design; test on various screen sizes.
+- **Animations & Transitions:**
+  - Use subtle animations (hover effects, modal transitions) to enhance user experience.
+- **Accessibility:**
+  - Follow ARIA guidelines for interactive elements.
+  - Ensure proper color contrast and keyboard navigability.
+- **Data Visualization:**
+  - Use responsive charts and tables that adjust seamlessly to different screen sizes.
+
+---
+
+## Build Process & Deployment
+
+- **Local Development:**
+  - Use `npm run dev` (or `yarn dev`) to start the Next.js development server.
+  - Leverage ESLint and Prettier for consistent code quality.
+- **Build & Test:**
+  - Run `npm run build` to generate a production build.
+  - Execute unit and integration tests using Jest and React Testing Library.
+  - Optionally implement E2E tests using Cypress.
+- **Deployment:**
+  - Deploy on Vercel with environment variables (Firebase credentials, Google API keys, SMTP credentials) configured securely.
+  - Enable automatic deployments on push to the main branch.
+- **Continuous Integration:**
+  - Set up GitHub Actions (or similar CI/CD pipelines) to run tests, lint checks, and build scripts on each pull request.
+- **Security:**
+  - Regularly audit dependencies.
+  - Use HTTPS, secure cookies, and proper input sanitization.
+  - Apply rate limiting on API routes.
+
+---
+
+## Testing & Quality Assurance
+
+- **Unit Testing:**
+  - Write comprehensive tests for all components, utilities, and API endpoints with Jest.
+- **Integration Testing:**
+  - Use React Testing Library to simulate user interactions and validate workflows.
+- **End-to-End Testing:**
+  - Use Cypress for critical user flows (authentication, data entry, notifications, messaging).
+- **Code Coverage:**
+  - Aim for high test coverage and integrate coverage reporting into CI.
+- **Error Simulation:**
+  - Test failure cases (API errors, network timeouts) to ensure graceful error handling and user feedback.
+
+---
+
+## Logging, Error Handling, and Monitoring
+
+- **Logging:**
+  - Implement a logging utility (e.g., Winston or custom logger) for client and server logs.
+  - Log critical errors and user actions.
+- **Error Handling:**
+  - Use try/catch blocks and global error boundaries in React.
+  - Provide clear, actionable error messages via toasts or modals.
+- **Monitoring:**
+  - Integrate monitoring tools (e.g., Sentry) to track runtime errors and performance issues.
+  - Set up alerts for production-critical issues.
+
+---
+
+## Conflict Resolution & Git Best Practices
+
+- **Branching Strategy:**
+  - Adopt Git Flow or a similar model:
+    - `main` for production-ready code.
+    - `develop` for integration.
+    - Feature branches for new features/bug fixes.
+- **Commit Messages:**
+  - Follow Conventional Commits (e.g., `feat:`, `fix:`, `docs:`).
+- **Code Reviews:**
+  - Mandate pull requests with thorough reviews.
+- **Merge Conflicts:**
+  - Regularly sync with `develop` to minimize conflicts.
+- **Documentation:**
+  - Keep this file and README.md updated with process or architecture changes.
+
+---
+
+## Additional Best Practices
+
+- **Performance Optimization:**
+  - Lazy-load components and optimize assets with Next.js image optimization.
+- **Developer Experience:**
+  - Write clear inline comments and maintain detailed documentation.
+  - Enable TypeScript strict mode to catch errors early.
+- **Security Audits:**
+  - Regularly review Firebase security rules and API authorizations.
+  - Manage environment variables securely.
+- **Automation:**
+  - Automate build, test, and deployment processes to minimize manual intervention.
+- **Scalability:**
+  - Design the system with scalability in mind (e.g., modular components, efficient data queries).
+
+---
+
+By following these comprehensive instructions, your Tenant Management System will be built on a solid foundation of best practices. This design ensures a smooth build process, robust testing, secure deployments, detailed analytics and reporting, and automated notifications and messaging—all aimed at providing an exceptional user experience for landlords.
+
+
+
