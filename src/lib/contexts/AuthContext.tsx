@@ -38,7 +38,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log("Attempting to sign in with Google...");
       const result = await signInWithPopup(auth, provider);
       console.log("Google sign-in successful:", result.user.uid);
-      return result.user;
     } catch (error: any) {
       console.error("Error signing in with Google:", error);
       console.error("Error code:", error.code);

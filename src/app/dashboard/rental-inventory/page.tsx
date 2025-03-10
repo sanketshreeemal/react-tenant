@@ -495,12 +495,12 @@ export default function RentalInventoryManagement() {
                   <ol className="list-decimal pl-5 mb-3 space-y-1 text-xs text-blue-700">
                     <li>Click the <FileDown className="w-3.5 h-3.5 inline-block mx-0.5" /> icon to download the Excel template</li>
                     <li>Fill in your property details in the template following the instructions</li>
-                    <li>For <strong>Property Type</strong>, you must enter either "Residential" or "Commercial" exactly as shown</li>
+                    <li>For <strong>Property Type</strong>, you must enter either &quot;Residential&quot; or &quot;Commercial&quot; exactly as shown</li>
                     <li>Save the file and click the <FileUp className="w-3.5 h-3.5 inline-block mx-0.5" /> icon to import your properties</li>
                   </ol>
                   <div className="bg-yellow-50 p-2 rounded text-xs text-yellow-800 mb-2">
                     <strong>Note:</strong> The template includes examples and instructions to guide you. 
-                    You don't need to delete these rows – our system will automatically detect and skip them during import.
+                    You don&apos;t need to delete these rows – our system will automatically detect and skip them during import.
                   </div>
                   <p className="text-xs text-blue-600">
                     Required fields are marked with an asterisk (*) in the template.
@@ -568,7 +568,7 @@ export default function RentalInventoryManagement() {
                   ) : (
                     <tr>
                       <td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-500">
-                        No rental inventory items found. Click "+ Manually Add" to create one or use the Excel upload feature.
+                        No rental inventory items found. Click &quot;+ Manually Add&quot; to create one or use the Excel upload feature.
                       </td>
                     </tr>
                   )}

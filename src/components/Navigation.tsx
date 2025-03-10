@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../lib/hooks/useAuth";
+import Image from 'next/image';
 
 // Icons
 import { 
@@ -61,10 +62,12 @@ export default function Navigation() {
 
         {user && (
           <div className="p-4 border-b flex items-center space-x-3">
-            <img
+            <Image
               src={user.photoURL || "https://via.placeholder.com/40"}
               alt="Profile"
               className="h-10 w-10 rounded-full"
+              width={40}
+              height={40}
             />
             <div>
               <p className="text-sm font-medium text-gray-800">{user.displayName}</p>
@@ -128,10 +131,12 @@ export default function Navigation() {
 
         {user && (
           <div className="p-4 border-b flex items-center space-x-3">
-            <img
+            <Image
               src={user.photoURL || "https://via.placeholder.com/40"}
               alt="Profile"
               className="h-10 w-10 rounded-full"
+              width={40}
+              height={40}
             />
             <div>
               <p className="text-sm font-medium text-gray-800">{user.displayName}</p>

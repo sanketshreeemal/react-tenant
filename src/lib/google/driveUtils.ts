@@ -61,7 +61,7 @@ const initDriveClient = (accessToken: string) => {
       auth: oauth2Client
     });
   } catch (error: any) {
-    logger.apiError(error, 'Google Drive', 'initDriveClient', { accessToken: '***' });
+    logger.apiError(error as Error, 'Google Drive', 'initDriveClient', { accessToken: '***' });
     throw new Error(`Failed to initialize Google Drive client: ${error.message}`);
   }
 };
@@ -126,14 +126,16 @@ export const uploadFileToDrive = async (
       createdTime: response.data.createdTime || new Date().toISOString()
     };
     
-    logger.apiSuccess('Google Drive', 'uploadFileToDrive', 
-      { fileName: file.name, folderName }, 
-      { fileId: result.id, webViewLink: result.webViewLink }
-    );
+    logger.apiSuccess('Google Drive', 'uploadFileToDrive', {
+      fileName: file.name, 
+      folderName,
+      fileId: result.id, 
+      webViewLink: result.webViewLink
+    });
     
     return result;
   } catch (error) {
-    logger.apiError(error, 'Google Drive', 'uploadFileToDrive', {
+    logger.apiError(error as Error, 'Google Drive', 'uploadFileToDrive', {
       fileName: file.name,
       fileType: file.type,
       fileSize: file.size,
@@ -189,10 +191,12 @@ export const findOrCreateFolder = async (
     if (response.data.files && response.data.files.length > 0) {
       const folder = response.data.files[0];
       
-      logger.apiSuccess('Google Drive', 'findOrCreateFolder', 
-        { folderName, parentFolderId: effectiveParentId }, 
-        { folderId: folder.id, found: true }
-      );
+      logger.apiSuccess('Google Drive', 'findOrCreateFolder', {
+        folderName, 
+        parentFolderId: effectiveParentId,
+        folderId: folder.id, 
+        found: true
+      });
       
       return {
         id: folder.id || '',
@@ -219,14 +223,16 @@ export const findOrCreateFolder = async (
       name: folderResponse.data.name || folderName
     };
     
-    logger.apiSuccess('Google Drive', 'findOrCreateFolder', 
-      { folderName, parentFolderId: effectiveParentId }, 
-      { folderId: result.id, created: true }
-    );
+    logger.apiSuccess('Google Drive', 'findOrCreateFolder', {
+      folderName, 
+      parentFolderId: effectiveParentId,
+      folderId: result.id, 
+      created: true
+    });
     
     return result;
   } catch (error) {
-    logger.apiError(error, 'Google Drive', 'findOrCreateFolder', {
+    logger.apiError(error as Error, 'Google Drive', 'findOrCreateFolder', {
       folderName,
       parentFolderId: parentFolderId || 'root'
     });
@@ -285,14 +291,14 @@ export const listDriveFiles = async (
       createdTime: file.createdTime || new Date().toISOString()
     }));
     
-    logger.apiSuccess('Google Drive', 'listDriveFiles', 
-      { folderId }, 
-      { fileCount: files.length }
-    );
+    logger.apiSuccess('Google Drive', 'listDriveFiles', {
+      folderId,
+      count: files.length
+    });
     
     return files;
   } catch (error) {
-    logger.apiError(error, 'Google Drive', 'listDriveFiles', { folderId });
+    logger.apiError(error as Error, 'Google Drive', 'listDriveFiles', { folderId });
     
     // Fallback to mock implementation for development
     logger.info('Falling back to mock implementation for Google Drive listDriveFiles', {
@@ -347,14 +353,14 @@ export const getDriveFile = async (
       createdTime: response.data.createdTime || new Date().toISOString()
     };
     
-    logger.apiSuccess('Google Drive', 'getDriveFile', 
-      { fileId }, 
-      { fileName: file.name, mimeType: file.mimeType }
-    );
+    logger.apiSuccess('Google Drive', 'getDriveFile', {
+      fileId,
+      found: !!file
+    });
     
     return file;
   } catch (error) {
-    logger.apiError(error, 'Google Drive', 'getDriveFile', { fileId });
+    logger.apiError(error as Error, 'Google Drive', 'getDriveFile', { fileId });
     
     // Fallback to mock implementation for development
     logger.info('Falling back to mock implementation for Google Drive getDriveFile', {
@@ -391,11 +397,14 @@ export const deleteDriveFile = async (
       fileId
     });
     
-    logger.apiSuccess('Google Drive', 'deleteDriveFile', { fileId }, { success: true });
+    logger.apiSuccess('Google Drive', 'deleteDriveFile', { 
+      fileId, 
+      success: true 
+    });
     
     return true;
   } catch (error) {
-    logger.apiError(error, 'Google Drive', 'deleteDriveFile', { fileId });
+    logger.apiError(error as Error, 'Google Drive', 'deleteDriveFile', { fileId });
     
     // Fallback to mock implementation for development
     logger.info('Falling back to mock implementation for Google Drive deleteDriveFile', {

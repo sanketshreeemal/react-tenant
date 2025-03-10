@@ -672,12 +672,12 @@ export default function TenantsManagement() {
                 <ol className="list-decimal pl-5 space-y-2">
                   <li>Click the <FileDown className="h-4 w-4 text-green-600 inline" /> icon to download the Excel template</li>
                   <li>Fill in your tenant details in the template following the instructions</li>
-                  <li>For <strong>Deposit Method</strong>, you must enter one of: "Cash", "Bank transfer", "UPI", or "Check" exactly as shown</li>
+                  <li>For <strong>Deposit Method</strong>, you must enter one of: &quot;Cash&quot;, &quot;Bank transfer&quot;, &quot;UPI&quot;, or &quot;Check&quot; exactly as shown</li>
                   <li>Save the file and click the <FileUp className="h-4 w-4 text-amber-600 inline" /> icon to import your tenants</li>
                 </ol>
                 <div className="mt-4 text-sm text-gray-500">
                   <p className="font-medium">Note:</p>
-                  <p>The template includes examples and instructions to guide you. You don't need to delete these rows — our system will automatically detect and skip them during import.</p>
+                  <p>The template includes examples and instructions to guide you. You don&apos;t need to delete these rows — our system will automatically detect and skip them during import.</p>
                   <p className="mt-2">Required fields are marked with an asterisk (*) in the template.</p>
                 </div>
               </div>
@@ -1213,7 +1213,7 @@ export default function TenantsManagement() {
                   ) : (
                     <tr>
                       <td colSpan={6} className="px-6 py-10 text-center text-sm text-gray-500">
-                        No lease records found. Click "Add Tenant" to create one.
+                        No lease records found. Click &quot;Add Tenant&quot; to create one.
                       </td>
                     </tr>
                   )}

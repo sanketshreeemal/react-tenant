@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
 import Navigation from "../../../components/Navigation";
@@ -166,13 +166,7 @@ export default function AnalyticsPage() {
     }
   }, [user]);
 
-  useEffect(() => {
-    if (!isLoading) {
-      calculateAnalytics();
-    }
-  }, [rentalInventory, leases, activeLeases, rentPayments, isLoading, timeRange]);
-
-  const calculateAnalytics = () => {
+  const calculateAnalytics = useCallback(() => {
     if (rentalInventory.length === 0) return;
 
     // Total units from rental inventory
@@ -255,7 +249,13 @@ export default function AnalyticsPage() {
 
     // Generate data for charts and table
     generateMonthlyData();
-  };
+  }, [rentalInventory, activeLeases, rentPayments, leases, timeRange]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      calculateAnalytics();
+    }
+  }, [isLoading, calculateAnalytics]);
 
   const generateMonthlyData = () => {
     const tableData: MonthlyTableData[] = [];

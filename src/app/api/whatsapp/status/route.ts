@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getWhatsAppMessageStatus } from '@/lib/whatsapp/messageUtils';
 import logger from '@/lib/logger';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
