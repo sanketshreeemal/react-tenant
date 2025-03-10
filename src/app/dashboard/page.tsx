@@ -277,7 +277,7 @@ export default function Dashboard() {
               )}
               <div className="mt-4">
                 <Link 
-                  href="/leases" 
+                  href="/dashboard/tenants" 
                   className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center"
                 >
                   View all leases
@@ -347,7 +347,7 @@ export default function Dashboard() {
               
               <div className="mt-6">
                 <Link 
-                  href="/rent-payments" 
+                  href="/dashboard/rent" 
                   className="bg-blue-50 text-blue-600 hover:bg-blue-100 px-4 py-2 rounded-md text-sm font-medium inline-flex items-center transition-colors"
                 >
                   Manage rent payments
@@ -355,7 +355,7 @@ export default function Dashboard() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </Link>
-            </div>
+              </div>
             </DashboardCard>
           </div>
         </div>

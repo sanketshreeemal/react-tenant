@@ -4,40 +4,125 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
 import Navigation from "../../../components/Navigation";
-import { collection, getDocs, query, orderBy, where } from "firebase/firestore";
-import { db } from "../../../lib/firebase/firebase";
-import { BarChart2, TrendingUp, Home, DollarSign, Calendar } from "lucide-react";
-import { format, subMonths, isWithinInterval, startOfMonth, endOfMonth } from "date-fns";
+import {
+  BarChart2,
+  TrendingUp,
+  Home,
+  DollarSign,
+  Calendar,
+} from "lucide-react";
+import {
+  format,
+  subMonths,
+  isWithinInterval,
+  startOfMonth,
+  endOfMonth,
+  parseISO,
+  isAfter,
+  isBefore,
+} from "date-fns";
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  ComposedChart,
+  Area,
+} from "recharts";
+import {
+  getAllRentalInventory,
+  getAllLeases,
+  getAllActiveLeases,
+  getAllRentPayments,
+} from "../../../lib/firebase/firestoreUtils";
+
+// Define type interfaces that match Firestore document structures
+interface RentalInventory {
+  id: string;
+  unitNumber: string;
+  propertyType: string;
+  address: string;
+  bedrooms: number;
+  bathrooms: number;
+  squareFeet: number;
+  isAvailable: boolean;
+  rentAmount: number;
+  securityDeposit: number;
+  createdAt: Date;
+  updatedAt?: Date;
+}
 
 interface Lease {
   id: string;
+  unitId: string;
   unitNumber: string;
+  tenantId: string;
   tenantName: string;
-  leaseStart: string;
-  leaseEnd: string;
+  leaseStartDate: Date;
+  leaseEndDate: Date;
   rentAmount: number;
   isActive: boolean;
-  createdAt: any;
+  createdAt: Date;
+  updatedAt?: Date;
 }
 
 interface RentPayment {
   id: string;
+  leaseId: string;
+  unitId: string;
   unitNumber: string;
+  tenantId: string;
   tenantName: string;
-  officialRent: number;
-  actualRent: number;
-  rentalPeriod: string;
-  createdAt: any;
+  paymentDate: Date;
+  amount: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  notes?: string;
+  createdAt: Date;
+  updatedAt?: Date;
+  dueDate?: Date;
+}
+
+// Chart data interfaces
+interface OccupancyChartData {
+  month: string;
+  Occupied: number;
+  Vacant: number;
+}
+
+interface RentCollectionChartData {
+  month: string;
+  'Expected Rent': number;
+  'Collected Rent': number;
+  'Foregone Rent': number;
+}
+
+interface MonthlyTableData {
+  month: string;
+  occupiedUnits: number;
+  vacantUnits: number;
+  occupancyRate: string;
+  expectedRent: number;
+  rentCollected: number;
+  collectionRate: string;
 }
 
 export default function AnalyticsPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const [rentalInventory, setRentalInventory] = useState<RentalInventory[]>([]);
   const [leases, setLeases] = useState<Lease[]>([]);
+  const [activeLeases, setActiveLeases] = useState<Lease[]>([]);
   const [rentPayments, setRentPayments] = useState<RentPayment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<"3m" | "6m" | "1y" | "all">("6m");
-  
+
   // Analytics data
   const [totalUnits, setTotalUnits] = useState(0);
   const [occupiedUnits, setOccupiedUnits] = useState(0);
@@ -46,7 +131,9 @@ export default function AnalyticsPage() {
   const [monthlyRevenue, setMonthlyRevenue] = useState(0);
   const [foregoneRent, setForegoneRent] = useState(0);
   const [rentCollectionRate, setRentCollectionRate] = useState(0);
-  const [monthlyData, setMonthlyData] = useState<any[]>([]);
+  const [monthlyData, setMonthlyData] = useState<MonthlyTableData[]>([]);
+  const [occupancyChartData, setOccupancyChartData] = useState<OccupancyChartData[]>([]);
+  const [rentCollectionChartData, setRentCollectionChartData] = useState<RentCollectionChartData[]>([]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -57,33 +144,16 @@ export default function AnalyticsPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch all leases
-        const leasesQuery = query(
-          collection(db, "leases"),
-          orderBy("createdAt", "desc")
-        );
-        const leasesSnapshot = await getDocs(leasesQuery);
-        
-        const leasesData: Lease[] = [];
-        leasesSnapshot.forEach((doc) => {
-          leasesData.push({ id: doc.id, ...doc.data() } as Lease);
-        });
-        
-        setLeases(leasesData);
-        
-        // Fetch rent payments
-        const paymentsQuery = query(
-          collection(db, "rentPayments"),
-          orderBy("createdAt", "desc")
-        );
-        const paymentsSnapshot = await getDocs(paymentsQuery);
-        
-        const paymentsData: RentPayment[] = [];
-        paymentsSnapshot.forEach((doc) => {
-          paymentsData.push({ id: doc.id, ...doc.data() } as RentPayment);
-        });
-        
-        setRentPayments(paymentsData);
+        // Use firestoreUtils to fetch data
+        const inventoryData = await getAllRentalInventory();
+        const allLeases = await getAllLeases();
+        const currentActiveLeases = await getAllActiveLeases();
+        const allRentPayments = await getAllRentPayments();
+
+        setRentalInventory(inventoryData as unknown as RentalInventory[]);
+        setLeases(allLeases as unknown as Lease[]);
+        setActiveLeases(currentActiveLeases as unknown as Lease[]);
+        setRentPayments(allRentPayments as unknown as RentPayment[]);
         setIsLoading(false);
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -97,57 +167,103 @@ export default function AnalyticsPage() {
   }, [user]);
 
   useEffect(() => {
-    if (leases.length > 0 && !isLoading) {
+    if (!isLoading) {
       calculateAnalytics();
     }
-  }, [leases, rentPayments, isLoading, timeRange]);
+  }, [rentalInventory, leases, activeLeases, rentPayments, isLoading, timeRange]);
 
   const calculateAnalytics = () => {
-    // Get unique units
-    const uniqueUnits = [...new Set(leases.map(lease => lease.unitNumber))];
-    setTotalUnits(uniqueUnits.length);
-    
-    // Get active leases
-    const activeLeases = leases.filter(lease => lease.isActive);
-    const activeUnitNumbers = [...new Set(activeLeases.map(lease => lease.unitNumber))];
-    setOccupiedUnits(activeUnitNumbers.length);
-    
-    // Calculate vacant units
-    const vacant = totalUnits - occupiedUnits;
+    if (rentalInventory.length === 0) return;
+
+    // Total units from rental inventory
+    setTotalUnits(rentalInventory.length);
+
+    // Occupied units (units with active leases)
+    // Get unique unit IDs that have active leases
+    const uniqueOccupiedUnitIds = Array.from(new Set(activeLeases.map(lease => lease.unitId)));
+    const occupiedCount = uniqueOccupiedUnitIds.length;
+    setOccupiedUnits(occupiedCount);
+
+    // Vacant units
+    const vacant = totalUnits - occupiedCount;
     setVacantUnits(vacant);
-    
-    // Calculate occupancy rate
-    const occupancyRate = totalUnits > 0 ? (occupiedUnits / totalUnits) * 100 : 0;
-    setOccupancyRate(occupancyRate);
-    
-    // Calculate monthly revenue (sum of all active lease rent amounts)
+
+    // Occupancy rate - ensure we're using the latest values for the calculation
+    // Occupancy rate = (number of units with active leases / total number of units) * 100
+    const occupancyRateValue = rentalInventory.length > 0 ? (occupiedCount / rentalInventory.length) * 100 : 0;
+    setOccupancyRate(occupancyRateValue);
+
+    // Current monthly revenue from active leases
     const monthlyRevenue = activeLeases.reduce((sum, lease) => sum + lease.rentAmount, 0);
-    setMonthlyRevenue(monthlyRevenue);
+    setMonthlyRevenue(monthlyRevenue || 0); // Ensure it's never undefined
+
+    // Calculate foregone rent for vacant units
+    let foregoneRentAmount = 0;
+
+    // For each vacant unit, find its potential rent
+    rentalInventory.forEach((unit) => {
+      // Check if unit has an active lease
+      const hasActiveLease = activeLeases.some(lease => lease.unitId === unit.id);
+      
+      if (!hasActiveLease) {
+        // Unit is vacant, find the most recent lease for this unit
+        const unitLeases = leases
+          .filter(lease => lease.unitId === unit.id)
+          .sort((a, b) => new Date(b.leaseEndDate).getTime() - new Date(a.leaseEndDate).getTime());
+        
+        if (unitLeases.length > 0) {
+          // Use the most recent lease's rent amount
+          foregoneRentAmount += unitLeases[0].rentAmount;
+        } else {
+          // If no previous lease, use the unit's default rent amount
+          foregoneRentAmount += unit.rentAmount;
+        }
+      }
+    });
     
-    // Calculate foregone rent (estimated rent for vacant units)
-    const averageRent = activeLeases.length > 0 
-      ? activeLeases.reduce((sum, lease) => sum + lease.rentAmount, 0) / activeLeases.length 
-      : 0;
-    const foregoneRent = vacant * averageRent;
-    setForegoneRent(foregoneRent);
-    
-    // Calculate rent collection rate
+    setForegoneRent(foregoneRentAmount || 0); // Ensure it's never undefined
+
+    // Calculate current month's rent collection rate
     const currentMonth = format(new Date(), "yyyy-MM");
-    const currentMonthPayments = rentPayments.filter(payment => payment.rentalPeriod === currentMonth);
-    const totalExpectedRent = monthlyRevenue;
-    const totalCollectedRent = currentMonthPayments.reduce((sum, payment) => sum + payment.actualRent, 0);
-    const collectionRate = totalExpectedRent > 0 ? (totalCollectedRent / totalExpectedRent) * 100 : 0;
-    setRentCollectionRate(collectionRate);
+    const currentMonthStart = startOfMonth(new Date());
+    const currentMonthEnd = endOfMonth(new Date());
+
+    // Expected rent from active leases
+    const expectedRent = monthlyRevenue;
+
+    // Collected rent for current month
+    const currentMonthPayments = rentPayments.filter(payment => 
+      isWithinInterval(new Date(payment.paymentDate), {
+        start: currentMonthStart,
+        end: currentMonthEnd
+      })
+    );
     
-    // Generate monthly data for charts
+    const collectedRent = currentMonthPayments.reduce((sum, payment) => sum + payment.amount, 0);
+    
+    // Prevent division by zero for collection rate
+    let collectionRate = 0;
+    if (expectedRent > 0) {
+      collectionRate = (collectedRent / expectedRent) * 100;
+    } else if (collectedRent > 0) {
+      // If we have collections but no expected rent, set to 100%
+      collectionRate = 100;
+    } 
+    // Otherwise it stays at 0%
+    
+    setRentCollectionRate(collectionRate);
+
+    // Generate data for charts and table
     generateMonthlyData();
   };
 
   const generateMonthlyData = () => {
-    const data = [];
+    const tableData: MonthlyTableData[] = [];
+    const occupancyData: OccupancyChartData[] = [];
+    const rentData: RentCollectionChartData[] = [];
     const now = new Date();
     let monthsToShow = 6;
-    
+
     switch (timeRange) {
       case "3m":
         monthsToShow = 3;
@@ -162,45 +278,105 @@ export default function AnalyticsPage() {
         monthsToShow = 24; // Show up to 2 years of data
         break;
     }
-    
-    for (let i = 0; i < monthsToShow; i++) {
+
+    // Get the total number of units - use the rental inventory directly
+    const totalUnitCount = rentalInventory.length;
+
+    for (let i = monthsToShow - 1; i >= 0; i--) {
       const month = subMonths(now, i);
       const monthStart = startOfMonth(month);
       const monthEnd = endOfMonth(month);
       const monthLabel = format(month, "MMM yyyy");
       const monthKey = format(month, "yyyy-MM");
-      
-      // Calculate occupancy for this month
-      const activeLeases = leases.filter(lease => {
-        const leaseStart = new Date(lease.leaseStart);
-        const leaseEnd = new Date(lease.leaseEnd);
-        return isWithinInterval(monthStart, { start: leaseStart, end: leaseEnd }) ||
-               isWithinInterval(monthEnd, { start: leaseStart, end: leaseEnd });
+
+      // Filter leases active during this month
+      const monthLeases = leases.filter(lease => {
+        const leaseStart = new Date(lease.leaseStartDate);
+        const leaseEnd = new Date(lease.leaseEndDate);
+        return (
+          (isBefore(leaseStart, monthEnd) && isAfter(leaseEnd, monthStart)) ||
+          isWithinInterval(monthStart, { start: leaseStart, end: leaseEnd }) ||
+          isWithinInterval(monthEnd, { start: leaseStart, end: leaseEnd })
+        );
       });
+
+      // Get unique unit IDs that had active leases during this month
+      const uniqueOccupiedUnitIds = Array.from(new Set(monthLeases.map(lease => lease.unitId)));
+      const occupiedCount = uniqueOccupiedUnitIds.length;
+      const vacantCount = totalUnitCount - occupiedCount;
       
-      const uniqueOccupiedUnits = [...new Set(activeLeases.map(lease => lease.unitNumber))];
-      const occupiedCount = uniqueOccupiedUnits.length;
-      const occupancyRate = totalUnits > 0 ? (occupiedCount / totalUnits) * 100 : 0;
+      // Calculate occupancy rate for this month
+      // Occupancy rate = (number of units with active leases / total number of units) * 100
+      const occupancyRate = totalUnitCount > 0 ? (occupiedCount / totalUnitCount) * 100 : 0;
+
+      // Calculate rent collection for this month
+      const monthPayments = rentPayments.filter(payment => 
+        isWithinInterval(new Date(payment.paymentDate), {
+          start: monthStart,
+          end: monthEnd
+        })
+      );
       
-      // Calculate rent collected for this month
-      const monthPayments = rentPayments.filter(payment => payment.rentalPeriod === monthKey);
-      const rentCollected = monthPayments.reduce((sum, payment) => sum + payment.actualRent, 0);
-      
+      const rentCollected = monthPayments.reduce((sum, payment) => sum + payment.amount, 0);
+
       // Calculate expected rent for this month
-      const expectedRent = activeLeases.reduce((sum, lease) => sum + lease.rentAmount, 0);
+      const expectedRent = monthLeases.reduce((sum, lease) => sum + lease.rentAmount, 0);
       
-      data.unshift({
+      // Calculate foregone rent for this month
+      let monthForegoneRent = 0;
+      rentalInventory.forEach((unit) => {
+        const hasLease = monthLeases.some(lease => lease.unitId === unit.id);
+        if (!hasLease) {
+          const unitLeases = leases
+            .filter(lease => lease.unitId === unit.id)
+            .sort((a, b) => new Date(b.leaseEndDate).getTime() - new Date(a.leaseEndDate).getTime());
+          
+          if (unitLeases.length > 0) {
+            monthForegoneRent += unitLeases[0].rentAmount;
+          } else {
+            monthForegoneRent += unit.rentAmount;
+          }
+        }
+      });
+
+      // Collection rate with safeguard for division by zero
+      let collectionRate = 0;
+      if (expectedRent > 0) {
+        collectionRate = (rentCollected / expectedRent) * 100;
+      } else if (rentCollected > 0) {
+        collectionRate = 100;
+      }
+
+      // Create table data entry
+      tableData.push({
         month: monthLabel,
         occupiedUnits: occupiedCount,
-        vacantUnits: totalUnits - occupiedCount,
+        vacantUnits: vacantCount,
         occupancyRate: occupancyRate.toFixed(1),
-        rentCollected,
         expectedRent,
-        collectionRate: expectedRent > 0 ? ((rentCollected / expectedRent) * 100).toFixed(1) : "0",
+        rentCollected,
+        collectionRate: collectionRate.toFixed(1),
+      });
+
+      // Create simplified occupancy chart data - just occupancy rate
+      occupancyData.push({
+        month: monthLabel,
+        Occupied: occupancyRate,
+        Vacant: 100 - occupancyRate,
+      });
+
+      // Create simplified rent collection chart data - just collected and foregone
+      rentData.push({
+        month: monthLabel,
+        'Expected Rent': expectedRent,
+        'Collected Rent': rentCollected,
+        'Foregone Rent': monthForegoneRent,
       });
     }
-    
-    setMonthlyData(data);
+
+    setMonthlyData(tableData);
+    setOccupancyChartData(occupancyData);
+    setRentCollectionChartData(rentData);
   };
 
   if (loading || !user) {
@@ -288,7 +464,9 @@ export default function AnalyticsPage() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Occupancy Rate</p>
                       <div className="flex items-center">
-                        <p className="text-2xl font-semibold text-gray-900">{occupancyRate.toFixed(1)}%</p>
+                        <p className="text-2xl font-semibold text-gray-900">
+                          {Number.isNaN(occupancyRate) ? "No Data" : `${occupancyRate.toFixed(1)}%`}
+                        </p>
                         <span className="ml-2 text-sm text-gray-500">
                           ({occupiedUnits}/{totalUnits} units)
                         </span>
@@ -304,7 +482,9 @@ export default function AnalyticsPage() {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-600">Monthly Revenue</p>
-                      <p className="text-2xl font-semibold text-gray-900">₹{monthlyRevenue.toLocaleString()}</p>
+                      <p className="text-2xl font-semibold text-gray-900">
+                        {monthlyRevenue <= 0 ? "No Revenue" : `₹${monthlyRevenue.toLocaleString()}`}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -316,7 +496,9 @@ export default function AnalyticsPage() {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-600">Foregone Rent</p>
-                      <p className="text-2xl font-semibold text-gray-900">₹{foregoneRent.toLocaleString()}</p>
+                      <p className="text-2xl font-semibold text-gray-900">
+                        {foregoneRent <= 0 ? "₹0" : `₹${foregoneRent.toLocaleString()}`}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -328,7 +510,9 @@ export default function AnalyticsPage() {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-600">Collection Rate</p>
-                      <p className="text-2xl font-semibold text-gray-900">{rentCollectionRate.toFixed(1)}%</p>
+                      <p className="text-2xl font-semibold text-gray-900">
+                        {Number.isNaN(rentCollectionRate) ? "No Data" : `${rentCollectionRate.toFixed(1)}%`}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -339,30 +523,86 @@ export default function AnalyticsPage() {
                 <div className="bg-white p-6 rounded-lg shadow">
                   <h2 className="text-lg font-medium text-gray-900 mb-4">Occupancy Trends</h2>
                   <div className="h-80">
-                    {/* Placeholder for chart - in a real app, you would use a charting library like Chart.js or Recharts */}
-                    <div className="border-4 border-dashed border-gray-200 rounded-lg h-full flex items-center justify-center">
-                      <div className="text-center">
-                        <p className="text-gray-500 mb-2">Occupancy Rate Chart</p>
-                        <p className="text-sm text-gray-400">
-                          This would be a line chart showing occupancy rate over time
-                        </p>
-                      </div>
-                    </div>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={occupancyChartData}
+                        margin={{
+                          top: 10,
+                          right: 30,
+                          left: 20,
+                          bottom: 20,
+                        }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis 
+                          tickFormatter={(value) => `${Math.floor(value)}%`}
+                          domain={[0, 100]}
+                        />
+                        <Tooltip 
+                          formatter={(value) => [`${Number(value).toFixed(1)}%`, '']}
+                          labelFormatter={(label) => `Month: ${label}`}
+                        />
+                        <Legend />
+                        <Line 
+                          type="monotone" 
+                          dataKey="Occupied" 
+                          stroke="#4ade80" 
+                          strokeWidth={2}
+                          name="Occupancy Rate" 
+                          dot={{ r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
                 
                 <div className="bg-white p-6 rounded-lg shadow">
                   <h2 className="text-lg font-medium text-gray-900 mb-4">Rent Collection</h2>
                   <div className="h-80">
-                    {/* Placeholder for chart */}
-                    <div className="border-4 border-dashed border-gray-200 rounded-lg h-full flex items-center justify-center">
-                      <div className="text-center">
-                        <p className="text-gray-500 mb-2">Rent Collection Chart</p>
-                        <p className="text-sm text-gray-400">
-                          This would be a bar chart comparing expected vs. collected rent
-                        </p>
-                      </div>
-                    </div>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={rentCollectionChartData}
+                        margin={{
+                          top: 10,
+                          right: 30,
+                          left: 20,
+                          bottom: 20,
+                        }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis 
+                          tickFormatter={(value) => 
+                            value >= 1000 
+                              ? `₹${Math.floor(value / 1000)}K` 
+                              : `₹${value}`
+                          } 
+                        />
+                        <Tooltip 
+                          formatter={(value) => [`₹${Number(value).toLocaleString()}`, '']}
+                          labelFormatter={(label) => `Month: ${label}`}
+                        />
+                        <Legend />
+                        <Line
+                          type="monotone"
+                          dataKey="Collected Rent"
+                          stroke="#34d399"
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="Foregone Rent"
+                          stroke="#f43f5e"
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
               </div>
