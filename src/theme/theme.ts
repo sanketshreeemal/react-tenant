@@ -30,6 +30,23 @@ export const theme = {
 
     // Border color used for outlines, dividers, etc.
     border: "#E5E7EB",           // Light gray border for subtle separations
+
+    // Button-specific semantic colors
+    button: {
+      // Primary action buttons (submit, confirm, save)
+      primary: "#1E40AF",        // Same as primary color
+      primaryHover: "#1E3A8A",   // Darker shade for hover
+
+      // Secondary/Cancel buttons
+      secondary: "#FFFFFF",      // White background
+      secondaryHover: "#F3F4F6", // Light gray for hover
+      secondaryBorder: "#E5E7EB",// Border color for secondary buttons
+      secondaryText: "#1F2937",  // Text color for secondary buttons
+
+      // Destructive action buttons (delete, remove)
+      destructive: "#DC2626",    // Same as error color
+      destructiveHover: "#B91C1C", // Darker red for hover
+    }
   },
 
   // -------------------------------------------------------------------------

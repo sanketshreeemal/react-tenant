@@ -8,6 +8,7 @@ import { RentalInventory } from "@/types";
 import { addRentalInventory, getAllRentalInventory, updateRentalInventory, deleteRentalInventory } from "@/lib/firebase/firestoreUtils";
 import { downloadInventoryTemplate, uploadInventoryExcel } from "@/lib/excelUtils";
 import { FileUp, FileDown, Loader2, AlertTriangle, CheckCircle, X } from "lucide-react";
+import { AlertMessage } from "@/components/ui/alert-message";
 
 export default function RentalInventoryManagement() {
   const { user, loading } = useAuth();
@@ -40,6 +41,12 @@ export default function RentalInventoryManagement() {
   const [ownerDetails, setOwnerDetails] = useState("");
   const [bankDetails, setBankDetails] = useState("");
   
+  // Consolidated alert message state
+  const [alertMessage, setAlertMessage] = useState<{
+    type: 'success' | 'error' | 'info' | 'warning';
+    message: string;
+  } | null>(null);
+
   useEffect(() => {
     if (!loading && !user) {
       router.push("/");
@@ -156,9 +163,16 @@ export default function RentalInventoryManagement() {
       try {
         await deleteRentalInventory(itemId);
         await loadInventoryData(); // Reload data
+        setAlertMessage({
+          type: 'success',
+          message: 'Inventory item deleted successfully'
+        });
       } catch (error: any) {
         console.error("Error deleting inventory item:", error);
-        alert(error.message || "An error occurred while deleting the inventory item");
+        setAlertMessage({
+          type: 'error',
+          message: error.message || "An error occurred while deleting the inventory item"
+        });
       }
     }
   };
@@ -243,6 +257,16 @@ export default function RentalInventoryManagement() {
       <Navigation />
       
       <div className="md:ml-64 p-4">
+        {/* Alert Messages */}
+        {alertMessage && (
+          <div className="max-w-7xl mx-auto mb-6">
+            <AlertMessage
+              variant={alertMessage.type}
+              message={alertMessage.message}
+            />
+          </div>
+        )}
+
         <header className="bg-white shadow rounded-lg mb-6">
           <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <h1 className="text-3xl font-bold text-gray-900">Rental Inventory Management</h1>
@@ -299,64 +323,16 @@ export default function RentalInventoryManagement() {
         <main className="max-w-7xl mx-auto">
           {/* Upload Results Notification */}
           {showUploadResults && uploadResults && (
-            <div className={`mb-6 p-4 rounded-md relative ${
-              uploadResults.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-            }`}>
-              <button 
-                onClick={closeUploadResults} 
-                className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              
-              <div className="flex items-start">
-                {uploadResults.success ? (
-                  <CheckCircle className="w-6 h-6 text-green-500 mr-3 flex-shrink-0 mt-0.5" />
-                ) : (
-                  <AlertTriangle className="w-6 h-6 text-red-500 mr-3 flex-shrink-0 mt-0.5" />
-                )}
-                
-                <div className="flex-1">
-                  <h3 className={`text-lg font-medium ${
-                    uploadResults.success ? 'text-green-800' : 'text-red-800'
-                  }`}>
-                    {uploadResults.success ? 'Upload Successful' : 'Upload Failed'}
-                  </h3>
-                  
-                  {uploadResults.message ? (
-                    <p className="mt-1 text-sm text-gray-700">
-                      {uploadResults.message}
-                    </p>
-                  ) : uploadResults.success && (
-                    <p className="mt-1 text-sm text-green-700">
-                      Successfully added {uploadResults.successful} properties. 
-                      {uploadResults.failed && uploadResults.failed > 0 && 
-                        ` Failed to add ${uploadResults.failed} properties.`}
-                      {uploadResults.skipped && uploadResults.skipped > 0 &&
-                        ` Skipped ${uploadResults.skipped} rows (empty or instructions).`}
-                    </p>
-                  )}
-                  
-                  {uploadResults.error && (
-                    <p className="mt-1 text-sm text-red-700">{uploadResults.error}</p>
-                  )}
-                  
-                  {uploadResults.errors && uploadResults.errors.length > 0 && (
-                    <div className="mt-2">
-                      <p className="text-sm font-medium text-red-700">Errors:</p>
-                      <ul className="mt-1 text-sm text-red-700 list-disc pl-5">
-                        {uploadResults.errors.slice(0, 5).map((err, idx) => (
-                          <li key={idx}>{err}</li>
-                        ))}
-                        {uploadResults.errors.length > 5 && (
-                          <li>...and {uploadResults.errors.length - 5} more errors</li>
-                        )}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+            <AlertMessage
+              variant={uploadResults.success ? 'success' : 'error'}
+              message={
+                uploadResults.message || 
+                (uploadResults.success 
+                  ? `Successfully added ${uploadResults.successful} properties. ${uploadResults.failed ? `Failed to add ${uploadResults.failed} properties.` : ''} ${uploadResults.skipped ? `Skipped ${uploadResults.skipped} rows.` : ''}`
+                  : uploadResults.error || 'Upload failed'
+                )
+              }
+            />
           )}
           
           {/* Add/Edit Form - Embedded directly in the page */}
@@ -367,9 +343,10 @@ export default function RentalInventoryManagement() {
               </h2>
               
               {formError && (
-                <div className="mb-6 p-3 bg-red-50 text-red-700 border border-red-200 rounded-md">
-                  {formError}
-                </div>
+                <AlertMessage
+                  variant="error"
+                  message={formError}
+                />
               )}
               
               <form onSubmit={handleSubmit}>

@@ -7,6 +7,9 @@ import Navigation from "../../../components/Navigation";
 import { getDocumentsWithTimeout } from "../../../lib/firebase/firestoreUtils";
 import { Mail, Send, Users, AlertTriangle, CheckCircle, RefreshCw } from "lucide-react";
 import logger from "../../../lib/logger";
+import { Button } from "../../../components/ui/button";
+import { theme } from "../../../theme/theme";
+import { AlertMessage } from "../../../components/ui/alert-message";
 
 interface Tenant {
   id: string;
@@ -267,29 +270,17 @@ export default function EmailNotificationsPage() {
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Compose Email</h2>
             
             {sendSuccess === true && (
-              <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-4 rounded-md">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <CheckCircle className="h-5 w-5 text-green-400" />
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm text-green-700">Email sent successfully!</p>
-                  </div>
-                </div>
-              </div>
+              <AlertMessage
+                variant="success"
+                message="Email sent successfully!"
+              />
             )}
             
             {sendError && (
-              <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4 rounded-md">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <AlertTriangle className="h-5 w-5 text-red-400" />
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm text-red-700">{sendError}</p>
-                  </div>
-                </div>
-              </div>
+              <AlertMessage
+                variant="error"
+                message={sendError}
+              />
             )}
             
             <div className="mb-4">
@@ -321,11 +312,12 @@ export default function EmailNotificationsPage() {
             </div>
             
             <div className="flex justify-end">
-              <button
-                type="button"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              <Button
+                variant="default"
+                size="default"
                 onClick={handleSendEmail}
                 disabled={isSending}
+                className="bg-theme-primary hover:bg-theme-primary/90"
               >
                 {isSending ? (
                   <>
@@ -338,7 +330,7 @@ export default function EmailNotificationsPage() {
                     Send Email
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           </div>
           
@@ -357,38 +349,27 @@ export default function EmailNotificationsPage() {
               <li>Occupancy statistics</li>
             </ul>
             
-            {reportStatus.success === true && (
-              <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-4 rounded-md">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <CheckCircle className="h-5 w-5 text-green-400" />
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm text-green-700">{reportStatus.message}</p>
-                  </div>
-                </div>
-              </div>
+            {reportStatus.success === true && reportStatus.message && (
+              <AlertMessage
+                variant="success"
+                message={reportStatus.message}
+              />
             )}
             
-            {reportStatus.success === false && (
-              <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4 rounded-md">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <AlertTriangle className="h-5 w-5 text-red-400" />
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm text-red-700">{reportStatus.message}</p>
-                  </div>
-                </div>
-              </div>
+            {reportStatus.success === false && reportStatus.message && (
+              <AlertMessage
+                variant="error"
+                message={reportStatus.message}
+              />
             )}
             
             <div className="flex justify-end">
-              <button
-                type="button"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              <Button
+                variant="default"
+                size="default"
                 onClick={handleGenerateMonthlyReport}
                 disabled={isGeneratingReport}
+                className="bg-theme-primary hover:bg-theme-primary/90"
               >
                 {isGeneratingReport ? (
                   <>
@@ -401,7 +382,7 @@ export default function EmailNotificationsPage() {
                     Generate Monthly Report
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -410,26 +391,21 @@ export default function EmailNotificationsPage() {
         <div className="mt-6 bg-white shadow rounded-lg overflow-hidden">
           <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
             <h3 className="text-lg font-medium leading-6 text-gray-900">Select Recipients</h3>
-            <button
-              type="button"
-              className="inline-flex items-center px-3 py-1 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleSelectAllTenants}
+              className="border-theme-secondary text-theme-text-primary hover:bg-theme-surface"
             >
               {selectedTenants.length === tenants.length ? "Deselect All" : "Select All"}
-            </button>
+            </Button>
           </div>
           
           {error && (
-            <div className="bg-red-50 border-l-4 border-red-400 p-4 mx-4 mb-4 rounded-md">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <AlertTriangle className="h-5 w-5 text-red-400" />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-red-700">{error}</p>
-                </div>
-              </div>
-            </div>
+            <AlertMessage
+              variant="error"
+              message={error}
+            />
           )}
           
           {isLoading ? (

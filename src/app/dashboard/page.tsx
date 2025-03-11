@@ -13,6 +13,7 @@ import {
 } from "../../lib/firebase/firestoreUtils";
 import { RentalInventory, Lease, RentPayment } from "../../types";
 import { formatCurrency, formatDate } from "../../lib/utils/formatters";
+import { AlertMessage } from "@/components/ui/alert-message";
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -168,10 +169,11 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navigation />
-        <div className="container mx-auto px-4 py-8 ml-64"> {/* Added ml-64 to account for sidebar */}
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-            {error}
-          </div>
+        <div className="container mx-auto px-4 py-8 ml-64">
+          <AlertMessage
+            variant="error"
+            message={error}
+          />
         </div>
       </div>
     );

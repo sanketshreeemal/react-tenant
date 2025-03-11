@@ -15,6 +15,7 @@ import {
 import { format, formatDistance, formatRelative, formatDuration, intervalToDuration } from 'date-fns';
 import { Search, Filter, CalendarIcon, CheckCircle, XCircle, FileUp, FileDown, Loader2, AlertTriangle } from "lucide-react";
 import { downloadTenantTemplate, uploadTenantExcel } from "@/lib/excelUtils";
+import { AlertMessage } from "@/components/ui/alert-message";
 
 export default function TenantsManagement() {
   const { user, loading } = useAuth();
@@ -45,6 +46,8 @@ export default function TenantsManagement() {
   const [showUploadResults, setShowUploadResults] = useState(false);
   const [isInstructionsExpanded, setIsInstructionsExpanded] = useState(false);
   
+  const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error' | 'info' | 'warning', message: string } | null>(null);
+  
   // Add effect to scroll to error message when it appears
   useEffect(() => {
     if (formError && formRef.current) {
@@ -62,6 +65,13 @@ export default function TenantsManagement() {
       return () => clearTimeout(timer);
     }
   }, [showUploadResults]);
+  
+  // Add effect to scroll to top when alert appears
+  useEffect(() => {
+    if (alertMessage) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [alertMessage]);
   
   // Custom class for input fields - wider with more padding
   const inputClass = "shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md pl-3 py-2 w-[125%]";
@@ -94,17 +104,7 @@ export default function TenantsManagement() {
     }
   }, [user, loading]);
   
-  // Auto-refresh functionality removed - data will only load on initial mount or manual refresh
-  // useEffect(() => {
-  //   if (user && !loading) {
-  //     const intervalId = setInterval(() => {
-  //       console.log("Refreshing tenant data...");
-  //       loadData();
-  //     }, 30000); // 30 seconds
-      
-  //     return () => clearInterval(intervalId);
-  //   }
-  // }, [user, loading]);
+ 
   
   // Debug useEffect to log rental inventory changes
   useEffect(() => {
@@ -387,8 +387,10 @@ export default function TenantsManagement() {
           );
           
           if (conflictingLease) {
-            // Create a more friendly error message with tenant names
-            alert(`Cannot activate this lease for ${leaseToActivate.tenantName}.\n\nUnit ${displayUnitNumber} already has an active lease for tenant ${conflictingLease.tenantName}.\n\nPlease deactivate the current active lease first.`);
+            setAlertMessage({
+              type: 'error',
+              message: `Cannot activate this lease for ${leaseToActivate.tenantName}. Unit ${displayUnitNumber} already has an active lease for tenant ${conflictingLease.tenantName}. Please deactivate the current active lease first.`
+            });
             return;
           }
         }
@@ -405,8 +407,16 @@ export default function TenantsManagement() {
             : lease
         )
       );
+      
+      setAlertMessage({
+        type: 'success',
+        message: `Lease status successfully ${!isActive ? 'activated' : 'deactivated'}`
+      });
     } catch (error: any) {
-      alert(`Error updating lease status: ${error.message}`);
+      setAlertMessage({
+        type: 'error',
+        message: `Error updating lease status: ${error.message}`
+      });
     }
   };
 
@@ -431,9 +441,15 @@ export default function TenantsManagement() {
       resetForm();
       
       // Show success message
-      alert("Lease was successfully deleted");
+      setAlertMessage({
+        type: 'success',
+        message: 'Lease was successfully deleted'
+      });
     } catch (error: any) {
-      alert(`Error deleting lease: ${error.message}`);
+      setAlertMessage({
+        type: 'error',
+        message: `Error deleting lease: ${error.message}`
+      });
     }
   };
 
@@ -586,6 +602,26 @@ export default function TenantsManagement() {
       <Navigation />
       
       <div className="md:ml-64 p-4">
+        {/* Add alert message at the top */}
+        {alertMessage && (
+          <div className="max-w-7xl mx-auto mb-6">
+            <AlertMessage
+              variant={alertMessage.type}
+              message={alertMessage.message}
+            />
+          </div>
+        )}
+        
+        {/* Form error display */}
+        {formError && (
+          <div className="max-w-7xl mx-auto mb-6">
+            <AlertMessage
+              variant="error"
+              message={formError}
+            />
+          </div>
+        )}
+        
         <header className="bg-white shadow rounded-lg mb-6">
           <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <h1 className="text-3xl font-bold text-gray-900">Tenants & Leases</h1>
@@ -738,12 +774,6 @@ export default function TenantsManagement() {
               <h2 className="text-xl font-semibold text-gray-800 mb-6">
                 {editingLeaseId ? 'Edit Tenant & Lease' : 'Add New Tenant & Lease'}
               </h2>
-              
-              {formError && (
-                <div className="mb-6 p-3 bg-red-50 text-red-700 border border-red-200 rounded-md">
-                  {formError}
-                </div>
-              )}
               
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="p-4 bg-gray-50 rounded-md mb-6">

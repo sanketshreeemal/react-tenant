@@ -9,6 +9,7 @@ import { db } from "../../../lib/firebase/firebase";
 import { MessageSquare, Send, Check, AlertTriangle, Users } from "lucide-react";
 import { getAllActiveLeases } from "../../../lib/firebase/firestoreUtils";
 import { Lease as FirebaseLease } from "../../../types";
+import { AlertMessage } from "@/components/ui/alert-message";
 
 // Define a local Lease interface that matches our component needs
 interface Lease {
@@ -480,26 +481,10 @@ export default function WhatsAppPage() {
                   </div>
                   
                   {statusMessage.message && (
-                    <div className={`mt-4 p-3 rounded-md ${
-                      statusMessage.type === "error" 
-                        ? "bg-red-50 text-red-800" 
-                        : "bg-green-50 text-green-800"
-                    }`}>
-                      <div className="flex">
-                        <div className="flex-shrink-0">
-                          {statusMessage.type === "error" ? (
-                            <AlertTriangle className="h-5 w-5 text-red-400" />
-                          ) : (
-                            <Check className="h-5 w-5 text-green-400" />
-                          )}
-                        </div>
-                        <div className="ml-3">
-                          <p className="text-sm font-medium">
-                            {statusMessage.message}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+                    <AlertMessage
+                      variant={statusMessage.type === "error" ? "error" : "success"}
+                      message={statusMessage.message}
+                    />
                   )}
                 </div>
               </div>
