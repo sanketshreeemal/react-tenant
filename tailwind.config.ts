@@ -1,8 +1,8 @@
 import type { Config } from "tailwindcss";
+import { theme } from "./src/theme/theme";
 
-const config: Config = {
-    darkMode: ["class"],
-    content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
+const tailwindConfig: Config = {
+    content: ["./src/**/*.{js,ts,jsx,tsx,mdx,json}"],
   theme: {
   	extend: {
   		backgroundImage: {
@@ -12,7 +12,10 @@ const config: Config = {
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
-  			sm: 'calc(var(--radius) - 4px)'
+  			sm: 'calc(var(--radius) - 4px)',
+            'theme-sm': theme.borderRadius.sm,
+            'theme-md': theme.borderRadius.md,
+            'theme-lg': theme.borderRadius.lg,
   		},
   		colors: {
   			background: 'hsl(var(--background))',
@@ -54,10 +57,43 @@ const config: Config = {
   				'3': 'hsl(var(--chart-3))',
   				'4': 'hsl(var(--chart-4))',
   				'5': 'hsl(var(--chart-5))'
-  			}
-  		}
+  			},
+            'theme-primary': theme.colors.primary,
+            'theme-secondary': theme.colors.secondary,
+            'theme-background': theme.colors.background,
+            'theme-surface': theme.colors.surface,
+            'theme-text-primary': theme.colors.textPrimary,
+            'theme-text-secondary': theme.colors.textSecondary,
+            'theme-error': theme.colors.error,
+  		},
+        spacing: {
+            'theme-xs': theme.spacing.xs,
+            'theme-sm': theme.spacing.sm,
+            'theme-md': theme.spacing.md,
+            'theme-lg': theme.spacing.lg,
+            'theme-xl': theme.spacing.xl,
+        },
+        fontFamily: {
+            sans: [theme.typography.fontFamily.sans],
+            mono: [theme.typography.fontFamily.mono],
+        },
+        fontSize: {
+            'theme-xs': theme.typography.fontSize.xs,
+            'theme-sm': theme.typography.fontSize.sm,
+            'theme-base': theme.typography.fontSize.base,
+            'theme-lg': theme.typography.fontSize.lg,
+            'theme-xl': theme.typography.fontSize.xl,
+            'theme-2xl': theme.typography.fontSize['2xl'],
+            'theme-3xl': theme.typography.fontSize['3xl'],
+            'theme-4xl': theme.typography.fontSize['4xl'],
+        },
+        boxShadow: {
+            'theme-sm': theme.shadows.sm,
+            'theme-md': theme.shadows.md,
+        },
   	}
   },
   plugins: [require("tailwindcss-animate")],
+  darkMode: 'class',
 };
-export default config;
+export default tailwindConfig;

@@ -22,7 +22,8 @@
   }
 }
 
-
+/* Import fonts needed for the theme */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap');
 
 @layer base {
   :root {
@@ -80,7 +81,47 @@
   }
 }
 
-
+/* Custom theme utility classes for easier styling */
+@layer utilities {
+  /* Text styling utilities */
+  .text-primary-theme {
+    color: var(--textPrimary, theme('colors.theme-text-primary'));
+  }
+  .text-secondary-theme {
+    color: var(--textSecondary, theme('colors.theme-text-secondary'));
+  }
+  
+  /* Background styling utilities */
+  .bg-surface {
+    background-color: var(--surface, theme('colors.theme-surface'));
+  }
+  
+  /* Border styling utilities */
+  .border-theme {
+    border-color: var(--border-color, theme('colors.theme-border'));
+  }
+  
+  /* Shadow utilities */
+  .shadow-theme-sm {
+    box-shadow: var(--shadow-sm, theme('boxShadow.theme-sm'));
+  }
+  .shadow-theme-md {
+    box-shadow: var(--shadow-md, theme('boxShadow.theme-md'));
+  }
+  
+  /* Spacing helper classes */
+  .p-theme-xs { padding: var(--spacing-xs, theme('spacing.theme-xs')); }
+  .p-theme-sm { padding: var(--spacing-sm, theme('spacing.theme-sm')); }
+  .p-theme-md { padding: var(--spacing-md, theme('spacing.theme-md')); }
+  .p-theme-lg { padding: var(--spacing-lg, theme('spacing.theme-lg')); }
+  .p-theme-xl { padding: var(--spacing-xl, theme('spacing.theme-xl')); }
+  
+  .m-theme-xs { margin: var(--spacing-xs, theme('spacing.theme-xs')); }
+  .m-theme-sm { margin: var(--spacing-sm, theme('spacing.theme-sm')); }
+  .m-theme-md { margin: var(--spacing-md, theme('spacing.theme-md')); }
+  .m-theme-lg { margin: var(--spacing-lg, theme('spacing.theme-lg')); }
+  .m-theme-xl { margin: var(--spacing-xl, theme('spacing.theme-xl')); }
+}
 
 @layer base {
   * {
