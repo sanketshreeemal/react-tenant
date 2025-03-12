@@ -14,6 +14,13 @@ import {
 import { RentalInventory, Lease, RentPayment } from "../../types";
 import { formatCurrency, formatDate } from "../../lib/utils/formatters";
 import { AlertMessage } from "@/components/ui/alert-message";
+import { theme } from "@/theme/theme";
+import { StatCard } from "@/components/ui/statcard";
+import { Building, DollarSign, FileText, Key } from "lucide-react";
+import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress"
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -153,6 +160,13 @@ export default function Dashboard() {
     };
   };
 
+  // Add new function to calculate property type split
+  const calculatePropertyTypeSplit = (properties: RentalInventory[]) => {
+    const commercial = properties.filter(p => p.propertyType === 'Commercial').length;
+    const residential = properties.filter(p => p.propertyType === 'Residential').length;
+    return { commercial, residential };
+  };
+
   if (loading || dataLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -182,222 +196,296 @@ export default function Dashboard() {
   const metrics = calculateDashboardMetrics();
   const upcomingExpirations = getUpcomingLeaseExpirations();
   const rentStatus = getRentCollectionStatus();
+  const propertyTypeSplit = calculatePropertyTypeSplit(properties);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <div className="pl-64 pt-6"> {/* Added pl-64 to push content right of the sidebar */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="text-2xl font-bold mb-8">Dashboard</h1>
-          
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <StatCard 
-              title="Properties" 
-              value={metrics.totalProperties.toString()} 
-              icon="🏢"
-              subtitle={`${metrics.occupancyRate}% Occupied`}
-              details={[
-                `${metrics.occupiedUnits} Occupied`,
-                `${metrics.totalProperties - metrics.occupiedUnits} Vacant`
-              ]}
-            />
-            <StatCard 
-              title="Rent Collected" 
-              value={formatCurrency(metrics.totalRentCollected)} 
-              icon="💰"
-              subtitle={`${metrics.collectionRate}% of Expected`}
-              details={[
-                `Expected: ${formatCurrency(metrics.totalExpectedRent)}`,
-                `${rentStatus.paid} of ${rentStatus.paid + rentStatus.unpaid} Units Paid`
-              ]}
-              highlightValue={metrics.collectionRate > 100}
-            />
-            <StatCard 
-              title="Active Leases" 
-              value={activeLeases.length.toString()} 
-              icon="📝"
-              subtitle={`${metrics.upcomingExpirations} Expiring Soon`}
-              details={[
-                `${upcomingExpirations.filter(l => l.daysLeft < 0).length} Expired`,
-                `${upcomingExpirations.filter(l => l.daysLeft >= 0 && l.daysLeft <= 30).length} Expiring in 30 Days`
-              ]}
-            />
-            <StatCard 
-              title="Vacancy" 
-              value={`${properties.length - activeLeases.length}`} 
-              icon="🔑"
-              subtitle="Available Units"
-              details={[
-                `${Math.round(100 - metrics.occupancyRate)}% Vacancy Rate`,
-                `${properties.length > 0 ? formatCurrency((metrics.totalProperties - metrics.occupiedUnits) * (metrics.totalExpectedRent / metrics.occupiedUnits || 0)) : '₹0'} Potential Income`
-              ]}
-              highlightValue={properties.length - activeLeases.length > 0}
-            />
-          </div>
-          
-          {/* Main Dashboard Sections */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Lease Expirations */}
-            <DashboardCard title="Upcoming Lease Expirations" icon="⏳">
-              {upcomingExpirations.length > 0 ? (
-                <div className="divide-y divide-gray-200">
-                  {upcomingExpirations.map((lease) => {
-                    // Color coding: red for expired, orange for expiring soon (30-60 days), green for safe
-                    let statusColor = "text-green-600";
-                    if (lease.daysLeft < 0) {
-                      statusColor = "text-red-600";
-                    } else if (lease.daysLeft <= 60) {
-                      statusColor = "text-amber-600";
-                    }
-                    
-                    return (
-                      <div key={lease.id} className="py-4 flex justify-between items-center">
-                        <div>
-                          <p className="font-medium text-gray-900">{lease.tenantName}</p>
-                          <p className="text-sm text-gray-500">Unit {lease.unitNumber}</p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {formatCurrency(lease.rentAmount)} monthly
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className={`font-medium ${statusColor}`}>
-                            {lease.daysLeft < 0 
-                              ? `Expired ${Math.abs(lease.daysLeft)} days ago` 
-                              : `${lease.daysLeft} days left`}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {lease.daysLeft < 0 ? "Ended" : "Expires"} {formatDate(new Date(lease.leaseEndDate))}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-gray-500 py-4">No upcoming lease expirations found.</p>
-              )}
-              <div className="mt-4">
-                <Link 
-                  href="/dashboard/tenants" 
-                  className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center"
-                >
-                  View all leases
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </Link>
-              </div>
-            </DashboardCard>
+      <div className="md:pl-64 w-full transition-all duration-300">
+        <div className="p-4 md:p-6 lg:p-8">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex justify-between items-center mb-4 md:mb-6">
+              <h1 className="text-xl md:text-2xl font-bold">Dashboard</h1>
+            </div>
             
-            {/* Rent Collection Status */}
-            <DashboardCard title={`${currentMonthName} Rent Collection Status`} icon="💸">
-              <div className="mb-6">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-gray-500">Collected</span>
-                  <span className="text-sm font-medium text-gray-900">{rentStatus.paid} of {rentStatus.paid + rentStatus.unpaid} units</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div 
-                    className="bg-green-600 h-3 rounded-full" 
-                    style={{ 
-                      width: `${rentStatus.paid + rentStatus.unpaid > 0 
-                        ? (rentStatus.paid / (rentStatus.paid + rentStatus.unpaid)) * 100 
-                        : 0}%` 
-                    }}
-                  ></div>
-                </div>
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>0%</span>
-                  <span>{rentStatus.paid + rentStatus.unpaid > 0 
-                    ? Math.round((rentStatus.paid / (rentStatus.paid + rentStatus.unpaid)) * 100) 
-                    : 0}%</span>
-                  <span>100%</span>
-                </div>
-              </div>
+            {/* Summary Cards - Mobile First Layout */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4 mb-6">
+              {/* Properties Card */}
+              <StatCard 
+                title="Properties" 
+                value={metrics.totalProperties.toString()}
+                icon={Building}
+                subtitle={[
+                  `${propertyTypeSplit.residential} Residential`,
+                  `${propertyTypeSplit.commercial} Commercial`
+                ]}
+                actionButton={{
+                  label: "Manage",
+                  href: "/dashboard/rental-inventory",
+                  variant: "outline"
+                }}
+              />
               
-              {rentStatus.unpaidLeases.length > 0 ? (
-                <div>
-                  <h3 className="font-medium text-gray-900 mb-3">Pending Payments</h3>
-                  <div className="space-y-4">
-                    {rentStatus.unpaidLeases.map((lease) => (
-                      <div key={lease.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-medium text-gray-900">{lease.tenantName}</p>
-                            <p className="text-sm text-gray-500">Unit {lease.unitNumber}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-medium text-gray-900">{formatCurrency(lease.rentAmount)}</p>
-                            <p className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full inline-block mt-1">Overdue</p>
+              <StatCard 
+                title="Rent Collected" 
+                value={formatCurrency(metrics.totalRentCollected)}
+                icon={DollarSign}
+                subtitle={`${metrics.collectionRate}% of Expected`}
+                highlightValue={metrics.collectionRate > 100}
+                actionButton={{
+                  label: "Manage",
+                  href: "/dashboard/rent",
+                  variant: "outline"
+                }}
+              />
+              
+              <StatCard 
+                title="Occupancy" 
+                value={`${Math.round(metrics.occupancyRate)}%`}
+                icon={Key}
+                subtitle={`${metrics.occupiedUnits}/${properties.length} units occupied`}
+                highlightValue={properties.length - activeLeases.length > 0}
+                actionButton={{
+                  label: "Manage",
+                  href: "/dashboard/properties/new",
+                  variant: "outline"
+                }}
+              />
+            </div>
+            
+            {/* Desktop Layout - Side by Side Cards */}
+            <div className="hidden lg:grid lg:grid-cols-2 gap-4">
+              {/* Rent Collection Status */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>{currentMonthName} Rent Collection Status</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[400px]">
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium text-gray-500">Collected</span>
+                        <span className="text-sm font-medium text-gray-900">
+                          {rentStatus.paid} of {rentStatus.paid + rentStatus.unpaid} units
+                        </span>
+                      </div>
+                      <Progress 
+                        value={rentStatus.paid + rentStatus.unpaid > 0 
+                          ? (rentStatus.paid / (rentStatus.paid + rentStatus.unpaid)) * 100 
+                          : 0
+                        } 
+                      />
+                      
+                      {rentStatus.unpaidLeases.length > 0 ? (
+                        <div className="mt-6">
+                          <h3 className="font-medium text-gray-900 mb-3">Pending Payments</h3>
+                          <div className="space-y-3">
+                            {rentStatus.unpaidLeases.map((lease) => (
+                              <Card key={lease.id}>
+                                <CardContent className="p-4">
+                                  <div className="flex justify-between items-start">
+                                    <div>
+                                      <p className="font-medium text-gray-900">{lease.tenantName}</p>
+                                      <p className="text-sm text-gray-500">Unit {lease.unitNumber}</p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="font-medium text-gray-900">{formatCurrency(lease.rentAmount)}</p>
+                                      <p className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full mt-1">
+                                        Overdue
+                                      </p>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-green-50 text-green-700 p-4 rounded-lg border border-green-100">
-                  <div className="flex items-center">
-                    <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <p className="font-medium">All rents collected for {currentMonthName}!</p>
-                  </div>
-                </div>
-              )}
-              
-              <div className="mt-6">
-                <Link 
-                  href="/dashboard/rent" 
-                  className="bg-blue-50 text-blue-600 hover:bg-blue-100 px-4 py-2 rounded-md text-sm font-medium inline-flex items-center transition-colors"
-                >
-                  Manage rent payments
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </Link>
-              </div>
-            </DashboardCard>
+                      ) : (
+                        <div className="bg-green-50 text-green-700 p-4 rounded-lg mt-4">
+                          <p className="font-medium flex items-center">
+                            <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            All rents collected for {currentMonthName}!
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+
+              {/* Lease Expirations */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Upcoming Lease Expirations</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[400px]">
+                    <div className="space-y-4">
+                      {upcomingExpirations.length > 0 ? (
+                        upcomingExpirations.map((lease) => {
+                          let statusColor = "text-green-600";
+                          if (lease.daysLeft < 0) {
+                            statusColor = "text-red-600";
+                          } else if (lease.daysLeft <= 60) {
+                            statusColor = "text-amber-600";
+                          }
+                          
+                          return (
+                            <Card key={lease.id}>
+                              <CardContent className="p-4">
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <p className="font-medium text-gray-900">{lease.tenantName}</p>
+                                    <p className="text-sm text-gray-500">Unit {lease.unitNumber}</p>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      {formatCurrency(lease.rentAmount)} monthly
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className={`font-medium ${statusColor}`}>
+                                      {lease.daysLeft < 0 
+                                        ? `Expired ${Math.abs(lease.daysLeft)} days ago` 
+                                        : `${lease.daysLeft} days left`}
+                                    </p>
+                                    <p className="text-sm text-gray-500">
+                                      {lease.daysLeft < 0 ? "Ended" : "Expires"} {formatDate(new Date(lease.leaseEndDate))}
+                                    </p>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })
+                      ) : (
+                        <p className="text-gray-500 py-4">No upcoming lease expirations found.</p>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Mobile Layout - Tabbed Interface */}
+            <div className="lg:hidden mt-4">
+              <Tabs defaultValue="rent" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="rent">Rent Collection</TabsTrigger>
+                  <TabsTrigger value="leases">Lease Expirations</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="rent">
+                  <Card>
+                    <CardContent className="p-4">
+                      <ScrollArea className="h-[400px]">
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-medium text-gray-500">Collected</span>
+                            <span className="text-sm font-medium text-gray-900">
+                              {rentStatus.paid} of {rentStatus.paid + rentStatus.unpaid} units
+                            </span>
+                          </div>
+                          <Progress 
+                            value={rentStatus.paid + rentStatus.unpaid > 0 
+                              ? (rentStatus.paid / (rentStatus.paid + rentStatus.unpaid)) * 100 
+                              : 0
+                            } 
+                          />
+                          
+                          {rentStatus.unpaidLeases.length > 0 ? (
+                            <div className="mt-6">
+                              <h3 className="font-medium text-gray-900 mb-3">Pending Payments</h3>
+                              <div className="space-y-3">
+                                {rentStatus.unpaidLeases.map((lease) => (
+                                  <Card key={lease.id}>
+                                    <CardContent className="p-4">
+                                      <div className="flex justify-between items-start">
+                                        <div>
+                                          <p className="font-medium text-gray-900">{lease.tenantName}</p>
+                                          <p className="text-sm text-gray-500">Unit {lease.unitNumber}</p>
+                                        </div>
+                                        <div className="text-right">
+                                          <p className="font-medium text-gray-900">{formatCurrency(lease.rentAmount)}</p>
+                                          <p className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full mt-1">
+                                            Overdue
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="bg-green-50 text-green-700 p-4 rounded-lg mt-4">
+                              <p className="font-medium flex items-center">
+                                <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                                All rents collected for {currentMonthName}!
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+                
+                <TabsContent value="leases">
+                  <Card>
+                    <CardContent className="p-4">
+                      <ScrollArea className="h-[400px]">
+                        <div className="space-y-4">
+                          {upcomingExpirations.length > 0 ? (
+                            upcomingExpirations.map((lease) => {
+                              let statusColor = "text-green-600";
+                              if (lease.daysLeft < 0) {
+                                statusColor = "text-red-600";
+                              } else if (lease.daysLeft <= 60) {
+                                statusColor = "text-amber-600";
+                              }
+                              
+                              return (
+                                <Card key={lease.id}>
+                                  <CardContent className="p-4">
+                                    <div className="flex justify-between items-start">
+                                      <div>
+                                        <p className="font-medium text-gray-900">{lease.tenantName}</p>
+                                        <p className="text-sm text-gray-500">Unit {lease.unitNumber}</p>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                          {formatCurrency(lease.rentAmount)} monthly
+                                        </p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className={`font-medium ${statusColor}`}>
+                                          {lease.daysLeft < 0 
+                                            ? `Expired ${Math.abs(lease.daysLeft)} days ago` 
+                                            : `${lease.daysLeft} days left`}
+                                        </p>
+                                        <p className="text-sm text-gray-500">
+                                          {lease.daysLeft < 0 ? "Ended" : "Expires"} {formatDate(new Date(lease.leaseEndDate))}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              );
+                            })
+                          ) : (
+                            <p className="text-gray-500 py-4">No upcoming lease expirations found.</p>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatCard({ 
-  title, 
-  value, 
-  icon, 
-  subtitle,
-  details = [],
-  highlightValue = false
-}: { 
-  title: string; 
-  value: string; 
-  icon: string; 
-  subtitle?: string;
-  details?: string[];
-  highlightValue?: boolean;
-}) {
-  return (
-    <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-100 hover:border-gray-200 hover:shadow transition-all">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-gray-500 font-medium">{title}</h2>
-        <span className="text-2xl">{icon}</span>
-      </div>
-      <div className="mb-2">
-        <p className={`text-3xl font-bold ${highlightValue ? 'text-green-600' : 'text-gray-900'}`}>{value}</p>
-        {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
-      </div>
-      {details.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          {details.map((detail, index) => (
-            <p key={index} className="text-xs text-gray-500 mb-1">{detail}</p>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -413,11 +501,11 @@ function DashboardCard({
 }) {
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
-      <div className="px-6 py-4 border-b border-gray-100 flex items-center">
-        {icon && <span className="mr-2 text-xl">{icon}</span>}
+      <div className="px-4 md:px-6 py-3 md:py-4 border-b border-gray-100 flex items-center">
+        {icon && <span className="mr-2 text-lg md:text-xl">{icon}</span>}
         <h2 className="font-semibold text-gray-900">{title}</h2>
       </div>
-      <div className="px-6 py-4">
+      <div className="px-4 md:px-6 py-3 md:py-4">
         {children}
       </div>
     </div>

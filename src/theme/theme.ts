@@ -46,6 +46,21 @@ export const theme = {
       // Destructive action buttons (delete, remove)
       destructive: "#DC2626",    // Same as error color
       destructiveHover: "#B91C1C", // Darker red for hover
+    },
+
+    // StatCard-specific colors
+    statCard: {
+      titleColor: "#4B5563",     // Gray for stat card titles
+      valueColor: "#1F2937",     // Dark gray for values
+      highlightValueColor: "#059669", // Green for highlighted values
+      subtitleColor: "#6B7280",  // Medium gray for subtitles
+      iconColor: "#374151",      // Dark gray for icons
+      detailsColor: "#6B7280",   // Medium gray for details text
+      borderColor: "#E5E7EB",    // Light gray for borders
+      iconBgColor: "#F3F4F6",    // Light gray for icon background
+      highlightBgColor: "#ECFDF5", // Light green for highlighted icon background
+      highlightIconColor: "#047857", // Dark green for highlighted icon
+      bulletColor: "#D1D5DB",    // Gray for subtitle bullets
     }
   },
 
@@ -96,8 +111,28 @@ export const theme = {
   // -------------------------------------------------------------------------
   shadows: {
     sm: "0 1px 2px rgba(0, 0, 0, 0.05)",   // Subtle shadow for small components
-    md: "0 4px 6px rgba(0, 0, 0, 0.1)",      // Medium shadow for panels and cards
+    md: "0 4px 6px rgba(0, 0, 0, 0.1)",    // Medium shadow for panels and cards
+    lg: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)", // Larger shadow for elevated components
   },
+
+  // -------------------------------------------------------------------------
+  // Component-specific themes
+  // -------------------------------------------------------------------------
+  components: {
+    // StatCard component specific theming
+    statCard: {
+      padding: "16px",
+      borderRadius: "12px",
+      shadow: "0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)",
+      hoverShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+      iconSize: "24px",
+      titleFontSize: "0.875rem", // 14px
+      valueFontSize: "1.5rem",   // 24px
+      valueFontWeight: "700",    // Bold
+      subtitleFontSize: "0.875rem", // 14px
+      detailsFontSize: "0.75rem", // 12px
+    }
+  }
 };
 
 export default theme; 
