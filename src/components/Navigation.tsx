@@ -34,7 +34,7 @@ export default function Navigation() {
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: Home },
     { name: "Tenants", href: "/dashboard/tenants", icon: Users },
-    { name: "Rental Inventory", href: "/dashboard/rental-inventory", icon: Building },
+    { name: "Property Management", href: "/dashboard/property-mgmt", icon: Building },
     { name: "Rent", href: "/dashboard/rent", icon: DollarSign },
     // Development Phase Features
     // { name: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },

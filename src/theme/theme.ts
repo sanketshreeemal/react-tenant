@@ -19,7 +19,7 @@ export const theme = {
 
     // Background colors for the overall page and surfaces (cards, panels)
     background: "#FFFFFF",       // Clean white background for the page
-    surface: "#F8F9FA",          // Light gray for card backgrounds or elevated surfaces
+    surface: "#FAFBFC",          // Very light gray for card backgrounds or elevated surfaces
 
     // Text colors for primary and secondary content
     textPrimary: "#1F2937",      // Dark gray for primary text for strong contrast
@@ -123,8 +123,8 @@ export const theme = {
       borderRadius: "12px", // Using borderRadius.lg value directly
       shadow: "0 1px 2px rgba(0, 0, 0, 0.05)", // Using shadows.sm value directly
       hoverShadow: "0 4px 6px rgba(0, 0, 0, 0.1)", // Using shadows.md value directly
-      iconSize: "28px",
-      titleFontSize: "0.95rem",
+      iconSize: "24px",
+      titleFontSize: "0.9rem",
       valueFontSize: "1.5rem",
       valueFontWeight: "700",
       subtitleFontSize: "0.875rem"

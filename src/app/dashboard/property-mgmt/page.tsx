@@ -7,8 +7,14 @@ import Navigation from "../../../components/Navigation";
 import { RentalInventory } from "@/types";
 import { addRentalInventory, getAllRentalInventory, updateRentalInventory, deleteRentalInventory } from "@/lib/firebase/firestoreUtils";
 import { downloadInventoryTemplate, uploadInventoryExcel } from "@/lib/excelUtils";
-import { FileUp, FileDown, Loader2, AlertTriangle, CheckCircle, X } from "lucide-react";
+import { FileUp, FileDown, Loader2, AlertTriangle, CheckCircle, X, Plus } from "lucide-react";
 import { AlertMessage } from "@/components/ui/alert-message";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 export default function RentalInventoryManagement() {
   const { user, loading } = useAuth();
@@ -20,8 +26,7 @@ export default function RentalInventoryManagement() {
   const [formError, setFormError] = useState<string | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isInstructionsExpanded, setIsInstructionsExpanded] = useState(false);
-
+  
   // Excel upload state
   const [isUploading, setIsUploading] = useState(false);
   const [uploadResults, setUploadResults] = useState<{
@@ -234,11 +239,6 @@ export default function RentalInventoryManagement() {
   const closeUploadResults = () => {
     setShowUploadResults(false);
   };
-
-  // Toggle instructions expand/collapse
-  const toggleInstructions = () => {
-    setIsInstructionsExpanded(!isInstructionsExpanded);
-  };
   
   if (loading || isLoading) {
     return (
@@ -267,58 +267,72 @@ export default function RentalInventoryManagement() {
           </div>
         )}
 
-        <header className="bg-white shadow rounded-lg mb-6">
-          <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <h1 className="text-3xl font-bold text-gray-900">Rental Inventory Management</h1>
-            <div className="flex flex-wrap gap-2">
-              {/* Excel Template Download Button */}
-              <button
-                onClick={handleDownloadTemplate}
-                className="flex items-center bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors relative group"
-                aria-label="Download Template"
-              >
-                <FileDown className="w-5 h-5" />
-                <span className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                  Download Template
-                </span>
-              </button>
-              
-              {/* Excel Upload Button */}
-              <button
-                onClick={triggerFileInput}
-                disabled={isUploading}
-                className="flex items-center bg-amber-500 hover:bg-amber-600 text-white font-medium py-2 px-4 rounded-md transition-colors disabled:bg-amber-300 relative group"
-                aria-label="Upload Template"
-              >
-                {isUploading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <FileUp className="w-5 h-5" />
-                )}
-                <span className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                  Upload Template
-                </span>
-              </button>
-              
-              {/* Add Property Button */}
-              <button
-                onClick={() => setIsFormOpen(!isFormOpen)}
-                className="flex items-center bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition-colors"
-              >
-                <span className="mr-1">{isFormOpen ? 'Cancel' : '+ Manual Add'}</span>
-              </button>
-              
-              {/* Hidden file input */}
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-                accept=".xlsx,.xls"
-                className="hidden"
-              />
+        <Card className="mb-6">
+          <CardHeader className="py-4 px-4 sm:px-6 lg:px-8">
+            <div className="w-full flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-2xl font-semibold text-gray-900 text-center sm:text-left">
+                Property Management
+              </CardTitle>
+              <div className="flex items-center justify-center sm:justify-end gap-2">
+                {/* Excel Template Download Button */}
+                <Button
+                  onClick={handleDownloadTemplate}
+                  className="bg-green-600 hover:bg-green-700"
+                  size="sm"
+                  aria-label="Download Template"
+                >
+                  <FileDown className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="sr-only">Download Template</span>
+                </Button>
+                
+                {/* Excel Upload Button */}
+                <Button
+                  onClick={triggerFileInput}
+                  disabled={isUploading}
+                  className="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300"
+                  size="sm"
+                  aria-label="Upload Template"
+                >
+                  {isUploading ? (
+                    <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                  ) : (
+                    <FileUp className="h-4 w-4 sm:h-5 sm:w-5" />
+                  )}
+                  <span className="sr-only">Upload Template</span>
+                </Button>
+                
+                {/* Add Property Button */}
+                <Button
+                  onClick={() => setIsFormOpen(!isFormOpen)}
+                  variant="default"
+                  size="sm"
+                  className="bg-gray-900 hover:bg-gray-800"
+                >
+                  {isFormOpen ? (
+                    <>
+                      <X className="h-4 w-4 sm:h-5 sm:w-5" />
+                      <span>Cancel</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+                      <span>Manual Add</span>
+                    </>
+                  )}
+                </Button>
+                
+                {/* Hidden file input */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                />
+              </div>
             </div>
-          </div>
-        </header>
+          </CardHeader>
+        </Card>
         
         <main className="max-w-7xl mx-auto">
           {/* Upload Results Notification */}
@@ -337,154 +351,155 @@ export default function RentalInventoryManagement() {
           
           {/* Add/Edit Form - Embedded directly in the page */}
           {isFormOpen && (
-            <div ref={formRef} className="bg-white shadow rounded-lg p-6 mb-8">
-              <h2 className="text-xl font-semibold text-gray-800 mb-6">
-                {editingItem ? 'Edit Property' : 'Manually Add New Property'}
-              </h2>
+            <Card ref={formRef} className="mb-8">
+              <CardHeader>
+                <CardTitle>
+                  {editingItem 
+                    ? `Edit ${editingItem.unitNumber} ${editingItem.propertyType} Property`
+                    : 'Add Property'
+                  }
+                </CardTitle>
+              </CardHeader>
               
-              {formError && (
-                <AlertMessage
-                  variant="error"
-                  message={formError}
-                />
-              )}
-              
-              <form onSubmit={handleSubmit}>
-                <div className="space-y-6">
-                  <div className="p-4 bg-gray-50 rounded-md">
-                    <h3 className="font-medium text-gray-700 mb-4">Property Information</h3>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <CardContent className="px-2 sm:px-6">
+                {formError && (
+                  <AlertMessage
+                    variant="error"
+                    message={formError}
+                    className="mb-6"
+                  />
+                )}
+                
+                <form onSubmit={handleSubmit}>
+                  <Card className="bg-surface border-border">
+                    <CardHeader className="px-3 sm:px-6">
+                      <CardTitle className="text-base">Property Information</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2 px-3 sm:px-6">
                       <div className="col-span-1">
-                        <label htmlFor="unitNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="unitNumber" className="block text-sm font-medium text-textSecondary mb-1">
                           Unit Number *
                         </label>
-                        <input
+                        <Input
                           type="text"
                           id="unitNumber"
                           value={unitNumber}
                           onChange={(e) => setUnitNumber(e.target.value)}
-                          className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
                           placeholder="e.g., 101 or HSR2"
                           required
                         />
                       </div>
                       
                       <div className="col-span-1">
-                        <label htmlFor="propertyType" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="propertyType" className="block text-sm font-medium text-textSecondary mb-1">
                           Property Type *
                         </label>
-                        <select
-                          id="propertyType"
-                          value={propertyType}
-                          onChange={(e) => setPropertyType(e.target.value as "Commercial" | "Residential")}
-                          className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                          required
-                        >
-                          <option value="Residential">Residential</option>
-                          <option value="Commercial">Commercial</option>
-                        </select>
+                        <Select value={propertyType} onValueChange={(value) => setPropertyType(value as "Commercial" | "Residential")}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select property type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Residential">Residential</SelectItem>
+                            <SelectItem value="Commercial">Commercial</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                       
                       <div className="col-span-2">
-                        <label htmlFor="ownerDetails" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="ownerDetails" className="block text-sm font-medium text-textSecondary mb-1">
                           Owner Details *
                         </label>
-                        <textarea
+                        <Textarea
                           id="ownerDetails"
                           value={ownerDetails}
                           onChange={(e) => setOwnerDetails(e.target.value)}
                           rows={3}
-                          className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
                           placeholder="Enter owner name, contact info, etc."
                           required
-                        ></textarea>
+                        />
                       </div>
                       
                       <div className="col-span-2">
-                        <label htmlFor="bankDetails" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="bankDetails" className="block text-sm font-medium text-textSecondary mb-1">
                           Bank Details (Optional)
                         </label>
-                        <textarea
+                        <Textarea
                           id="bankDetails"
                           value={bankDetails}
                           onChange={(e) => setBankDetails(e.target.value)}
                           rows={3}
-                          className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
                           placeholder="Enter bank account info, IFSC code, etc."
-                        ></textarea>
+                        />
                       </div>
-                    </div>
-                  </div>
+                    </CardContent>
+                  </Card>
                   
-                  <div className="flex justify-end space-x-3">
-                    <button
+                  <div className="flex justify-end space-x-3 mt-6">
+                    <Button
                       type="button"
                       onClick={closeForm}
-                      className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      variant="outline"
                     >
                       Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="bg-blue-500 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
+                    </Button>
+                    
+                    <Button type="submit">
                       {editingItem ? 'Update Property' : 'Add Property'}
-                    </button>
+                    </Button>
                   </div>
-                </div>
-              </form>
-            </div>
+                </form>
+              </CardContent>
+            </Card>
           )}
           
           {/* Excel Upload Instructions - Collapsible Banner */}
           {!isFormOpen && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg mb-8 overflow-hidden">
-              {/* Collapsible Banner Header */}
-              <div 
-                className="p-3 flex justify-between items-center cursor-pointer hover:bg-blue-100 transition-colors"
-                onClick={toggleInstructions}
-              >
-                <div className="flex items-center">
-                  <FileUp className="w-4 h-4 text-blue-700 mr-2" />
-                  <p className="text-sm text-blue-700 font-medium">
-                    Bulk upload properties by downloading the template, filling it out, and uploading it
-                  </p>
-                </div>
-                <div className="text-blue-600">
-                  {isInstructionsExpanded ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
-                    </svg>
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </div>
-              </div>
-              
-              {/* Expanded Content */}
-              {isInstructionsExpanded && (
-                <div className="p-4 border-t border-blue-200">
-                  <p className="mb-3 text-xs text-blue-700">
-                    You can add multiple properties at once by following these steps:
-                  </p>
-                  <ol className="list-decimal pl-5 mb-3 space-y-1 text-xs text-blue-700">
-                    <li>Click the <FileDown className="w-3.5 h-3.5 inline-block mx-0.5" /> icon to download the Excel template</li>
-                    <li>Fill in your property details in the template following the instructions</li>
-                    <li>For <strong>Property Type</strong>, you must enter either &quot;Residential&quot; or &quot;Commercial&quot; exactly as shown</li>
-                    <li>Save the file and click the <FileUp className="w-3.5 h-3.5 inline-block mx-0.5" /> icon to import your properties</li>
-                  </ol>
-                  <div className="bg-yellow-50 p-2 rounded text-xs text-yellow-800 mb-2">
-                    <strong>Note:</strong> The template includes examples and instructions to guide you. 
-                    You don&apos;t need to delete these rows – our system will automatically detect and skip them during import.
+            <Accordion type="single" collapsible className="mb-8">
+              <AccordionItem value="bulk-upload">
+                <AccordionTrigger>
+                  <div className="flex items-center gap-2">
+                    <FileUp className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                    <span>Bulk upload properties using Excel template</span>
                   </div>
-                  <p className="text-xs text-blue-600">
-                    Required fields are marked with an asterisk (*) in the template.
-                  </p>
-                </div>
-              )}
-            </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-4">
+                    <p className="text-gray-600">Follow these steps to add multiple properties at once:</p>
+                    
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-3">
+                        <FileDown className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        <p className="text-gray-600">Click this icon above to download the Excel template</p>
+                      </div>
+
+                      <div className="flex items-start gap-3">
+                        <div className="w-5 flex-shrink-0" /> {/* Spacer for alignment */}
+                        <p className="text-gray-600">Fill in your property details in the downloaded template</p>
+                      </div>
+
+                      <div className="flex items-start gap-3">
+                        <div className="w-5 flex-shrink-0" /> {/* Spacer for alignment */}
+                        <p className="text-gray-600">For <strong>Property Type</strong>, enter either &quot;Residential&quot; or &quot;Commercial&quot;</p>
+                      </div>
+
+                      <div className="flex items-start gap-3">
+                        <FileUp className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                        <p className="text-gray-600">Click this icon above to upload your completed template</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-md text-amber-800 text-sm mt-4">
+                      <strong>Note:</strong> The template includes examples and instructions to guide you. 
+                      You don&apos;t need to delete these rows – our system will automatically detect and skip them during import.
+                    </div>
+                    
+                    <p className="text-gray-600 text-sm">
+                      Required fields are marked with an asterisk (*) in the template.
+                    </p>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           )}
           
           {/* Inventory Table */}

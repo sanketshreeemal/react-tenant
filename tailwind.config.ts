@@ -13,9 +13,9 @@ const tailwindConfig: Config = {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)',
-            'theme-sm': theme.borderRadius.sm,
-            'theme-md': theme.borderRadius.md,
-            'theme-lg': theme.borderRadius.lg,
+  			'theme-sm': theme.borderRadius.sm,
+  			'theme-md': theme.borderRadius.md,
+  			'theme-lg': theme.borderRadius.lg
   		},
   		colors: {
   			background: 'hsl(var(--background))',
@@ -58,42 +58,56 @@ const tailwindConfig: Config = {
   				'4': 'hsl(var(--chart-4))',
   				'5': 'hsl(var(--chart-5))'
   			},
-            'theme-primary': theme.colors.primary,
-            'theme-secondary': theme.colors.secondary,
-            'theme-background': theme.colors.background,
-            'theme-surface': theme.colors.surface,
-            'theme-text-primary': theme.colors.textPrimary,
-            'theme-text-secondary': theme.colors.textSecondary,
-            'theme-error': theme.colors.error,
+  			'theme-primary': theme.colors.primary,
+  			'theme-secondary': theme.colors.secondary,
+  			'theme-background': theme.colors.background,
+  			'theme-surface': theme.colors.surface,
+  			'theme-text-primary': theme.colors.textPrimary,
+  			'theme-text-secondary': theme.colors.textSecondary,
+  			'theme-error': theme.colors.error
   		},
-        spacing: {
-            'theme-xs': theme.spacing.xs,
-            'theme-sm': theme.spacing.sm,
-            'theme-md': theme.spacing.md,
-            'theme-lg': theme.spacing.lg,
-            'theme-xl': theme.spacing.xl,
-        },
-        fontFamily: {
-            sans: [theme.typography.fontFamily.sans],
-            mono: [theme.typography.fontFamily.mono],
-        },
-        fontSize: {
-            'theme-xs': theme.typography.fontSize.xs,
-            'theme-sm': theme.typography.fontSize.sm,
-            'theme-base': theme.typography.fontSize.base,
-            'theme-lg': theme.typography.fontSize.lg,
-            'theme-xl': theme.typography.fontSize.xl,
-            'theme-2xl': theme.typography.fontSize['2xl'],
-            'theme-3xl': theme.typography.fontSize['3xl'],
-            'theme-4xl': theme.typography.fontSize['4xl'],
-        },
-        boxShadow: {
-            'theme-sm': theme.shadows.sm,
-            'theme-md': theme.shadows.md,
-        },
+  		spacing: {
+  			'theme-xs': theme.spacing.xs,
+  			'theme-sm': theme.spacing.sm,
+  			'theme-md': theme.spacing.md,
+  			'theme-lg': theme.spacing.lg,
+  			'theme-xl': theme.spacing.xl
+  		},
+  		fontFamily: {
+  			sans: [theme.typography.fontFamily.sans],
+  			mono: [theme.typography.fontFamily.mono]
+  		},
+  		fontSize: {
+  			'theme-xs': theme.typography.fontSize.xs,
+  			'theme-sm': theme.typography.fontSize.sm,
+  			'theme-base': theme.typography.fontSize.base,
+  			'theme-lg': theme.typography.fontSize.lg,
+  			'theme-xl': theme.typography.fontSize.xl,
+  			'theme-2xl': theme.typography.fontSize['2xl'],
+  			'theme-3xl': theme.typography.fontSize['3xl'],
+  			'theme-4xl': theme.typography.fontSize['4xl']
+  		},
+  		boxShadow: {
+  			'theme-sm': theme.shadows.sm,
+  			'theme-md': theme.shadows.md
+  		},
+  		keyframes: {
+  			'accordion-down': {
+  				from: { height: '0' },
+  				to: { height: 'var(--radix-accordion-content-height)' }
+  			},
+  			'accordion-up': {
+  				from: { height: 'var(--radix-accordion-content-height)' },
+  				to: { height: '0' }
+  			}
+  		},
+  		animation: {
+  			'accordion-down': 'accordion-down 0.2s ease-out',
+  			'accordion-up': 'accordion-up 0.2s ease-out'
+  		}
   	}
   },
   plugins: [require("tailwindcss-animate")],
-  darkMode: 'class',
+  darkMode: 'class'
 };
 export default tailwindConfig;
