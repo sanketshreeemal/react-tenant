@@ -36,10 +36,11 @@ export default function Navigation() {
     { name: "Tenants", href: "/dashboard/tenants", icon: Users },
     { name: "Rental Inventory", href: "/dashboard/rental-inventory", icon: Building },
     { name: "Rent", href: "/dashboard/rent", icon: DollarSign },
-    { name: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
-    { name: "Email Notifications", href: "/dashboard/email", icon: Mail },
-    { name: "WhatsApp Messaging", href: "/dashboard/whatsapp", icon: MessageSquare },
-    { name: "Documents", href: "/dashboard/documents", icon: FileImage },
+    // Development Phase Features
+    // { name: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
+    // { name: "Email Notifications", href: "/dashboard/email", icon: Mail },
+    // { name: "WhatsApp Messaging", href: "/dashboard/whatsapp", icon: MessageSquare },
+    // { name: "Documents", href: "/dashboard/documents", icon: FileImage },
   ];
 
   return (

@@ -55,12 +55,10 @@ export const theme = {
       highlightValueColor: "#059669", // Green for highlighted values
       subtitleColor: "#6B7280",  // Medium gray for subtitles
       iconColor: "#374151",      // Dark gray for icons
-      detailsColor: "#6B7280",   // Medium gray for details text
-      borderColor: "#E5E7EB",    // Light gray for borders
+      borderColor: "#E5E7EB",    // Light gray for borders #REF
       iconBgColor: "#F3F4F6",    // Light gray for icon background
       highlightBgColor: "#ECFDF5", // Light green for highlighted icon background
       highlightIconColor: "#047857", // Dark green for highlighted icon
-      bulletColor: "#D1D5DB",    // Gray for subtitle bullets
     }
   },
 
@@ -121,16 +119,15 @@ export const theme = {
   components: {
     // StatCard component specific theming
     statCard: {
-      padding: "16px",
-      borderRadius: "12px",
-      shadow: "0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)",
-      hoverShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-      iconSize: "24px",
-      titleFontSize: "0.875rem", // 14px
-      valueFontSize: "1.5rem",   // 24px
-      valueFontWeight: "700",    // Bold
-      subtitleFontSize: "0.875rem", // 14px
-      detailsFontSize: "0.75rem", // 12px
+      padding: "8px", // Using spacing.sm value directly
+      borderRadius: "12px", // Using borderRadius.lg value directly
+      shadow: "0 1px 2px rgba(0, 0, 0, 0.05)", // Using shadows.sm value directly
+      hoverShadow: "0 4px 6px rgba(0, 0, 0, 0.1)", // Using shadows.md value directly
+      iconSize: "28px",
+      titleFontSize: "0.95rem",
+      valueFontSize: "1.5rem",
+      valueFontWeight: "700",
+      subtitleFontSize: "0.875rem"
     }
   }
 };

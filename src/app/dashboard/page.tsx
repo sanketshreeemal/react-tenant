@@ -209,47 +209,29 @@ export default function Dashboard() {
             </div>
             
             {/* Summary Cards - Mobile First Layout */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4 mb-6">
-              {/* Properties Card */}
-              <StatCard 
-                title="Properties" 
-                value={metrics.totalProperties.toString()}
-                icon={Building}
-                subtitle={[
-                  `${propertyTypeSplit.residential} Residential`,
-                  `${propertyTypeSplit.commercial} Commercial`
-                ]}
-                actionButton={{
-                  label: "Manage",
-                  href: "/dashboard/rental-inventory",
-                  variant: "outline"
-                }}
-              />
-              
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <StatCard 
                 title="Rent Collected" 
                 value={formatCurrency(metrics.totalRentCollected)}
                 icon={DollarSign}
                 subtitle={`${metrics.collectionRate}% of Expected`}
-                highlightValue={metrics.collectionRate > 100}
-                actionButton={{
-                  label: "Manage",
-                  href: "/dashboard/rent",
-                  variant: "outline"
-                }}
+                href="/dashboard/rent"
               />
               
               <StatCard 
-                title="Occupancy" 
+                title="Occupancy Rate" 
                 value={`${Math.round(metrics.occupancyRate)}%`}
                 icon={Key}
                 subtitle={`${metrics.occupiedUnits}/${properties.length} units occupied`}
-                highlightValue={properties.length - activeLeases.length > 0}
-                actionButton={{
-                  label: "Manage",
-                  href: "/dashboard/properties/new",
-                  variant: "outline"
-                }}
+                href="/dashboard/properties/new"
+              />
+
+              <StatCard 
+                title="Properties" 
+                value={metrics.totalProperties.toString()}
+                icon={Building}
+                subtitle={`${propertyTypeSplit.residential} Residential • ${propertyTypeSplit.commercial} Commercial`}
+                href="/dashboard/rental-inventory"
               />
             </div>
             
