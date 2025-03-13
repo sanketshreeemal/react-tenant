@@ -13,9 +13,14 @@ import {
   getAllRentalInventory
 } from "@/lib/firebase/firestoreUtils";
 import { format, formatDistance, formatRelative, formatDuration, intervalToDuration } from 'date-fns';
-import { Search, Filter, CalendarIcon, CheckCircle, XCircle, FileUp, FileDown, Loader2, AlertTriangle } from "lucide-react";
+import { Search, Filter, CalendarIcon, CheckCircle, XCircle, FileUp, FileDown, Loader2, AlertTriangle, X, Plus } from "lucide-react";
 import { downloadTenantTemplate, uploadTenantExcel } from "@/lib/excelUtils";
 import { AlertMessage } from "@/components/ui/alert-message";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 export default function TenantsManagement() {
   const { user, loading } = useAuth();
@@ -622,103 +627,123 @@ export default function TenantsManagement() {
           </div>
         )}
         
-        <header className="bg-white shadow rounded-lg mb-6">
-          <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <h1 className="text-3xl font-bold text-gray-900">Tenants & Leases</h1>
-            <div className="flex flex-wrap gap-2">
-              {/* Excel Template Download Button */}
-              <div className="relative group">
-                <button
+        {/* Header Card */}
+        <Card className="mb-6">
+          <CardHeader className="py-4 px-4 sm:px-6 lg:px-8">
+            <div className="w-full flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-2xl font-semibold text-gray-900 text-center sm:text-left">
+                Tenants & Leases
+              </CardTitle>
+              <div className="flex items-center justify-center sm:justify-end gap-2">
+                {/* Excel Template Download Button */}
+                <Button
                   onClick={handleDownloadTemplate}
-                  className="flex items-center justify-center w-12 h-12 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200"
-                  aria-label="Download template"
+                  className="bg-green-600 hover:bg-green-700"
+                  size="sm"
+                  aria-label="Download Template"
                 >
-                  <div className="w-full h-full flex items-center justify-center bg-green-100 rounded-lg">
-                    <FileDown className="h-6 w-6 text-green-600" />
-                  </div>
-                </button>
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute -bottom-8 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap z-10">
-                  Download template
-                </div>
-              </div>
-              
-              {/* Excel Upload Button */}
-              <div className="relative group">
-                <button
+                  <FileDown className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="sr-only">Download Template</span>
+                </Button>
+                
+                {/* Excel Upload Button */}
+                <Button
                   onClick={triggerFileInput}
-                  className="flex items-center justify-center w-12 h-12 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200"
-                  aria-label="Upload template"
                   disabled={isUploading}
+                  className="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300"
+                  size="sm"
+                  aria-label="Upload Template"
                 >
-                  <div className="w-full h-full flex items-center justify-center bg-amber-100 rounded-lg">
-                    {isUploading ? (
-                      <Loader2 className="h-6 w-6 text-amber-600 animate-spin" />
-                    ) : (
-                      <FileUp className="h-6 w-6 text-amber-600" />
-                    )}
-                  </div>
-                </button>
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute -bottom-8 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap z-10">
-                  Upload template
-                </div>
+                  {isUploading ? (
+                    <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                  ) : (
+                    <FileUp className="h-4 w-4 sm:h-5 sm:w-5" />
+                  )}
+                  <span className="sr-only">Upload Template</span>
+                </Button>
+                
+                {/* Add Tenant Button */}
+                <Button
+                  onClick={() => setIsFormOpen(!isFormOpen)}
+                  variant="default"
+                  size="sm"
+                  className="bg-gray-900 hover:bg-gray-800"
+                >
+                  {isFormOpen ? (
+                    <>
+                      <X className="h-4 w-4 sm:h-5 sm:w-5" />
+                      <span>Cancel</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+                      <span>Manual Add</span>
+                    </>
+                  )}
+                </Button>
+                
+                {/* Hidden file input */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                />
               </div>
-              
-              {/* Hidden file input */}
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-                accept=".xlsx,.xls"
-                className="hidden"
-              />
-              
-              {/* Add Tenant Button */}
-              <button
-                onClick={() => toggleForm()}
-                className="flex items-center bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition-colors"
-              >
-                <span className="mr-1">{isFormOpen ? 'Cancel' : '+ Add Tenant'}</span>
-              </button>
             </div>
-          </div>
-        </header>
+          </CardHeader>
+        </Card>
         
         {/* Excel Import Instructions & Upload Results */}
         <div className="max-w-7xl mx-auto">
           {/* Bulk Upload Instructions Panel */}
-          <div className="bg-white shadow rounded-lg mb-6 overflow-hidden">
-            <div 
-              className="px-4 py-3 bg-gray-50 flex justify-between items-center cursor-pointer"
-              onClick={toggleInstructions}
-            >
-              <div className="flex items-center">
-                <FileDown className="text-gray-500 h-5 w-5 mr-2" />
-                <h3 className="text-md font-medium text-gray-700">
-                  Bulk upload tenants by downloading the template, filling it out, and uploading it
-                </h3>
-              </div>
-              <span className="text-blue-500">
-                {isInstructionsExpanded ? '− Hide' : '+ Show'}
-              </span>
-            </div>
-            
-            {isInstructionsExpanded && (
-              <div className="p-4 border-t border-gray-200">
-                <p className="mb-2">You can add multiple tenants at once by following these steps:</p>
-                <ol className="list-decimal pl-5 space-y-2">
-                  <li>Click the <FileDown className="h-4 w-4 text-green-600 inline" /> icon to download the Excel template</li>
-                  <li>Fill in your tenant details in the template following the instructions</li>
-                  <li>For <strong>Deposit Method</strong>, you must enter one of: &quot;Cash&quot;, &quot;Bank transfer&quot;, &quot;UPI&quot;, or &quot;Check&quot; exactly as shown</li>
-                  <li>Save the file and click the <FileUp className="h-4 w-4 text-amber-600 inline" /> icon to import your tenants</li>
-                </ol>
-                <div className="mt-4 text-sm text-gray-500">
-                  <p className="font-medium">Note:</p>
-                  <p>The template includes examples and instructions to guide you. You don&apos;t need to delete these rows — our system will automatically detect and skip them during import.</p>
-                  <p className="mt-2">Required fields are marked with an asterisk (*) in the template.</p>
+          <Accordion type="single" collapsible className="mb-8">
+            <AccordionItem value="bulk-upload">
+              <AccordionTrigger>
+                <div className="flex items-center gap-2">
+                  <FileUp className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                  <span>Bulk upload tenants using Excel template</span>
                 </div>
-              </div>
-            )}
-          </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-4">
+                  <p className="text-gray-600">Follow these steps to add multiple tenants at once:</p>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <FileDown className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-gray-600">Click this icon above to download the Excel template</p>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      <div className="w-5 flex-shrink-0" /> {/* Spacer for alignment */}
+                      <p className="text-gray-600">Fill in your tenant details in the template following the instructions</p>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      <div className="w-5 flex-shrink-0" /> {/* Spacer for alignment */}
+                      <p className="text-gray-600">For <strong>Deposit Method</strong>, you must enter one of: &quot;Cash&quot;, &quot;Bank transfer&quot;, &quot;UPI&quot;, or &quot;Check&quot; exactly as shown</p>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      <FileUp className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                      <p className="text-gray-600">Click this icon above to upload your completed template</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-200 p-3 rounded-md text-amber-800 text-sm mt-4">
+                    <strong>Note:</strong> The template includes examples and instructions to guide you. 
+                    You don&apos;t need to delete these rows – our system will automatically detect and skip them during import.
+                  </div>
+                  
+                  <p className="text-gray-600 text-sm">
+                    Required fields are marked with an asterisk (*) in the template.
+                  </p>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
           
           {/* Upload Results */}
           {showUploadResults && uploadResults && (
@@ -770,326 +795,344 @@ export default function TenantsManagement() {
         <main className="max-w-7xl mx-auto">
           {/* Add/Edit Lease Form - Embedded directly in the page */}
           {isFormOpen && (
-            <div ref={formRef} className="bg-white shadow rounded-lg p-6 mb-8">
-              <h2 className="text-xl font-semibold text-gray-800 mb-6">
-                {editingLeaseId ? 'Edit Tenant & Lease' : 'Add New Tenant & Lease'}
-              </h2>
+            <Card ref={formRef} className="mb-8">
+              <CardHeader>
+                <CardTitle>
+                  {editingLeaseId ? `Edit unit ${getUnitNumber(unitId)} lease` : 'Add New Lease'}
+                </CardTitle>
+              </CardHeader>
               
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="p-4 bg-gray-50 rounded-md mb-6">
-                  <h3 className="font-medium text-gray-700 mb-4">Unit Information</h3>
-                  <div className="grid grid-cols-1 gap-4">
-                    <div className="col-span-1">
-                      <label htmlFor="unitId" className="block text-sm font-medium text-gray-700 mb-1">
-                        Unit Number *
-                      </label>
-                      <select
-                        id="unitId"
-                        value={unitId}
-                        onChange={(e) => {
-                          const selectedUnitId = e.target.value;
-                          setUnitId(selectedUnitId);
-                          
-                          // Get the unitNumber from the selected unit
-                          const selectedUnit = rentalInventory.find(unit => unit.id === selectedUnitId);
-                          if (selectedUnit) {
-                            setUnitNumber(selectedUnit.unitNumber);
-                          } else {
-                            setUnitNumber("");
-                          }
-                        }}
-                        className={inputClass}
-                        required
-                        disabled={editingLeaseId !== null} // Cannot change unit when editing
-                      >
-                        <option value="">Select a unit</option>
-                        {rentalInventory && rentalInventory.length > 0 ? (
-                          rentalInventory.map((unit) => (
-                            <option key={unit.id} value={unit.id}>
-                              {unit.unitNumber} ({unit.propertyType})
-                            </option>
-                          ))
-                        ) : (
-                          <option value="" disabled>No rental units available</option>
+              <CardContent className="px-2 sm:px-6">
+                {formError && (
+                  <AlertMessage
+                    variant="error"
+                    message={formError}
+                    className="mb-6"
+                  />
+                )}
+                
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Unit Information Card */}
+                  <Card className="bg-surface border-border">
+                    <CardHeader className="px-3 sm:px-6">
+                      <CardTitle className="text-base">Unit Information</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 gap-4 px-3 sm:px-6">
+                      <div className="col-span-1">
+                        <label htmlFor="unitId" className="block text-sm font-medium text-textSecondary mb-1">
+                          Unit Number *
+                        </label>
+                        <select
+                          id="unitId"
+                          value={unitId}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setUnitId(value);
+                            const selectedUnit = rentalInventory.find(unit => unit.id === value);
+                            if (selectedUnit) {
+                              setUnitNumber(selectedUnit.unitNumber);
+                            } else {
+                              setUnitNumber("");
+                            }
+                          }}
+                          disabled={editingLeaseId !== null}
+                          className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md pl-3 py-2"
+                          required
+                        >
+                          <option value="">Select a unit</option>
+                          {rentalInventory && rentalInventory.length > 0 ? (
+                            rentalInventory.map((unit) => (
+                              <option key={unit.id} value={unit.id}>
+                                {unit.unitNumber} ({unit.propertyType})
+                              </option>
+                            ))
+                          ) : (
+                            <option value="" disabled>No rental units available</option>
+                          )}
+                        </select>
+                        {editingLeaseId && (
+                          <p className="mt-1 text-xs text-textSecondary">Unit cannot be changed when editing a lease</p>
                         )}
-                      </select>
-                      {editingLeaseId && (
-                        <p className="mt-1 text-xs text-gray-500">Unit cannot be changed when editing a lease</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="p-4 bg-gray-50 rounded-md mb-6">
-                  <h3 className="font-medium text-gray-700 mb-4">Tenant Information</h3>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div className="col-span-1">
-                      <label htmlFor="tenantName" className="block text-sm font-medium text-gray-700 mb-1">
-                        Tenant Name *
-                      </label>
-                      <input
-                        type="text"
-                        id="tenantName"
-                        value={tenantName}
-                        onChange={(e) => setTenantName(e.target.value)}
-                        className={inputClass}
-                        placeholder="Full name"
-                        required
-                      />
-                    </div>
-                    
-                    <div className="col-span-1">
-                      <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                        Email Address *
-                      </label>
-                      <input
-                        type="email"
-                        id="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className={inputClass}
-                        placeholder="email@example.com"
-                        required
-                      />
-                    </div>
-                    
-                    <div className="col-span-1 flex space-x-2">
-                      <div className="w-1/3">
-                        <label htmlFor="countryCode" className="block text-sm font-medium text-gray-700 mb-1">
-                          Country Code *
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Tenant Information Card */}
+                  <Card className="bg-surface border-border">
+                    <CardHeader className="px-3 sm:px-6">
+                      <CardTitle className="text-base">Tenant Information</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 px-3 sm:px-6">
+                      <div className="col-span-1">
+                        <label htmlFor="tenantName" className="block text-sm font-medium text-textSecondary mb-1">
+                          Tenant Name *
                         </label>
-                        <input
+                        <Input
                           type="text"
-                          id="countryCode"
-                          value={countryCode}
-                          onChange={(e) => setCountryCode(e.target.value)}
-                          className={inputClass}
-                          placeholder="+91"
+                          id="tenantName"
+                          value={tenantName}
+                          onChange={(e) => setTenantName(e.target.value)}
+                          placeholder="Full name"
                           required
                         />
                       </div>
-                      <div className="w-2/3">
-                        <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-1">
-                          Phone Number *
+                      
+                      <div className="col-span-1">
+                        <label htmlFor="email" className="block text-sm font-medium text-textSecondary mb-1">
+                          Email Address *
                         </label>
-                        <input
-                          type="text"
-                          id="phoneNumber"
-                          value={phoneNumber}
-                          onChange={(e) => setPhoneNumber(e.target.value)}
-                          className={inputClass}
-                          placeholder="9876543210"
+                        <Input
+                          type="email"
+                          id="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="email@example.com"
                           required
                         />
                       </div>
-                    </div>
-                    
-                    <div className="col-span-1">
-                      <label htmlFor="adhaarNumber" className="block text-sm font-medium text-gray-700 mb-1">
-                        Adhaar Number *
-                      </label>
-                      <input
-                        type="text"
-                        id="adhaarNumber"
-                        value={adhaarNumber}
-                        onChange={(e) => setAdhaarNumber(e.target.value)}
-                        className={inputClass}
-                        placeholder="XXXXXXXXXXXX"
-                        pattern="[0-9]{12}"
-                        title="Adhaar number must be 12 digits with no spaces"
-                        required
-                      />
-                    </div>
-                    
-                    <div className="col-span-1">
-                      <label htmlFor="panNumber" className="block text-sm font-medium text-gray-700 mb-1">
-                        PAN Number
-                      </label>
-                      <input
-                        type="text"
-                        id="panNumber"
-                        value={panNumber}
-                        onChange={(e) => setPanNumber(e.target.value)}
-                        className={inputClass}
-                        placeholder="Optional"
-                      />
-                    </div>
-                    
-                    <div className="col-span-1">
-                      <label htmlFor="employerName" className="block text-sm font-medium text-gray-700 mb-1">
-                        Employer Name
-                      </label>
-                      <input
-                        type="text"
-                        id="employerName"
-                        value={employerName}
-                        onChange={(e) => setEmployerName(e.target.value)}
-                        className={inputClass}
-                        placeholder="Optional"
-                      />
-                    </div>
-                    
-                    <div className="col-span-2">
-                      <label htmlFor="permanentAddress" className="block text-sm font-medium text-gray-700 mb-1">
-                        Permanent Address
-                      </label>
-                      <textarea
-                        id="permanentAddress"
-                        value={permanentAddress}
-                        onChange={(e) => setPermanentAddress(e.target.value)}
-                        rows={3}
-                        className={inputClass}
-                        placeholder="Optional"
-                      />
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="p-4 bg-gray-50 rounded-md mb-6">
-                  <h3 className="font-medium text-gray-700 mb-4">Lease Details</h3>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div className="col-span-1">
-                      <label htmlFor="leaseStartDate" className="block text-sm font-medium text-gray-700 mb-1">
-                        Lease Start Date *
-                      </label>
-                      <input
-                        type="date"
-                        id="leaseStartDate"
-                        value={leaseStartDate}
-                        onChange={(e) => setLeaseStartDate(e.target.value)}
-                        className={inputClass}
-                        required
-                      />
-                    </div>
-                    
-                    <div className="col-span-1">
-                      <label htmlFor="leaseEndDate" className="block text-sm font-medium text-gray-700 mb-1">
-                        Lease End Date *
-                      </label>
-                      <input
-                        type="date"
-                        id="leaseEndDate"
-                        value={leaseEndDate}
-                        onChange={(e) => setLeaseEndDate(e.target.value)}
-                        className={inputClass}
-                        required
-                      />
-                    </div>
-                    
-                    <div className="col-span-1">
-                      <label htmlFor="rentAmount" className="block text-sm font-medium text-gray-700 mb-1">
-                        Monthly Rent Amount (₹) *
-                      </label>
-                      <input
-                        type="number"
-                        id="rentAmount"
-                        value={rentAmount}
-                        onChange={(e) => setRentAmount(Number(e.target.value))}
-                        className={numberInputClass}
-                        min="0"
-                        required
-                      />
-                    </div>
-                    
-                    <div className="col-span-1">
-                      <label htmlFor="securityDeposit" className="block text-sm font-medium text-gray-700 mb-1">
-                        Security Deposit (₹) *
-                      </label>
-                      <input
-                        type="number"
-                        id="securityDeposit"
-                        value={securityDeposit}
-                        onChange={(e) => setSecurityDeposit(Number(e.target.value))}
-                        className={numberInputClass}
-                        min="0"
-                        required
-                      />
-                    </div>
-                    
-                    <div className="col-span-1">
-                      <label htmlFor="depositMethod" className="block text-sm font-medium text-gray-700 mb-1">
-                        Deposit Payment Method *
-                      </label>
-                      <select
-                        id="depositMethod"
-                        value={depositMethod}
-                        onChange={(e) => setDepositMethod(e.target.value as 'Cash' | 'Bank transfer' | 'UPI' | 'Check')}
-                        className={inputClass}
-                        required
-                      >
-                        <option value="Cash">Cash</option>
-                        <option value="Bank transfer">Bank transfer</option>
-                        <option value="UPI">UPI</option>
-                        <option value="Check">Check</option>
-                      </select>
-                    </div>
-                    
-                    <div className="col-span-1">
-                      <label htmlFor="isActive" className="block text-sm font-medium text-gray-700 mb-1">
-                        Lease Status
-                      </label>
-                      <div className="mt-2">
-                        <div className="flex flex-col items-center">
-                          <label className="inline-flex relative items-center cursor-pointer">
-                            <input
-                              type="checkbox"
-                              className="sr-only peer"
-                              checked={isActive}
-                              onChange={(e) => setIsActive(e.target.checked)}
+                      
+                      <div className="col-span-1">
+                        <div className="flex w-full gap-2">
+                          <div className="w-[20%] sm:min-w-[4.5rem] sm:w-[10%]">
+                            <label htmlFor="countryCode" className="block text-sm font-medium text-textSecondary mb-1">
+                              Code *
+                            </label>
+                            <Input
+                              type="text"
+                              id="countryCode"
+                              value={countryCode}
+                              onChange={(e) => setCountryCode(e.target.value)}
+                              placeholder="+91"
+                              className="!px-2 text-center"
+                              required
                             />
-                            <div className="w-11 h-6 bg-[rgb(209,209,214)] rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all after:duration-300 peer-checked:bg-[rgb(48,209,88)] transition-colors duration-300"></div>
-                          </label>
-                          <span className="text-xs text-gray-500 mt-1 transition-all duration-300 text-center w-full">
-                            {isActive ? 'Active' : 'Inactive'}
-                          </span>
+                          </div>
+                          <div className="w-[80%] sm:flex-1 sm:w-[40%]">
+                            <label htmlFor="phoneNumber" className="block text-sm font-medium text-textSecondary mb-1">
+                              Phone Number *
+                            </label>
+                            <Input
+                              type="text"
+                              id="phoneNumber"
+                              value={phoneNumber}
+                              onChange={(e) => setPhoneNumber(e.target.value)}
+                              placeholder="9876543210"
+                              required
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    
-                    <div className="col-span-2">
-                      <label htmlFor="additionalComments" className="block text-sm font-medium text-gray-700 mb-1">
-                        Additional Comments
-                      </label>
-                      <textarea
-                        id="additionalComments"
-                        value={additionalComments}
-                        onChange={(e) => setAdditionalComments(e.target.value)}
-                        rows={3}
-                        className={inputClass}
-                        placeholder="Any additional notes about this lease"
-                      />
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex justify-end space-x-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsFormOpen(false)}
-                    className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    Cancel
-                  </button>
+
+                      <div className="col-span-1">
+                        <label htmlFor="adhaarNumber" className="block text-sm font-medium text-textSecondary mb-1">
+                          Adhaar Number *
+                        </label>
+                        <Input
+                          type="text"
+                          id="adhaarNumber"
+                          value={adhaarNumber}
+                          onChange={(e) => setAdhaarNumber(e.target.value)}
+                          placeholder="XXXXXXXXXXXX"
+                          pattern="[0-9]{12}"
+                          title="Adhaar number must be 12 digits with no spaces"
+                          required
+                        />
+                      </div>
+                      
+                      <div className="col-span-1">
+                        <label htmlFor="panNumber" className="block text-sm font-medium text-textSecondary mb-1">
+                          PAN Number
+                        </label>
+                        <Input
+                          type="text"
+                          id="panNumber"
+                          value={panNumber}
+                          onChange={(e) => setPanNumber(e.target.value)}
+                          placeholder="Optional"
+                        />
+                      </div>
+                      
+                      <div className="col-span-1">
+                        <label htmlFor="employerName" className="block text-sm font-medium text-textSecondary mb-1">
+                          Employer Name
+                        </label>
+                        <Input
+                          type="text"
+                          id="employerName"
+                          value={employerName}
+                          onChange={(e) => setEmployerName(e.target.value)}
+                          placeholder="Optional"
+                        />
+                      </div>
+                      
+                      <div className="col-span-1 md:col-span-2">
+                        <label htmlFor="permanentAddress" className="block text-sm font-medium text-textSecondary mb-1">
+                          Permanent Address
+                        </label>
+                        <Textarea
+                          id="permanentAddress"
+                          value={permanentAddress}
+                          onChange={(e) => setPermanentAddress(e.target.value)}
+                          rows={3}
+                          placeholder="Optional"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Lease Details Card */}
+                  <Card className="bg-surface border-border">
+                    <CardHeader className="px-3 sm:px-6">
+                      <CardTitle className="text-base">Lease Details</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 px-3 sm:px-6">
+                      <div className="col-span-1">
+                        <label htmlFor="leaseStartDate" className="block text-sm font-medium text-textSecondary mb-1">
+                          Lease Start Date *
+                        </label>
+                        <Input
+                          type="date"
+                          id="leaseStartDate"
+                          value={leaseStartDate}
+                          onChange={(e) => setLeaseStartDate(e.target.value)}
+                          required
+                        />
+                      </div>
+                      
+                      <div className="col-span-1">
+                        <label htmlFor="leaseEndDate" className="block text-sm font-medium text-textSecondary mb-1">
+                          Lease End Date *
+                        </label>
+                        <Input
+                          type="date"
+                          id="leaseEndDate"
+                          value={leaseEndDate}
+                          onChange={(e) => setLeaseEndDate(e.target.value)}
+                          required
+                        />
+                      </div>
+                      
+                      <div className="col-span-1">
+                        <label htmlFor="rentAmount" className="block text-sm font-medium text-textSecondary mb-1">
+                          Monthly Rent Amount (₹) *
+                        </label>
+                        <Input
+                          type="text"
+                          id="rentAmount"
+                          value={rentAmount === 0 ? '' : rentAmount}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Convert to number, handle empty string as 0
+                            const numValue = value === '' ? 0 : Number(value.replace(/[^0-9]/g, ''));
+                            setRentAmount(numValue);
+                          }}
+                          placeholder="Enter rent amount"
+                          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          required
+                        />
+                      </div>
+                      
+                      <div className="col-span-1">
+                        <label htmlFor="securityDeposit" className="block text-sm font-medium text-textSecondary mb-1">
+                          Security Deposit (₹) *
+                        </label>
+                        <Input
+                          type="text"
+                          id="securityDeposit"
+                          value={securityDeposit === 0 ? '' : securityDeposit}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Convert to number, handle empty string as 0
+                            const numValue = value === '' ? 0 : Number(value.replace(/[^0-9]/g, ''));
+                            setSecurityDeposit(numValue);
+                          }}
+                          placeholder="Enter security deposit"
+                          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          required
+                        />
+                      </div>
+                      
+                      <div className="col-span-1">
+                        <label htmlFor="depositMethod" className="block text-sm font-medium text-textSecondary mb-1">
+                          Deposit Payment Method *
+                        </label>
+                        <select
+                          id="depositMethod"
+                          value={depositMethod}
+                          onChange={(e) => setDepositMethod(e.target.value as 'Cash' | 'Bank transfer' | 'UPI' | 'Check')}
+                          className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md pl-3 py-2"
+                          required
+                        >
+                          <option value="Cash">Cash</option>
+                          <option value="Bank transfer">Bank Transfer</option>
+                          <option value="UPI">UPI</option>
+                          <option value="Check">Check</option>
+                        </select>
+                      </div>
+
+                      <div className="col-span-1">
+                        <label htmlFor="isActive" className="block text-sm font-medium text-gray-700 mb-1">
+                          Lease Status
+                        </label>
+                        <div className="mt-2">
+                          <div className="flex flex-col items-start">
+                            <label className="inline-flex relative items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={isActive}
+                                onChange={(e) => setIsActive(e.target.checked)}
+                              />
+                              <div className="w-11 h-6 bg-[rgb(209,209,214)] rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all after:duration-300 peer-checked:bg-[rgb(48,209,88)] transition-colors duration-300"></div>
+                            </label>
+                            <span className="text-xs text-gray-500 mt-1">
+                              {isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="col-span-1 md:col-span-2">
+                        <label htmlFor="additionalComments" className="block text-sm font-medium text-textSecondary mb-1">
+                          Additional Comments
+                        </label>
+                        <Textarea
+                          id="additionalComments"
+                          value={additionalComments}
+                          onChange={(e) => setAdditionalComments(e.target.value)}
+                          rows={3}
+                          placeholder="Any additional notes about this lease"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
                   
-                  {editingLeaseId && (
-                    <button
+                  <div className="flex justify-end space-x-3">
+                    <Button
                       type="button"
-                      onClick={() => initiateDeleteLease(editingLeaseId)}
-                      className="bg-red-500 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                      onClick={() => setIsFormOpen(false)}
+                      variant="outline"
                     >
-                      Delete Lease
-                    </button>
-                  )}
-                  
-                  <button
-                    type="submit"
-                    className="bg-blue-500 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    {editingLeaseId ? 'Update Lease' : 'Save Lease'}
-                  </button>
-                </div>
-              </form>
-            </div>
+                      Cancel
+                    </Button>
+                    
+                    {editingLeaseId && (
+                      <Button
+                        type="button"
+                        onClick={() => initiateDeleteLease(editingLeaseId)}
+                        variant="destructive"
+                      >
+                        Delete Lease
+                      </Button>
+                    )}
+                    
+                    <Button type="submit">
+                      {editingLeaseId ? 'Update Lease' : 'Save Lease'}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
           )}
           
           {/* Delete Confirmation Modal */}
