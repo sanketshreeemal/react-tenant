@@ -88,7 +88,7 @@ export default function Dashboard() {
 
     // Current month rent collection
     const currentMonthPayments = rentPayments.filter(
-      payment => payment.rentalPeriod === currentMonth
+      payment => payment.rentalPeriod === currentMonth && payment.paymentType === "Rent Payment"
     );
     const totalRentCollected = currentMonthPayments.reduce(
       (sum, payment) => sum + payment.actualRentPaid, 0
@@ -215,7 +215,7 @@ export default function Dashboard() {
                 value={formatCurrency(metrics.totalRentCollected)}
                 icon={DollarSign}
                 subtitle={`${metrics.collectionRate}% of Expected`}
-                href="/dashboard/rent"
+                href="/dashboard/payments"
               />
               
               <StatCard 

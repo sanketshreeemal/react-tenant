@@ -87,6 +87,8 @@ interface RentPayment {
   createdAt: Date;
   updatedAt?: Date;
   dueDate?: Date;
+  paymentType?: string;
+  collectionMethod?: string;
 }
 
 // Chart data interfaces
@@ -314,7 +316,8 @@ export default function AnalyticsPage() {
         isWithinInterval(new Date(payment.paymentDate), {
           start: monthStart,
           end: monthEnd
-        })
+        }) && 
+        (payment.paymentType === "Rent Payment" || !payment.paymentType) // Include payments without type for backward compatibility
       );
       
       const rentCollected = monthPayments.reduce((sum, payment) => sum + payment.amount, 0);

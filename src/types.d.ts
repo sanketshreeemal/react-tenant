@@ -62,6 +62,8 @@ export interface Unit {
     tenantName?: string; // Denormalized tenant name for faster display
     officialRent?: number; // Denormalized rent amount from lease
     actualRentPaid: number;
+    paymentType: string; // Type of payment: "Rent Payment", "Bill Payment", "Maintenance Fee", "Other"
+    collectionMethod: string; // Method of payment collection: "Cash", "UPI", "Bank Transfer", "Cheque", etc.
     rentalPeriod: string; // Format "YYYY-MM" (e.g., "2024-08")
     paymentDate: Date; // Firestore Timestamp
     landlordComments?: string; // Optional

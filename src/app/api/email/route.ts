@@ -128,15 +128,17 @@ export async function POST(request: Request) {
         break;
         
       case 'new_rent_payment':
-        subject = 'New Rent Payment Recorded';
+        subject = 'New Payment Recorded';
         html = `
-          <h1>New Rent Payment Recorded</h1>
-          <p>A new rent payment has been recorded:</p>
+          <h1>New Payment Recorded</h1>
+          <p>A new payment has been recorded:</p>
           <ul>
             <li><strong>Unit:</strong> ${data.unitNumber}</li>
             <li><strong>Tenant:</strong> ${data.tenantName}</li>
+            <li><strong>Payment Type:</strong> ${data.paymentType || 'Rent Payment'}</li>
             <li><strong>Amount:</strong> ₹${data.actualRentPaid}</li>
             <li><strong>Period:</strong> ${data.rentalPeriod}</li>
+            ${data.comments ? `<li><strong>Comments:</strong> ${data.comments}</li>` : ''}
           </ul>
         `;
         break;

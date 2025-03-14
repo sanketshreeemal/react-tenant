@@ -11,6 +11,12 @@ import { format, subMonths, addMonths } from "date-fns";
 import { getActiveLeaseForUnit, getRentalInventoryDetails } from "../../../lib/firebase/firestoreUtils";
 import logger from "../../../lib/logger";
 import { AlertMessage } from "@/components/ui/alert-message";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { theme } from "@/theme/theme";
 
 interface Lease {
   id: string;
@@ -28,9 +34,28 @@ interface RentPayment {
   tenantName: string;
   officialRent: number;
   actualRent: number;
+  paymentType?: string;
+  collectionMethod?: string;
   rentalPeriod: string;
   comments: string;
   createdAt: any;
+}
+
+interface FormData {
+  leaseId: string;
+  unitId: string;
+  unitNumber: string;
+  tenantName: string;
+  officialRent: string;
+  actualRent: string;
+  rentalPeriod: string;
+  paymentDate: string;
+  ownerDetails: string;
+  bankDetails: string;
+  comments: string;
+  paymentType: string;
+  collectionMethod: string;
+  attachment?: File | null;
 }
 
 export default function RentPage() {
@@ -50,8 +75,13 @@ export default function RentPage() {
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [rentWarning, setRentWarning] = useState("");
   
+  // Add state for payment type filter
+  const [selectedPaymentTypes, setSelectedPaymentTypes] = useState<string[]>([]);
+  const [showPaymentTypeFilter, setShowPaymentTypeFilter] = useState(false);
+  const filterRef = React.useRef<HTMLDivElement>(null);
+  
   // Form state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     leaseId: "",
     unitId: "",
     unitNumber: "",
@@ -63,6 +93,9 @@ export default function RentPage() {
     ownerDetails: "",
     bankDetails: "",
     comments: "",
+    paymentType: "",
+    collectionMethod: "",
+    attachment: null,
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -77,6 +110,20 @@ export default function RentPage() {
     type: 'success' | 'error' | 'info' | 'warning';
     message: string;
   } | null>(null);
+
+  // Click outside handler for filter dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
+        setShowPaymentTypeFilter(false);
+      }
+    }
+    
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [filterRef]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -186,8 +233,8 @@ export default function RentPage() {
           logger.info(`RentPage: Selected lease with ID ${value}`);
           
           // Auto-populate lease-related data
-          setFormData({
-            ...formData,
+          setFormData(prev => ({
+            ...prev,
             leaseId: value,
             unitId: selectedLease.unitId,
             unitNumber: selectedLease.unitNumber,
@@ -196,7 +243,7 @@ export default function RentPage() {
             actualRent: selectedLease.rentAmount.toString(),
             ownerDetails: "", // Will be populated from inventory details
             bankDetails: "", // Will be populated from inventory details
-          });
+          }));
           
           // Reset rent warning
           setRentWarning("");
@@ -230,21 +277,50 @@ export default function RentPage() {
       }
     }
     
+    // Handle payment type change
+    if (name === "paymentType") {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+        // Reset officialRent to N/A for non-rent payments
+        officialRent: value === "Rent Payment" ? prev.officialRent : "N/A"
+      }));
+      return;
+    }
+    
     // Check rent amount when actualRent changes
-    if (name === "actualRent" && value && formData.officialRent) {
+    if (name === "actualRent") {
       const actualRent = parseFloat(value);
-      const officialRent = parseFloat(formData.officialRent);
       
-      if (actualRent > officialRent * 1.2) {
-        setRentWarning("The rent collected is 20% higher than expected. Please verify if this is correct. Consider adding a comment to explain the difference.");
-      } else if (actualRent < officialRent * 0.8) {
-        setRentWarning("The rent collected is 20% lower than expected. Please verify if this is correct. Consider adding a comment to explain the difference.");
-      } else {
-        setRentWarning("");
+      // Validate that amount is positive
+      if (actualRent <= 0) {
+        setFormError("Amount collected must be greater than 0");
+        return;
+      }
+
+      if (formData.paymentType === "Rent Payment" && formData.officialRent && formData.officialRent !== "N/A") {
+        const officialRent = parseFloat(formData.officialRent);
+        
+        if (actualRent > officialRent * 1.2) {
+          setRentWarning("The rent collected is higher than expected. Please verify if this is correct. Consider adding a comment to explain the difference.");
+        } else if (actualRent < officialRent * 0.8) {
+          setRentWarning("The rent collected is lower than expected. Please verify if this is correct. Consider adding a comment to explain the difference.");
+        } else {
+          setRentWarning("");
+        }
       }
     }
     
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFormData(prev => ({
+        ...prev,
+        attachment: e.target.files![0]
+      }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -257,8 +333,15 @@ export default function RentPage() {
       logger.info("RentPage: Submitting rent payment form...");
       
       // Validate form
-      if (!formData.leaseId || !formData.actualRent || !formData.rentalPeriod || !formData.paymentDate) {
+      if (!formData.leaseId || !formData.actualRent || !formData.rentalPeriod || !formData.paymentDate || !formData.paymentType || !formData.collectionMethod) {
         const error = "Please fill in all required fields";
+        logger.error(`RentPage: Form validation error: ${error}`);
+        throw new Error(error);
+      }
+
+      // Validate amount is positive
+      if (parseFloat(formData.actualRent) <= 0) {
+        const error = "Amount collected must be greater than 0";
         logger.error(`RentPage: Form validation error: ${error}`);
         throw new Error(error);
       }
@@ -268,7 +351,7 @@ export default function RentPage() {
       const currentDate = new Date();
       
       if (selectedDate > currentDate) {
-        const error = "Rent paid date cannot be in the future";
+        const error = "Payment date cannot be in the future";
         logger.error(`RentPage: Form validation error: ${error}`);
         throw new Error(error);
       }
@@ -279,8 +362,10 @@ export default function RentPage() {
         unitId: formData.unitId,
         unitNumber: formData.unitNumber,
         tenantName: formData.tenantName,
-        officialRent: formData.officialRent ? parseFloat(formData.officialRent) : 0,
+        officialRent: formData.officialRent && formData.officialRent !== "N/A" ? parseFloat(formData.officialRent) : 0,
         actualRentPaid: parseFloat(formData.actualRent),
+        paymentType: formData.paymentType,
+        collectionMethod: formData.collectionMethod,
         rentalPeriod: formData.rentalPeriod,
         paymentDate: new Date(formData.paymentDate),
         ownerDetails: formData.ownerDetails,
@@ -302,6 +387,8 @@ export default function RentPage() {
           tenantName: paymentData.tenantName,
           officialRent: paymentData.officialRent,
           actualRent: paymentData.actualRentPaid,
+          paymentType: paymentData.paymentType,
+          collectionMethod: paymentData.collectionMethod,
           rentalPeriod: paymentData.rentalPeriod,
           comments: paymentData.comments || "",
           createdAt: paymentData.createdAt
@@ -309,7 +396,7 @@ export default function RentPage() {
         ...rentPayments,
       ]);
       
-      setSuccessMessage("Rent payment recorded successfully!");
+      setSuccessMessage(`${formData.paymentType} recorded successfully!`);
       
       // Reset form
       setFormData({
@@ -324,6 +411,9 @@ export default function RentPage() {
         ownerDetails: "",
         bankDetails: "",
         comments: "",
+        paymentType: "",
+        collectionMethod: "",
+        attachment: null,
       });
       
       // Hide form after successful submission
@@ -433,7 +523,12 @@ export default function RentPage() {
       payment.tenantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       payment.unitNumber.toLowerCase().includes(searchTerm.toLowerCase());
     
-    return matchesSearch;
+    // Add payment type filtering
+    const matchesPaymentType = 
+      selectedPaymentTypes.length === 0 || 
+      selectedPaymentTypes.includes(payment.paymentType || "Rent Payment");
+    
+    return matchesSearch && matchesPaymentType;
   });
 
   const handleSort = (column: 'rentalPeriod' | 'createdAt') => {
@@ -489,6 +584,28 @@ export default function RentPage() {
     rentalPeriodOptions.push({ value, label });
   }
 
+  // Get unique payment types from the data
+  const getUniquePaymentTypes = () => {
+    const types = new Set<string>();
+    
+    // Always include these default types
+    types.add("Rent Payment");
+    types.add("Bill Payment");
+    types.add("Maintenance Fee");
+    types.add("Other");
+    
+    // Add any other types from the data
+    rentPayments.forEach(payment => {
+      if (payment.paymentType) {
+        types.add(payment.paymentType);
+      }
+    });
+    
+    return Array.from(types).sort();
+  };
+  
+  const uniquePaymentTypes = getUniquePaymentTypes();
+
   if (loading || !user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -512,225 +629,292 @@ export default function RentPage() {
           </div>
         )}
         
-        <header className="bg-white shadow rounded-lg mb-6">
-          <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-            <div className="flex items-center">
-              <DollarSign className="h-8 w-8 text-blue-500 mr-3" />
-              <h1 className="text-3xl font-bold text-gray-900">Rent Management</h1>
+        <Card className="mb-6">
+          <CardHeader className="py-4 px-4 sm:px-6 lg:px-8">
+            <div className="w-full flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center">
+                <CardTitle className="text-2xl font-semibold text-gray-900 text-center sm:text-left">
+                  Payment Management
+                </CardTitle>
+              </div>
+              <Button
+                onClick={() => setShowAddForm(!showAddForm)}
+                variant="default"
+                size="sm"
+                className="bg-gray-900 hover:bg-gray-800"
+              >
+                {showAddForm ? (
+                  <>
+                    <X className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                    <span>Cancel</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                    <span>Record Payment</span>
+                  </>
+                )}
+              </Button>
             </div>
-            <button
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              {showAddForm ? (
-                <>
-                  <X className="h-5 w-5 mr-2" />
-                  Cancel
-                </>
-              ) : (
-                <>
-                  <Plus className="h-5 w-5 mr-2" />
-                  Record Rent Payment
-                </>
-              )}
-            </button>
-          </div>
-        </header>
+          </CardHeader>
+        </Card>
         
         <main className="max-w-7xl mx-auto">
           {showAddForm && (
-            <div className="bg-white shadow rounded-lg overflow-hidden mb-6">
-              <div className="p-6">
-                <h2 className="text-lg font-medium text-gray-900 mb-4">Record Rent Payment</h2>
-                
-                {/* Form error message */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="text-lg font-medium text-gray-900">Record Payment</CardTitle>
+              </CardHeader>
+              <CardContent>
                 {formError && (
                   <AlertMessage
                     variant="error"
                     message={formError}
+                    className="mb-4"
                   />
                 )}
                 
-                {/* Success message */}
                 {successMessage && (
                   <AlertMessage
                     variant="success"
                     message={successMessage}
+                    className="mb-4"
                   />
                 )}
                 
-                {/* Rent warning message */}
                 {rentWarning && (
                   <AlertMessage
                     variant="warning"
                     message={rentWarning}
+                    className="mb-4"
                   />
                 )}
                 
                 <form onSubmit={handleSubmit}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label htmlFor="leaseId" className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="leaseId" className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
                         Select Unit <span className="text-red-500">*</span>
                       </label>
-                      <select
-                        id="leaseId"
+                      <Select
                         name="leaseId"
                         value={formData.leaseId}
-                        onChange={handleInputChange}
-                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                        required
+                        onValueChange={(value) => handleInputChange({ target: { name: "leaseId", value } } as any)}
                       >
-                        <option value="">Select a unit</option>
-                        {activeLeases.map((lease) => (
-                          <option key={lease.id} value={lease.id}>
-                            {lease.unitNumber} - {lease.tenantName}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select a unit" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {activeLeases.map((lease) => (
+                            <SelectItem key={lease.id} value={lease.id}>
+                              {lease.unitNumber} - {lease.tenantName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="paymentType" className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
+                        Payment Type <span className="text-red-500">*</span>
+                      </label>
+                      <Select
+                        name="paymentType"
+                        value={formData.paymentType}
+                        onValueChange={(value) => handleInputChange({ target: { name: "paymentType", value } } as any)}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select payment type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {uniquePaymentTypes.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     
                     <div>
-                      <label htmlFor="rentalPeriod" className="block text-sm font-medium text-gray-700 mb-1">
-                        Rental Period <span className="text-red-500">*</span>
+                      <label htmlFor="rentalPeriod" className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
+                        Payment Period <span className="text-red-500">*</span>
                       </label>
-                      <select
-                        id="rentalPeriod"
+                      <Select
                         name="rentalPeriod"
                         value={formData.rentalPeriod}
-                        onChange={handleInputChange}
-                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                        required
+                        onValueChange={(value) => handleInputChange({ target: { name: "rentalPeriod", value } } as any)}
                       >
-                        {rentalPeriodOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select period" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {rentalPeriodOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     
                     <div>
-                      <label htmlFor="tenantName" className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="tenantName" className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
                         Tenant Name
                       </label>
-                      <input
+                      <Input
                         type="text"
                         id="tenantName"
                         name="tenantName"
                         value={formData.tenantName}
-                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md bg-gray-50"
-                        placeholder="Auto-populated from lease"
+                        className="bg-gray-50"
                         disabled
+                        placeholder="Auto-populated from lease"
                       />
                     </div>
 
                     <div>
-                      <label htmlFor="paymentDate" className="block text-sm font-medium text-gray-700 mb-1">
-                        Rent Paid Date <span className="text-red-500">*</span>
+                      <label htmlFor="paymentDate" className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
+                        Payment Date <span className="text-red-500">*</span>
                       </label>
-                      <input
+                      <Input
                         type="date"
                         id="paymentDate"
                         name="paymentDate"
                         value={formData.paymentDate}
                         onChange={handleInputChange}
-                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                        placeholder="Select date"
                         max={format(new Date(), "yyyy-MM-dd")}
                         required
                       />
                     </div>
                     
                     <div>
-                      <label htmlFor="officialRent" className="block text-sm font-medium text-gray-700 mb-1">
-                        Expected Rent (₹)
+                      <label htmlFor="officialRent" className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
+                        Expected Amount (₹)
                       </label>
-                      <input
+                      <Input
                         type="text"
                         id="officialRent"
                         name="officialRent"
-                        value={formData.officialRent}
-                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md bg-gray-50"
-                        placeholder="Auto-populated from lease"
+                        value={formData.paymentType === "Rent Payment" ? formData.officialRent : "N/A"}
+                        className="bg-gray-50"
                         disabled
+                        placeholder="Auto-populated from lease"
                       />
                     </div>
                     
                     <div>
-                      <label htmlFor="actualRent" className="block text-sm font-medium text-gray-700 mb-1">
-                        Rent Collected (₹) <span className="text-red-500">*</span>
+                      <label htmlFor="actualRent" className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
+                        Amount Collected (₹) <span className="text-red-500">*</span>
                       </label>
-                      <input
+                      <Input
                         type="number"
                         id="actualRent"
                         name="actualRent"
                         value={formData.actualRent}
                         onChange={handleInputChange}
-                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
                         required
                       />
                     </div>
 
                     <div>
-                      <label htmlFor="ownerDetails" className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="collectionMethod" className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
+                        Collection Method <span className="text-red-500">*</span>
+                      </label>
+                      <Select
+                        name="collectionMethod"
+                        value={formData.collectionMethod}
+                        onValueChange={(value) => handleInputChange({ target: { name: "collectionMethod", value } } as any)}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select collection method" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Cash">Cash</SelectItem>
+                          <SelectItem value="UPI">UPI</SelectItem>
+                          <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                          <SelectItem value="Cheque">Cheque</SelectItem>
+                          <SelectItem value="Other">Other - Specify in Comments</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="ownerDetails" className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
                         Unit Owner
                       </label>
-                      <input
+                      <Input
                         type="text"
                         id="ownerDetails"
                         name="ownerDetails"
                         value={formData.ownerDetails}
-                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md bg-gray-50"
-                        placeholder="Auto-populated from lease"
+                        className="bg-gray-50"
                         disabled
+                        placeholder="Auto-populated from lease"
                       />
                     </div>
 
                     <div>
-                      <label htmlFor="bankDetails" className="block text-sm font-medium text-gray-700 mb-1">
+                      <label htmlFor="bankDetails" className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
                         Bank Details
                       </label>
-                      <input
+                      <Input
                         type="text"
                         id="bankDetails"
                         name="bankDetails"
                         value={formData.bankDetails}
-                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md bg-gray-50"
-                        placeholder="Auto-populated from lease"
+                        className="bg-gray-50"
                         disabled
+                        placeholder="Auto-populated from lease"
                       />
                     </div>
                     
                     <div className="md:col-span-2">
-                      <label htmlFor="comments" className="block text-sm font-medium text-gray-700 mb-1">
-                        Comments
+                      <label htmlFor="comments" className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
+                        Comments {formData.paymentType === "Bill Payment" || formData.paymentType === "Other" ? <span className="text-red-500">*</span> : null}
                       </label>
-                      <textarea
+                      <Textarea
                         id="comments"
                         name="comments"
                         value={formData.comments}
                         onChange={handleInputChange}
-                        rows={3}
-                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                        placeholder={
+                          formData.paymentType === "Bill Payment" 
+                            ? "What type of bill payment? Electricity, Water, Gas etc" 
+                            : formData.paymentType === "Other"
+                            ? "What type of payment is this for?"
+                            : "Comments"
+                        }
+                        required={formData.paymentType === "Bill Payment" || formData.paymentType === "Other"}
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label htmlFor="attachment" className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
+                        Attachment
+                      </label>
+                      <Input
+                        type="file"
+                        id="attachment"
+                        name="attachment"
+                        onChange={handleFileChange}
+                        className="mt-1"
                       />
                     </div>
                   </div>
                   
-                  <div className="mt-6 flex justify-end">
-                    <button
+                  <CardFooter className="flex justify-end space-x-3 px-0 pt-6">
+                    <Button
                       type="button"
+                      variant="outline"
                       onClick={() => setShowAddForm(false)}
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 mr-3"
                     >
                       Cancel
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="submit"
                       disabled={isSubmitting}
-                      className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                        isSubmitting ? "opacity-75 cursor-not-allowed" : ""
-                      }`}
+                      className={isSubmitting ? "opacity-75 cursor-not-allowed" : ""}
                     >
                       {isSubmitting ? (
                         <>
@@ -743,11 +927,11 @@ export default function RentPage() {
                       ) : (
                         "Save Payment"
                       )}
-                    </button>
-                  </div>
+                    </Button>
+                  </CardFooter>
                 </form>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
           
           {showDeleteForm && paymentToDelete && (
@@ -889,7 +1073,7 @@ export default function RentPage() {
           
           <div className="bg-white shadow rounded-lg overflow-hidden">
             <div className="p-4 border-b flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
-              <div className="relative flex-1 max-w-md">
+              <div className="relative w-full md:flex-1 md:max-w-md">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Search className="h-5 w-5 text-gray-400" />
                 </div>
@@ -900,6 +1084,56 @@ export default function RentPage() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
+              </div>
+              
+              {/* Payment Type Filter */}
+              <div className="relative w-full md:w-auto" ref={filterRef}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowPaymentTypeFilter(!showPaymentTypeFilter)}
+                  className="w-full md:w-auto flex items-center justify-center"
+                >
+                  <span>Filter by Type</span>
+                  {selectedPaymentTypes.length > 0 && (
+                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {selectedPaymentTypes.length}
+                    </span>
+                  )}
+                </Button>
+                
+                {showPaymentTypeFilter && (
+                  <div className="absolute right-0 mt-2 w-full md:w-64 bg-white rounded-md shadow-lg z-10 p-3 border border-gray-200">
+                    <div className="flex justify-between items-center mb-2">
+                      <h3 className="text-sm font-medium text-gray-700">Payment Types</h3>
+                      <button
+                        onClick={() => setSelectedPaymentTypes([])}
+                        className="text-xs text-blue-600 hover:text-blue-800"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {uniquePaymentTypes.map((type) => (
+                        <label key={type} className="flex items-center">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            checked={selectedPaymentTypes.includes(type)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedPaymentTypes([...selectedPaymentTypes, type]);
+                              } else {
+                                setSelectedPaymentTypes(selectedPaymentTypes.filter(t => t !== type));
+                              }
+                            }}
+                          />
+                          <span className="ml-2 text-sm text-gray-700">{type}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             
@@ -917,6 +1151,9 @@ export default function RentPage() {
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Tenant
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Payment Type
                       </th>
                       <th 
                         scope="col" 
@@ -984,6 +1221,9 @@ export default function RentPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">{payment.tenantName}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{payment.paymentType || "Rent Payment"}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">

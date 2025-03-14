@@ -606,10 +606,17 @@ export const addRentPayment = async (paymentData: Omit<RentPayment, 'id' | 'crea
   try {
     logger.info("firestoreUtils: Adding rent payment...");
     
+    // Ensure payment has a payment type (default to "Rent Payment" for backward compatibility)
+    const paymentWithDefaults = {
+      ...paymentData,
+      paymentType: paymentData.paymentType || "Rent Payment",
+      collectionMethod: paymentData.collectionMethod || "",
+      paymentDate: paymentData.paymentDate || new Date(),
+    };
+    
     const rentCollectionRef = collection(db, 'rent-collection');
     const docRef = await addDoc(rentCollectionRef, {
-      ...paymentData,
-      paymentDate: paymentData.paymentDate || new Date(),
+      ...paymentWithDefaults,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -644,6 +651,9 @@ export const getAllRentPayments = async (): Promise<RentPayment[]> => {
       const rentPayment: RentPayment = {
         id: doc.id,
         ...data,
+        // Add default paymentType for backward compatibility with existing records
+        paymentType: data.paymentType || "Rent Payment",
+        collectionMethod: data.collectionMethod || "",
         paymentDate: data.paymentDate instanceof Timestamp 
           ? data.paymentDate.toDate() 
           : new Date(data.paymentDate),
