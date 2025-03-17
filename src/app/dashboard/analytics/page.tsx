@@ -39,7 +39,7 @@ import {
   getAllRentalInventory,
   getAllLeases,
   getAllActiveLeases,
-  getAllRentPayments,
+  getAllPayments,
 } from "../../../lib/firebase/firestoreUtils";
 
 // Define type interfaces that match Firestore document structures
@@ -150,7 +150,7 @@ export default function AnalyticsPage() {
         const inventoryData = await getAllRentalInventory();
         const allLeases = await getAllLeases();
         const currentActiveLeases = await getAllActiveLeases();
-        const allRentPayments = await getAllRentPayments();
+        const allRentPayments = await getAllPayments();
 
         setRentalInventory(inventoryData as unknown as RentalInventory[]);
         setLeases(allLeases as unknown as Lease[]);

@@ -8,19 +8,21 @@ import Link from "next/link";
 import { 
   getAllRentalInventory, 
   getAllActiveLeases, 
-  getAllRentPayments,
-  getAllLeases
+  getAllLeases,
+  getAllPayments
 } from "../../lib/firebase/firestoreUtils";
 import { RentalInventory, Lease, RentPayment } from "../../types";
 import { formatCurrency, formatDate } from "../../lib/utils/formatters";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { theme } from "@/theme/theme";
 import { StatCard } from "@/components/ui/statcard";
-import { Building, DollarSign, FileText, Key } from "lucide-react";
+import { Building, DollarSign, FileText, Key, ArrowUp, ArrowDown, Search } from "lucide-react";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress"
+import { Input } from "@/components/ui/input";
+import { Timestamp } from 'firebase/firestore';
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -33,6 +35,9 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [currentMonth, setCurrentMonth] = useState<string>("");
   const [currentMonthName, setCurrentMonthName] = useState<string>("");
+  const [sortColumn, setSortColumn] = useState<string>('rentalPeriod');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [searchTerm, setSearchTerm] = useState<string>("");
 
   useEffect(() => {
     if (!loading && !user) {
@@ -56,7 +61,7 @@ export default function Dashboard() {
             getAllRentalInventory(),
             getAllActiveLeases(),
             getAllLeases(),
-            getAllRentPayments()
+            getAllPayments()
           ]);
           
           setProperties(propertiesData);
@@ -86,15 +91,18 @@ export default function Dashboard() {
       ? Math.round((occupiedUnits / totalProperties) * 100) 
       : 0;
 
-    // Current month rent collection
+    // Current month rent collection - only count "Rent Payment" type
     const currentMonthPayments = rentPayments.filter(
-      payment => payment.rentalPeriod === currentMonth && payment.paymentType === "Rent Payment"
+      payment => payment.rentalPeriod === currentMonth && 
+      (payment.paymentType === "Rent Payment" || !payment.paymentType) // Include payments without type for backward compatibility
     );
+    
+    // Sum up actual rent paid for current month
     const totalRentCollected = currentMonthPayments.reduce(
       (sum, payment) => sum + payment.actualRentPaid, 0
     );
     
-    // Expected rent (from active leases)
+    // Expected rent from active leases
     const totalExpectedRent = activeLeases.reduce(
       (sum, lease) => sum + lease.rentAmount, 0
     );
@@ -145,7 +153,10 @@ export default function Dashboard() {
   const getRentCollectionStatus = () => {
     // Get units with paid rent this month
     const paidUnitIds = rentPayments
-      .filter(payment => payment.rentalPeriod === currentMonth)
+      .filter(payment => 
+        payment.rentalPeriod === currentMonth && 
+        (payment.paymentType === "Rent Payment" || !payment.paymentType) // Include payments without type for backward compatibility
+      )
       .map(payment => payment.unitId);
     
     // Units with active leases that haven't paid
@@ -166,6 +177,74 @@ export default function Dashboard() {
     const residential = properties.filter(p => p.propertyType === 'Residential').length;
     return { commercial, residential };
   };
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // If clicking the same column, toggle direction
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // If clicking a different column, set it with desc direction
+      setSortColumn(column);
+      setSortDirection('desc');
+    }
+  };
+
+  const getTimestamp = (date: Date | Timestamp) => {
+    if (date instanceof Date) return date.getTime();
+    return new Date(date.seconds * 1000).getTime();
+  };
+
+  const sortedPayments = [...rentPayments].sort((a, b) => {
+    const direction = sortDirection === 'asc' ? 1 : -1;
+    
+    switch (sortColumn) {
+      case 'unitNumber':
+        return direction * (a.unitId || '').localeCompare(b.unitId || '');
+      case 'tenantName':
+        return direction * (a.tenantName || '').localeCompare(b.tenantName || '');
+      case 'paymentType':
+        return direction * ((a.paymentType || 'Rent Payment').localeCompare(b.paymentType || 'Rent Payment'));
+      case 'rentalPeriod':
+        const [yearA, monthA] = a.rentalPeriod.split('-').map(Number);
+        const [yearB, monthB] = b.rentalPeriod.split('-').map(Number);
+        const dateA = new Date(yearA, monthA - 1);
+        const dateB = new Date(yearB, monthB - 1);
+        return direction * (dateA.getTime() - dateB.getTime());
+      case 'officialRent':
+        return direction * ((a.officialRent || 0) - (b.officialRent || 0));
+      case 'actualRent':
+        return direction * (a.actualRentPaid - b.actualRentPaid);
+      case 'createdAt':
+        return direction * (getTimestamp(a.createdAt) - getTimestamp(b.createdAt));
+      default:
+        return 0;
+    }
+  });
+
+  // Function to render sort arrow
+  const renderSortArrow = (column: string) => {
+    if (sortColumn !== column) return null;
+    return sortDirection === 'asc' ? <ArrowUp className="h-4 w-4 text-blue-500" /> : <ArrowDown className="h-4 w-4 text-blue-500" />;
+  };
+
+  // Update the filteredPayments logic to search across all fields
+  const filteredPayments = rentPayments.filter((payment) => {
+    if (!searchTerm) return true;
+    
+    const searchLower = searchTerm.toLowerCase();
+    const paymentDate = getTimestamp(payment.createdAt);
+    const formattedDate = new Date(paymentDate).toLocaleDateString().toLowerCase();
+    
+    return (
+      (payment.unitId || '').toLowerCase().includes(searchLower) ||
+      (payment.tenantName || '').toLowerCase().includes(searchLower) ||
+      (payment.paymentType || 'Rent Payment').toLowerCase().includes(searchLower) ||
+      payment.rentalPeriod.includes(searchLower) ||
+      (payment.officialRent || 0).toString().includes(searchTerm) ||
+      payment.actualRentPaid.toString().includes(searchTerm) ||
+      formattedDate.includes(searchLower)
+    );
+  });
 
   if (loading || dataLoading) {
     return (
@@ -464,6 +543,20 @@ export default function Dashboard() {
                   </Card>
                 </TabsContent>
               </Tabs>
+            </div>
+
+            {/* Replace the search input section */}
+            <div className="relative w-full md:flex-1 md:max-w-md">
+              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-gray-400" />
+              </div>
+              <Input
+                type="text"
+                className="pl-9"
+                placeholder="Search payments..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
           </div>
         </div>

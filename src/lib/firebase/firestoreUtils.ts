@@ -630,25 +630,26 @@ export const addRentPayment = async (paymentData: Omit<RentPayment, 'id' | 'crea
 };
 
 /**
- * Retrieves all rent payments from the 'rent-collection' collection.
- * @returns {Promise<RentPayment[]>} Array of rent payment items.
- * @throws {Error} If there is an error retrieving the rent payments.
+ * Retrieves all payments from the 'rent-collection' collection.
+ * This includes rent payments, bill payments, maintenance fees, and other payment types.
+ * @returns {Promise<RentPayment[]>} Array of payment items.
+ * @throws {Error} If there is an error retrieving the payments.
  */
-export const getAllRentPayments = async (): Promise<RentPayment[]> => {
+export const getAllPayments = async (): Promise<RentPayment[]> => {
   try {
-    logger.info("firestoreUtils: Retrieving all rent payments...");
+    logger.info("firestoreUtils: Retrieving all payments...");
     
     const rentCollectionRef = collection(db, 'rent-collection');
     const q = query(rentCollectionRef, orderBy('createdAt', 'desc'));
     const querySnapshot = await getDocs(q);
     
-    const rentPayments: RentPayment[] = [];
+    const payments: RentPayment[] = [];
     
     querySnapshot.forEach((doc) => {
       const data = doc.data();
       
       // Convert Firestore Timestamps to JavaScript Date objects
-      const rentPayment: RentPayment = {
+      const payment: RentPayment = {
         id: doc.id,
         ...data,
         // Add default paymentType for backward compatibility with existing records
@@ -665,16 +666,19 @@ export const getAllRentPayments = async (): Promise<RentPayment[]> => {
           : new Date(data.updatedAt)
       } as RentPayment;
       
-      rentPayments.push(rentPayment);
+      payments.push(payment);
     });
     
-    logger.info(`firestoreUtils: Retrieved ${rentPayments.length} rent payments.`);
-    return rentPayments;
+    logger.info(`firestoreUtils: Retrieved ${payments.length} payments.`);
+    return payments;
   } catch (error: any) {
-    logger.error(`firestoreUtils: Error retrieving rent payments: ${error.message}`);
-    throw new Error('Failed to retrieve rent payments.');
+    logger.error(`firestoreUtils: Error retrieving payments: ${error.message}`);
+    throw new Error('Failed to retrieve payments.');
   }
 };
+
+// For backward compatibility, alias the old function name to the new one
+export const getAllRentPayments = getAllPayments;
 
 /**
  * Retrieves rental inventory details for a unit, including owner and bank details.

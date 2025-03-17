@@ -6,7 +6,7 @@ import { useAuth } from "../../../lib/hooks/useAuth";
 import Navigation from "../../../components/Navigation";
 import { collection, getDocs, query, orderBy, where, addDoc, doc, getDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase/firebase";
-import { DollarSign, Search, Plus, Calendar, Check, X, ArrowUp, ArrowDown } from "lucide-react";
+import { DollarSign, Search, Plus, Calendar, Check, X, ArrowUp, ArrowDown, Filter } from "lucide-react";
 import { format, subMonths, addMonths } from "date-fns";
 import { getActiveLeaseForUnit, getRentalInventoryDetails } from "../../../lib/firebase/firestoreUtils";
 import logger from "../../../lib/logger";
@@ -102,7 +102,7 @@ export default function RentPage() {
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  const [sortColumn, setSortColumn] = useState<'rentalPeriod' | 'createdAt'>('rentalPeriod');
+  const [sortColumn, setSortColumn] = useState<'unitNumber' | 'tenantName' | 'paymentType' | 'rentalPeriod' | 'officialRent' | 'actualRent' | 'createdAt'>('rentalPeriod');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Consolidated alert message state
@@ -199,6 +199,8 @@ export default function RentPage() {
             tenantName: data.tenantName || "",
             officialRent: data.officialRent || 0,
             actualRent: data.actualRentPaid || 0,
+            paymentType: data.paymentType || "Rent Payment",
+            collectionMethod: data.collectionMethod || "",
             rentalPeriod: data.rentalPeriod,
             comments: data.comments || "",
             createdAt: data.createdAt
@@ -519,19 +521,49 @@ export default function RentPage() {
   };
 
   const filteredPayments = rentPayments.filter((payment) => {
-    const matchesSearch = 
-      payment.tenantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.unitNumber.toLowerCase().includes(searchTerm.toLowerCase());
+    // If no search term, just filter by payment type
+    if (!searchTerm.trim()) {
+      return (
+        selectedPaymentTypes.length === 0 || 
+        selectedPaymentTypes.includes(payment.paymentType || "Rent Payment")
+      );
+    }
     
-    // Add payment type filtering
+    const searchLower = searchTerm.toLowerCase();
+    
+    // Search in multiple fields
+    const matchesUnitOrTenant = 
+      payment.tenantName.toLowerCase().includes(searchLower) ||
+      payment.unitNumber.toLowerCase().includes(searchLower);
+    
+    // Search in payment type
     const matchesPaymentType = 
+      (payment.paymentType || "Rent Payment").toLowerCase().includes(searchLower);
+    
+    // Search in rental period (both in format "2023-08" and month names like "August")
+    const matchesRentalPeriod = payment.rentalPeriod.toLowerCase().includes(searchLower);
+    
+    // Check if search term matches a month name in the rental period
+    const [year, month] = payment.rentalPeriod.split('-');
+    const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    const monthName = months[parseInt(month, 10) - 1];
+    const matchesMonthName = monthName.includes(searchLower);
+    
+    // Search in comments
+    const matchesComments = payment.comments.toLowerCase().includes(searchLower);
+    
+    // Check if we should include this payment based on combined search results
+    const matchesSearch = matchesUnitOrTenant || matchesPaymentType || matchesRentalPeriod || matchesMonthName || matchesComments;
+    
+    // Also apply payment type filter
+    const matchesPaymentTypeFilter = 
       selectedPaymentTypes.length === 0 || 
       selectedPaymentTypes.includes(payment.paymentType || "Rent Payment");
     
-    return matchesSearch && matchesPaymentType;
+    return matchesSearch && matchesPaymentTypeFilter;
   });
 
-  const handleSort = (column: 'rentalPeriod' | 'createdAt') => {
+  const handleSort = (column: 'unitNumber' | 'tenantName' | 'paymentType' | 'rentalPeriod' | 'officialRent' | 'actualRent' | 'createdAt') => {
     if (sortColumn === column) {
       // If clicking the same column, toggle direction
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -543,32 +575,59 @@ export default function RentPage() {
   };
 
   const sortedPayments = [...filteredPayments].sort((a, b) => {
-    if (sortColumn === 'rentalPeriod') {
-      const [yearA, monthA] = a.rentalPeriod.split('-').map(Number);
-      const [yearB, monthB] = b.rentalPeriod.split('-').map(Number);
+    const direction = sortDirection === 'asc' ? 1 : -1;
+    
+    switch (sortColumn) {
+      case 'unitNumber':
+        return direction * (a.unitNumber.localeCompare(b.unitNumber));
       
-      const dateA = new Date(yearA, monthA - 1);
-      const dateB = new Date(yearB, monthB - 1);
+      case 'tenantName':
+        return direction * (a.tenantName.localeCompare(b.tenantName));
       
-      return sortDirection === 'asc' 
-        ? dateA.getTime() - dateB.getTime()
-        : dateB.getTime() - dateA.getTime();
-    } else {
-      const dateA = a.createdAt instanceof Date 
-        ? a.createdAt.getTime()
-        : a.createdAt.toDate 
-          ? a.createdAt.toDate().getTime()
-          : new Date(a.createdAt.seconds * 1000).getTime();
+      case 'paymentType':
+        const typeA = a.paymentType || "Rent Payment";
+        const typeB = b.paymentType || "Rent Payment";
+        return direction * (typeA.localeCompare(typeB));
       
-      const dateB = b.createdAt instanceof Date 
-        ? b.createdAt.getTime()
-        : b.createdAt.toDate 
-          ? b.createdAt.toDate().getTime()
-          : new Date(b.createdAt.seconds * 1000).getTime();
+      case 'rentalPeriod':
+        const [yearA, monthA] = a.rentalPeriod.split('-').map(Number);
+        const [yearB, monthB] = b.rentalPeriod.split('-').map(Number);
+        
+        const dateA = new Date(yearA, monthA - 1);
+        const dateB = new Date(yearB, monthB - 1);
+        
+        return direction * (dateB.getTime() - dateA.getTime());
       
-      return sortDirection === 'asc'
-        ? dateA - dateB
-        : dateB - dateA;
+      case 'officialRent':
+        return direction * (a.officialRent - b.officialRent);
+      
+      case 'actualRent':
+        return direction * (a.actualRent - b.actualRent);
+      
+      case 'createdAt':
+        const createdAtA = a.createdAt instanceof Date 
+          ? a.createdAt.getTime()
+          : a.createdAt.toDate 
+            ? a.createdAt.toDate().getTime()
+            : new Date(a.createdAt.seconds * 1000).getTime();
+        
+        const createdAtB = b.createdAt instanceof Date 
+          ? b.createdAt.getTime()
+          : b.createdAt.toDate 
+            ? b.createdAt.toDate().getTime()
+            : new Date(b.createdAt.seconds * 1000).getTime();
+        
+        return direction * (createdAtB - createdAtA);
+      
+      default:
+        // Default sort by rental period (most recent first)
+        const [defaultYearA, defaultMonthA] = a.rentalPeriod.split('-').map(Number);
+        const [defaultYearB, defaultMonthB] = b.rentalPeriod.split('-').map(Number);
+        
+        const defaultDateA = new Date(defaultYearA, defaultMonthA - 1);
+        const defaultDateB = new Date(defaultYearB, defaultMonthB - 1);
+        
+        return defaultDateB.getTime() - defaultDateA.getTime();
     }
   });
 
@@ -584,27 +643,29 @@ export default function RentPage() {
     rentalPeriodOptions.push({ value, label });
   }
 
-  // Get unique payment types from the data
-  const getUniquePaymentTypes = () => {
+  // Function to get unique payment types from the data
+  function getUniquePaymentTypes(paymentsList: RentPayment[]) {
     const types = new Set<string>();
     
-    // Always include these default types
-    types.add("Rent Payment");
-    types.add("Bill Payment");
-    types.add("Maintenance Fee");
-    types.add("Other");
+    // Always include these default types in the specified order
+    const defaultTypes = ["Rent Payment", "Bill Payment", "Maintenance Fee", "Other"];
+    defaultTypes.forEach(type => types.add(type));
     
     // Add any other types from the data
-    rentPayments.forEach(payment => {
-      if (payment.paymentType) {
+    paymentsList.forEach(payment => {
+      if (payment.paymentType && !defaultTypes.includes(payment.paymentType)) {
         types.add(payment.paymentType);
       }
     });
     
-    return Array.from(types).sort();
-  };
+    // Return with default types in specified order, followed by any additional types sorted alphabetically
+    return [
+      ...defaultTypes,
+      ...Array.from(types).filter(type => !defaultTypes.includes(type)).sort()
+    ];
+  }
   
-  const uniquePaymentTypes = getUniquePaymentTypes();
+  const uniquePaymentTypes = getUniquePaymentTypes(rentPayments);
 
   if (loading || !user) {
     return (
@@ -1079,22 +1140,32 @@ export default function RentPage() {
                 </div>
                 <input
                   type="text"
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="block w-full pl-10 pr-8 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   placeholder="Search payments..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm("")}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  >
+                    <X className="h-4 w-4 text-gray-400 hover:text-gray-500" aria-hidden="true" />
+                  </button>
+                )}
               </div>
               
               {/* Payment Type Filter */}
-              <div className="relative w-full md:w-auto" ref={filterRef}>
+              <div className="relative w-full md:w-auto md:ml-4" ref={filterRef}>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setShowPaymentTypeFilter(!showPaymentTypeFilter)}
                   className="w-full md:w-auto flex items-center justify-center"
                 >
-                  <span>Filter by Type</span>
+                  <Filter className="h-4 w-4 mr-2" />
+                  <span>Filter by Payment Type</span>
                   {selectedPaymentTypes.length > 0 && (
                     <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                       {selectedPaymentTypes.length}
@@ -1103,7 +1174,7 @@ export default function RentPage() {
                 </Button>
                 
                 {showPaymentTypeFilter && (
-                  <div className="absolute right-0 mt-2 w-full md:w-64 bg-white rounded-md shadow-lg z-10 p-3 border border-gray-200">
+                  <div className="absolute left-0 mt-2 w-full md:w-64 bg-white rounded-md shadow-lg z-10 p-3 border border-gray-200">
                     <div className="flex justify-between items-center mb-2">
                       <h3 className="text-sm font-medium text-gray-700">Payment Types</h3>
                       <button
@@ -1146,14 +1217,65 @@ export default function RentPage() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Unit
+                      <th 
+                        scope="col" 
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
+                        onClick={() => handleSort('unitNumber')}
+                      >
+                        <div className="flex items-center">
+                          Unit
+                          <span className="ml-2">
+                            {sortColumn === 'unitNumber' ? (
+                              sortDirection === 'asc' ? (
+                                <ArrowUp className="h-4 w-4 text-blue-500" />
+                              ) : (
+                                <ArrowDown className="h-4 w-4 text-blue-500" />
+                              )
+                            ) : (
+                              <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
+                            )}
+                          </span>
+                        </div>
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Tenant
+                      <th 
+                        scope="col" 
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
+                        onClick={() => handleSort('tenantName')}
+                      >
+                        <div className="flex items-center">
+                          Tenant
+                          <span className="ml-2">
+                            {sortColumn === 'tenantName' ? (
+                              sortDirection === 'asc' ? (
+                                <ArrowUp className="h-4 w-4 text-blue-500" />
+                              ) : (
+                                <ArrowDown className="h-4 w-4 text-blue-500" />
+                              )
+                            ) : (
+                              <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
+                            )}
+                          </span>
+                        </div>
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Payment Type
+                      <th 
+                        scope="col" 
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
+                        onClick={() => handleSort('paymentType')}
+                      >
+                        <div className="flex items-center">
+                          Payment Type
+                          <span className="ml-2">
+                            {sortColumn === 'paymentType' ? (
+                              sortDirection === 'asc' ? (
+                                <ArrowUp className="h-4 w-4 text-blue-500" />
+                              ) : (
+                                <ArrowDown className="h-4 w-4 text-blue-500" />
+                              )
+                            ) : (
+                              <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
+                            )}
+                          </span>
+                        </div>
                       </th>
                       <th 
                         scope="col" 
@@ -1175,11 +1297,45 @@ export default function RentPage() {
                           </span>
                         </div>
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Expected Rent
+                      <th 
+                        scope="col" 
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
+                        onClick={() => handleSort('officialRent')}
+                      >
+                        <div className="flex items-center">
+                          Expected
+                          <span className="ml-2">
+                            {sortColumn === 'officialRent' ? (
+                              sortDirection === 'asc' ? (
+                                <ArrowUp className="h-4 w-4 text-blue-500" />
+                              ) : (
+                                <ArrowDown className="h-4 w-4 text-blue-500" />
+                              )
+                            ) : (
+                              <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
+                            )}
+                          </span>
+                        </div>
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Rent Collected
+                      <th 
+                        scope="col" 
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
+                        onClick={() => handleSort('actualRent')}
+                      >
+                        <div className="flex items-center">
+                          Collected
+                          <span className="ml-2">
+                            {sortColumn === 'actualRent' ? (
+                              sortDirection === 'asc' ? (
+                                <ArrowUp className="h-4 w-4 text-blue-500" />
+                              ) : (
+                                <ArrowDown className="h-4 w-4 text-blue-500" />
+                              )
+                            ) : (
+                              <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
+                            )}
+                          </span>
+                        </div>
                       </th>
                       <th 
                         scope="col" 
@@ -1270,17 +1426,8 @@ export default function RentPage() {
                 <DollarSign className="h-12 w-12 text-gray-400 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-1">No rent payments found</h3>
                 <p className="text-gray-500">
-                  {searchTerm ? "Try adjusting your search" : "Get started by recording a rent payment"}
+                  {searchTerm ? "Try adjusting your search" : "Get started by recording a payment"}
                 </p>
-                {!searchTerm && !showAddForm && (
-                  <button
-                    onClick={() => setShowAddForm(true)}
-                    className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    <Plus className="h-5 w-5 mr-2" />
-                    Record Rent Payment
-                  </button>
-                )}
               </div>
             )}
           </div>

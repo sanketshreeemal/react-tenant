@@ -14,7 +14,7 @@ The analytics dashboard utilizes the following functions from `src/lib/firebase/
 - `getAllRentalInventory()` - Retrieves all rental units in the portfolio
 - `getAllLeases()` - Retrieves all leases (historical and current)
 - `getAllActiveLeases()` - Retrieves only currently active leases
-- `getAllRentPayments()` - Retrieves rent payment history
+- `getAllPayments()` - Retrieves payment history (including rent, bills, maintenance fees, and other payments)
 
 ### Key Metrics Calculated
 
