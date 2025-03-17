@@ -7,7 +7,7 @@ import Navigation from "../../../components/Navigation";
 import { RentalInventory } from "@/types";
 import { addRentalInventory, getAllRentalInventory, updateRentalInventory, deleteRentalInventory } from "@/lib/firebase/firestoreUtils";
 import { downloadInventoryTemplate, uploadInventoryExcel } from "@/lib/excelUtils";
-import { FileUp, FileDown, Loader2, AlertTriangle, CheckCircle, X, Plus } from "lucide-react";
+import { FileUp, FileDown, Loader2, AlertTriangle, CheckCircle, X, Plus, Pencil, Trash2 } from "lucide-react";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { theme } from "@/theme/theme";
 
 export default function RentalInventoryManagement() {
   const { user, loading } = useAuth();
@@ -304,18 +305,23 @@ export default function RentalInventoryManagement() {
                 {/* Add Property Button */}
                 <Button
                   onClick={() => setIsFormOpen(!isFormOpen)}
-                  variant="default"
+                  variant={isFormOpen ? "outline" : "default"}
                   size="sm"
-                  className="bg-gray-900 hover:bg-gray-800"
+                  style={isFormOpen ? {
+                    backgroundColor: theme.colors.button.secondary,
+                    color: theme.colors.button.secondaryText,
+                    borderColor: theme.colors.button.secondaryBorder,
+                  } : {
+                    backgroundColor: theme.colors.button.primary,
+                    color: theme.colors.background,
+                  }}
+                  className={isFormOpen ? "hover:bg-secondary/10" : "hover:bg-primary/90"}
                 >
                   {isFormOpen ? (
-                    <>
-                      <X className="h-4 w-4 sm:h-5 sm:w-5" />
-                      <span>Cancel</span>
-                    </>
+                    "Cancel"
                   ) : (
                     <>
-                      <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+                      <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                       <span>Manual Add</span>
                     </>
                   )}
@@ -439,6 +445,12 @@ export default function RentalInventoryManagement() {
                       type="button"
                       onClick={closeForm}
                       variant="outline"
+                      style={{
+                        backgroundColor: theme.colors.button.secondary,
+                        color: theme.colors.button.secondaryText,
+                        borderColor: theme.colors.button.secondaryBorder,
+                      }}
+                      className="hover:bg-secondary/10"
                     >
                       Cancel
                     </Button>
@@ -542,18 +554,24 @@ export default function RentalInventoryManagement() {
                           {item.bankDetails || "-"}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <button
-                            onClick={() => openEditForm(item)}
-                            className="text-blue-600 hover:text-blue-900 mr-3"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => item.id && handleDelete(item.id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Delete
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => openEditForm(item)}
+                              className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                              title="Edit property"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              <span className="sr-only">Edit</span>
+                            </button>
+                            <button
+                              onClick={() => item.id && handleDelete(item.id)}
+                              className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                              title="Delete property"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span className="sr-only">Delete</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))

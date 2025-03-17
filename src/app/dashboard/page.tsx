@@ -544,20 +544,6 @@ export default function Dashboard() {
                 </TabsContent>
               </Tabs>
             </div>
-
-            {/* Replace the search input section */}
-            <div className="relative w-full md:flex-1 md:max-w-md">
-              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-gray-400" />
-              </div>
-              <Input
-                type="text"
-                className="pl-9"
-                placeholder="Search payments..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
           </div>
         </div>
       </div>

@@ -13,7 +13,7 @@ import {
   getAllRentalInventory
 } from "@/lib/firebase/firestoreUtils";
 import { format, formatDistance, formatRelative, formatDuration, intervalToDuration } from 'date-fns';
-import { Search, Filter, CalendarIcon, CheckCircle, XCircle, FileUp, FileDown, Loader2, AlertTriangle, X, Plus } from "lucide-react";
+import { Search, Filter, CalendarIcon, CheckCircle, XCircle, FileUp, FileDown, Loader2, AlertTriangle, X, Plus, Pencil } from "lucide-react";
 import { downloadTenantTemplate, uploadTenantExcel } from "@/lib/excelUtils";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { theme } from "@/theme/theme";
 
 export default function TenantsManagement() {
   const { user, loading } = useAuth();
@@ -665,18 +666,23 @@ export default function TenantsManagement() {
                 {/* Add Tenant Button */}
                 <Button
                   onClick={() => setIsFormOpen(!isFormOpen)}
-                  variant="default"
+                  variant={isFormOpen ? "outline" : "default"}
                   size="sm"
-                  className="bg-gray-900 hover:bg-gray-800"
+                  style={isFormOpen ? {
+                    backgroundColor: theme.colors.button.secondary,
+                    color: theme.colors.button.secondaryText,
+                    borderColor: theme.colors.button.secondaryBorder,
+                  } : {
+                    backgroundColor: theme.colors.button.primary,
+                    color: theme.colors.background,
+                  }}
+                  className={isFormOpen ? "hover:bg-secondary/10" : "hover:bg-primary/90"}
                 >
                   {isFormOpen ? (
-                    <>
-                      <X className="h-4 w-4 sm:h-5 sm:w-5" />
-                      <span>Cancel</span>
-                    </>
+                    "Cancel"
                   ) : (
                     <>
-                      <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+                      <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                       <span>Manual Add</span>
                     </>
                   )}
@@ -1112,6 +1118,12 @@ export default function TenantsManagement() {
                       type="button"
                       onClick={() => setIsFormOpen(false)}
                       variant="outline"
+                      style={{
+                        backgroundColor: theme.colors.button.secondary,
+                        color: theme.colors.button.secondaryText,
+                        borderColor: theme.colors.button.secondaryBorder,
+                      }}
+                      className="hover:bg-secondary/10"
                     >
                       Cancel
                     </Button>
@@ -1169,13 +1181,19 @@ export default function TenantsManagement() {
                     >
                       Delete
                     </button>
-                    <button 
-                      type="button" 
-                      className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                    <Button
+                      type="button"
                       onClick={cancelDeleteLease}
+                      variant="outline"
+                      style={{
+                        backgroundColor: theme.colors.button.secondary,
+                        color: theme.colors.button.secondaryText,
+                        borderColor: theme.colors.button.secondaryBorder,
+                      }}
+                      className="hover:bg-secondary/10"
                     >
                       Cancel
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -1255,8 +1273,18 @@ export default function TenantsManagement() {
                           ₹{lease.rentAmount.toLocaleString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          {/* Toggle Switch with Status Label */}
-                          <div className="flex items-center justify-end space-x-3">
+                          <div className="flex items-center justify-end gap-3">
+                            {/* Edit Button */}
+                            <button
+                              onClick={() => toggleForm(lease.id)}
+                              className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors -mt-4"
+                              title="Edit lease"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              <span className="sr-only">Edit</span>
+                            </button>
+
+                            {/* Toggle Switch with Status Label */}
                             <div className="flex flex-col items-center">
                               <label className="inline-flex relative items-center cursor-pointer">
                                 <input
@@ -1271,14 +1299,6 @@ export default function TenantsManagement() {
                                 {lease.isActive ? 'Active' : 'Inactive'}
                               </span>
                             </div>
-                            
-                            {/* Edit Button */}
-                            <button
-                              onClick={() => toggleForm(lease.id)}
-                              className="text-blue-600 hover:text-blue-900 font-medium"
-                            >
-                              Edit
-                            </button>
                           </div>
                         </td>
                       </tr>

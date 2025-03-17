@@ -6,7 +6,7 @@ import { useAuth } from "../../../lib/hooks/useAuth";
 import Navigation from "../../../components/Navigation";
 import { collection, getDocs, query, orderBy, where, addDoc, doc, getDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase/firebase";
-import { DollarSign, Search, Plus, Calendar, Check, X, ArrowUp, ArrowDown, Filter } from "lucide-react";
+import { DollarSign, Search, Plus, Calendar, Check, X, ArrowUp, ArrowDown, Filter, Trash2 } from "lucide-react";
 import { format, subMonths, addMonths } from "date-fns";
 import { getActiveLeaseForUnit, getRentalInventoryDetails } from "../../../lib/firebase/firestoreUtils";
 import logger from "../../../lib/logger";
@@ -700,15 +700,20 @@ export default function RentPage() {
               </div>
               <Button
                 onClick={() => setShowAddForm(!showAddForm)}
-                variant="default"
+                variant={showAddForm ? "outline" : "default"}
                 size="sm"
-                className="bg-gray-900 hover:bg-gray-800"
+                style={showAddForm ? {
+                  backgroundColor: theme.colors.button.secondary,
+                  color: theme.colors.button.secondaryText,
+                  borderColor: theme.colors.button.secondaryBorder,
+                } : {
+                  backgroundColor: theme.colors.button.primary,
+                  color: theme.colors.background,
+                }}
+                className={showAddForm ? "hover:bg-secondary/10" : "hover:bg-primary/90"}
               >
                 {showAddForm ? (
-                  <>
-                    <X className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                    <span>Cancel</span>
-                  </>
+                  "Cancel"
                 ) : (
                   <>
                     <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
@@ -969,13 +974,23 @@ export default function RentPage() {
                       type="button"
                       variant="outline"
                       onClick={() => setShowAddForm(false)}
+                      style={{
+                        backgroundColor: theme.colors.button.secondary,
+                        color: theme.colors.button.secondaryText,
+                        borderColor: theme.colors.button.secondaryBorder,
+                      }}
+                      className="hover:bg-secondary/10"
                     >
                       Cancel
                     </Button>
                     <Button
                       type="submit"
                       disabled={isSubmitting}
-                      className={isSubmitting ? "opacity-75 cursor-not-allowed" : ""}
+                      style={{
+                        backgroundColor: theme.colors.button.primary,
+                        color: theme.colors.background,
+                      }}
+                      className={`hover:bg-primary/90 ${isSubmitting ? "opacity-75 cursor-not-allowed" : ""}`}
                     >
                       {isSubmitting ? (
                         <>
@@ -986,7 +1001,10 @@ export default function RentPage() {
                           Saving...
                         </>
                       ) : (
-                        "Save Payment"
+                        <>
+                          <Check className="h-4 w-4 mr-2" />
+                          Save Payment
+                        </>
                       )}
                     </Button>
                   </CardFooter>
@@ -996,85 +1014,178 @@ export default function RentPage() {
           )}
           
           {showDeleteForm && paymentToDelete && (
-            <div className="bg-white shadow rounded-lg overflow-hidden mb-6">
-              <div className="p-6">
-                <h2 className="text-lg font-medium text-gray-900 mb-4">Delete Rent Payment</h2>
-                
-                {/* Delete error message */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="text-lg font-medium text-gray-900">Delete Payment Record</CardTitle>
+              </CardHeader>
+              <CardContent>
                 {deleteError && (
                   <AlertMessage
                     variant="error"
                     message={deleteError}
+                    className="mb-4"
                   />
                 )}
                 
-                {/* Delete success message */}
                 {deleteSuccess && (
                   <AlertMessage
                     variant="success"
                     message={deleteSuccess}
+                    className="mb-4"
                   />
                 )}
                 
                 <form onSubmit={handleDeleteSubmit}>
-                  <div className="mb-6">
-                    <h3 className="text-md font-medium text-gray-700 mb-2">Payment Details</h3>
-                    <div className="bg-gray-50 p-4 rounded-md">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-sm text-gray-500">Unit</p>
-                          <p className="text-sm font-medium">{paymentToDelete.unitNumber}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Tenant</p>
-                          <p className="text-sm font-medium">{paymentToDelete.tenantName}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Rental Period</p>
-                          <p className="text-sm font-medium">
-                            {(() => {
-                              const [year, month] = paymentToDelete.rentalPeriod.split('-');
-                              const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                              return `${months[parseInt(month, 10) - 1]} ${year}`;
-                            })()}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Amount</p>
-                          <p className="text-sm font-medium">₹{paymentToDelete.actualRent.toLocaleString()}</p>
-                        </div>
-                      </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
+                        Unit
+                      </label>
+                      <Input
+                        type="text"
+                        value={paymentToDelete.unitNumber}
+                        className="bg-gray-50"
+                        style={{ 
+                          backgroundColor: theme.colors.surface,
+                          borderColor: theme.colors.border,
+                          color: theme.colors.textPrimary 
+                        }}
+                        disabled
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
+                        Payment Type
+                      </label>
+                      <Input
+                        type="text"
+                        value={paymentToDelete.paymentType || "Rent Payment"}
+                        className="bg-gray-50"
+                        style={{ 
+                          backgroundColor: theme.colors.surface,
+                          borderColor: theme.colors.border,
+                          color: theme.colors.textPrimary 
+                        }}
+                        disabled
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
+                        Payment Period
+                      </label>
+                      <Input
+                        type="text"
+                        value={(() => {
+                          const [year, month] = paymentToDelete.rentalPeriod.split('-');
+                          const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                          return `${months[parseInt(month, 10) - 1]} ${year}`;
+                        })()}
+                        className="bg-gray-50"
+                        style={{ 
+                          backgroundColor: theme.colors.surface,
+                          borderColor: theme.colors.border,
+                          color: theme.colors.textPrimary 
+                        }}
+                        disabled
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
+                        Tenant Name
+                      </label>
+                      <Input
+                        type="text"
+                        value={paymentToDelete.tenantName}
+                        className="bg-gray-50"
+                        style={{ 
+                          backgroundColor: theme.colors.surface,
+                          borderColor: theme.colors.border,
+                          color: theme.colors.textPrimary 
+                        }}
+                        disabled
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
+                        Expected Amount (₹)
+                      </label>
+                      <Input
+                        type="text"
+                        value={paymentToDelete.officialRent.toLocaleString()}
+                        className="bg-gray-50"
+                        style={{ 
+                          backgroundColor: theme.colors.surface,
+                          borderColor: theme.colors.border,
+                          color: theme.colors.textPrimary 
+                        }}
+                        disabled
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
+                        Amount Collected (₹)
+                      </label>
+                      <Input
+                        type="text"
+                        value={paymentToDelete.actualRent.toLocaleString()}
+                        className={`bg-gray-50 ${paymentToDelete.actualRent < paymentToDelete.officialRent ? "text-red-600" : "text-green-600"}`}
+                        style={{ 
+                          backgroundColor: theme.colors.surface,
+                          borderColor: theme.colors.border,
+                          color: theme.colors.textPrimary 
+                        }}
+                        disabled
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label htmlFor="deleteReason" className="block text-sm font-medium text-red-600 mb-1">
+                        Reason For Deletion <span className="text-red-500">*</span>
+                      </label>
+                      <Textarea
+                        id="deleteReason"
+                        name="deleteReason"
+                        value={deleteReason}
+                        onChange={(e) => setDeleteReason(e.target.value)}
+                        rows={3}
+                        style={{ 
+                          backgroundColor: theme.colors.surface,
+                          borderColor: theme.colors.border,
+                          color: theme.colors.textPrimary 
+                        }}
+                        placeholder="Please provide a reason for deleting this payment record"
+                        required
+                      />
                     </div>
                   </div>
                   
-                  <div className="mb-6">
-                    <label htmlFor="deleteReason" className="block text-sm font-medium text-gray-700 mb-1">
-                      Reason For Deletion <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      id="deleteReason"
-                      name="deleteReason"
-                      value={deleteReason}
-                      onChange={(e) => setDeleteReason(e.target.value)}
-                      rows={3}
-                      className="shadow-sm focus:ring-red-500 focus:border-red-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                      placeholder="Please provide a reason for deleting this payment record"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="flex justify-end space-x-3">
-                    <button
+                  <CardFooter className="flex justify-end space-x-3 px-0 pt-6">
+                    <Button
                       type="button"
+                      variant="outline"
                       onClick={cancelDelete}
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      style={{
+                        backgroundColor: theme.colors.button.secondary,
+                        color: theme.colors.button.secondaryText,
+                        borderColor: theme.colors.button.secondaryBorder,
+                      }}
+                      className="hover:bg-secondary/10"
                     >
                       Cancel
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="submit"
                       disabled={isDeleting}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                      style={{
+                        backgroundColor: theme.colors.button.destructive,
+                        color: theme.colors.background,
+                      }}
+                      className={`hover:bg-destructive/90 ${isDeleting ? "opacity-75 cursor-not-allowed" : ""}`}
                     >
                       {isDeleting ? (
                         <>
@@ -1085,13 +1196,16 @@ export default function RentPage() {
                           Deleting...
                         </>
                       ) : (
-                        "Delete Payment"
+                        <>
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete Payment
+                        </>
                       )}
-                    </button>
-                  </div>
+                    </Button>
+                  </CardFooter>
                 </form>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
           
           {showDeleteConfirmation && (
@@ -1102,18 +1216,29 @@ export default function RentPage() {
                   Are you sure you want to delete this rent payment? This action cannot be undone.
                 </p>
                 <div className="flex justify-end space-x-3">
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
                     onClick={() => setShowDeleteConfirmation(false)}
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    style={{
+                      backgroundColor: theme.colors.button.secondary,
+                      color: theme.colors.button.secondaryText,
+                      borderColor: theme.colors.button.secondaryBorder,
+                    }}
+                    className="hover:bg-secondary/10"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="destructive"
                     onClick={confirmDelete}
                     disabled={isDeleting}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    style={{
+                      backgroundColor: theme.colors.button.destructive,
+                      color: theme.colors.background,
+                    }}
+                    className={`hover:bg-destructive/90 ${isDeleting ? "opacity-75 cursor-not-allowed" : ""}`}
                   >
                     {isDeleting ? (
                       <>
@@ -1124,9 +1249,12 @@ export default function RentPage() {
                         Deleting...
                       </>
                     ) : (
-                      "Yes, Delete Payment"
+                      <>
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Yes, Delete Payment
+                      </>
                     )}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -1408,12 +1536,17 @@ export default function RentPage() {
                                 : new Date(payment.createdAt.seconds * 1000).toLocaleDateString()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <button
+                            <Button
                               onClick={() => initiateDeletePayment(payment)}
-                              className="text-red-600 hover:text-red-900 font-medium"
+                              variant="ghost"
+                              style={{
+                                color: theme.colors.button.destructive,
+                              }}
+                              className="hover:bg-destructive/10"
                             >
+                              <Trash2 className="h-4 w-4 mr-2" />
                               Delete
-                            </button>
+                            </Button>
                           </td>
                         </tr>
                       );

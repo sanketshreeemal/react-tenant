@@ -6,7 +6,7 @@
  * These tokens ensure consistency across components and ease future iterations.
  */
 
-export const theme = {
+const theme = {
   // -------------------------------------------------------------------------
   // Colors: Define the primary color palette and supporting colors.
   // -------------------------------------------------------------------------
@@ -34,17 +34,17 @@ export const theme = {
     // Button-specific semantic colors
     button: {
       // Primary action buttons (submit, confirm, save)
-      primary: "#1E40AF",        // Same as primary color
-      primaryHover: "#1E3A8A",   // Darker shade for hover
+      primary: "#1F2937",        // Changed to black for positive actions
+      primaryHover: "#111827",   // Darker black for hover
 
       // Secondary/Cancel buttons
       secondary: "#FFFFFF",      // White background
       secondaryHover: "#F3F4F6", // Light gray for hover
-      secondaryBorder: "#E5E7EB",// Border color for secondary buttons
-      secondaryText: "#1F2937",  // Text color for secondary buttons
+      secondaryBorder: "#E5E7EB",// Border color
+      secondaryText: "#1F2937",  // Black text for secondary buttons
 
       // Destructive action buttons (delete, remove)
-      destructive: "#DC2626",    // Same as error color
+      destructive: "#DC2626",    // Red
       destructiveHover: "#B91C1C", // Darker red for hover
     },
 
@@ -130,6 +130,6 @@ export const theme = {
       subtitleFontSize: "0.875rem"
     }
   }
-};
+} as const;
 
-export default theme; 
+export { theme }; 
