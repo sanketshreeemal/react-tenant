@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
 import Navigation from "../../../components/Navigation";
@@ -111,6 +111,45 @@ export default function RentPage() {
     type: 'success' | 'error' | 'info' | 'warning';
     message: string;
   } | null>(null);
+
+  // Add state to track expanded panel
+  const [expandedPanel, setExpandedPanel] = useState<string | null>(null);
+  // Add ref for the scroll container
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // Add states for touch interaction
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+  
+  // Detect if device is mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+    };
+  }, []);
+  
+  // Set the first panel as expanded by default
+  useEffect(() => {
+    if (rentPayments.length > 0 && !expandedPanel) {
+      setExpandedPanel(rentPayments[0].id);
+    }
+  }, [rentPayments, expandedPanel]);
+  
+  // Function to handle panel expansion
+  const handlePanelInteraction = (id: string, action: 'mouseenter' | 'mouseleave' | 'click') => {
+    if (isMobile && action === 'click') {
+      setExpandedPanel(expandedPanel === id ? null : id);
+    } else if (!isMobile) {
+      if (action === 'mouseenter') {
+        setExpandedPanel(id);
+      }
+    }
+  };
 
   // Click outside handler for filter dropdown
   useEffect(() => {
@@ -668,6 +707,19 @@ export default function RentPage() {
   
   const uniquePaymentTypes = getUniquePaymentTypes(rentPayments);
 
+  // Add a function to format payment period for display
+  const formatRentalPeriod = (rentalPeriod: string) => {
+    const [year, month] = rentalPeriod.split('-');
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return `${months[parseInt(month, 10) - 1]} ${year}`;
+  };
+
+  // Add a function to get a random pastel color for panel backgrounds
+  const getRandomPastelColor = () => {
+    const hue = Math.floor(Math.random() * 360);
+    return `hsla(${hue}, 70%, 85%, 0.25)`;
+  };
+
   if (loading || !user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -724,6 +776,209 @@ export default function RentPage() {
               </Button>
             </div>
           </CardHeader>
+        </Card>
+        
+        {/* New Card Container for Payment Panels Carousel */}
+        <Card 
+          className="mb-6 overflow-hidden"
+          style={{
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.border,
+            boxShadow: theme.shadows.md,
+            maxHeight: "calc(100vh - 350px)", // Ensure it doesn't get too tall
+            minHeight: "250px" // Increased height from 200px to 250px (25% increase)
+          }}
+        >
+          <CardHeader className="py-4 px-4 sm:px-6 lg:px-8 border-b" style={{ borderColor: theme.colors.border }}>
+            <div className="flex items-center justify-between">
+              <CardTitle 
+                className="text-xl font-medium"
+                style={{ color: theme.colors.textPrimary }}
+              >
+                Payments Dashboard
+              </CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6 lg:p-8">
+            {isLoading ? (
+              <div className="flex justify-center items-center h-[200px]">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+              </div>
+            ) : rentPayments.length > 0 ? (
+              <div className="relative">
+                {/* Horizontal scroll container */}
+                <div 
+                  ref={scrollContainerRef}
+                  className="flex overflow-x-auto pb-4 snap-x snap-mandatory hide-scrollbar" 
+                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                >
+                  {/* Display the most recent payments first (they are already sorted by date) */}
+                  {rentPayments.slice(0, 20).map((payment, index) => {
+                    const isExpanded = expandedPanel === payment.id;
+                    const bgColor = getRandomPastelColor();
+                    const formattedPeriod = formatRentalPeriod(payment.rentalPeriod);
+                    const isShort = payment.actualRent < payment.officialRent;
+                    
+                    return (
+                      <div 
+                        key={payment.id}
+                        className={`
+                          relative flex-shrink-0 snap-start rounded-xl overflow-hidden
+                          transition-all duration-300 ease-in-out
+                          ${isExpanded ? 'w-[280px] sm:w-[320px]' : 'w-[80px] sm:w-[100px]'}
+                          h-[200px] mx-1 sm:mx-2
+                        `}
+                        style={{
+                          backgroundColor: theme.colors.background,
+                          boxShadow: isExpanded ? theme.shadows.md : theme.shadows.sm,
+                          border: `1px solid ${isExpanded ? 'rgba(255,255,255,0.2)' : theme.colors.border}`,
+                          backdropFilter: 'blur(10px)',
+                        }}
+                        onMouseEnter={() => handlePanelInteraction(payment.id, 'mouseenter')}
+                        onMouseLeave={() => handlePanelInteraction(payment.id, 'mouseleave')}
+                        onClick={() => handlePanelInteraction(payment.id, 'click')}
+                      >
+                        {/* Random shape background blur */}
+                        <div 
+                          className="absolute inset-0 opacity-20 z-0" 
+                          style={{ 
+                            background: bgColor,
+                            borderRadius: '50%',
+                            filter: 'blur(20px)',
+                            transform: `translate(${Math.random() * 40 - 20}%, ${Math.random() * 40 - 20}%) scale(1.5)`,
+                          }}
+                        />
+                        
+                        {/* Collapsed state - vertical title */}
+                        <div 
+                          className={`
+                            absolute inset-0 flex items-center justify-center
+                            transition-opacity duration-300 z-10
+                            ${isExpanded ? 'opacity-0 pointer-events-none' : 'opacity-100'}
+                          `}
+                        >
+                          <div className="transform -rotate-90 whitespace-nowrap">
+                            <span className="font-medium text-sm" style={{ color: theme.colors.textPrimary }}>
+                              {payment.unitNumber} - {formattedPeriod}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Expanded state - full content */}
+                        <div 
+                          className={`
+                            absolute inset-0 p-4 flex flex-col
+                            transition-opacity duration-200 z-10
+                            ${isExpanded ? 'opacity-100 delay-100' : 'opacity-0 pointer-events-none'}
+                          `}
+                        >
+                          {/* Payment Type Badge */}
+                          <div 
+                            className="text-xs font-semibold px-2 py-1 rounded-full self-start mb-2"
+                            style={{
+                              backgroundColor: payment.paymentType === "Rent Payment" 
+                                ? 'rgba(59, 130, 246, 0.15)' 
+                                : 'rgba(124, 58, 237, 0.15)',
+                              color: payment.paymentType === "Rent Payment" 
+                                ? '#3b82f6' 
+                                : '#7c3aed',
+                            }}
+                          >
+                            {payment.paymentType || "Rent Payment"}
+                          </div>
+                          
+                          {/* Unit and tenant info */}
+                          <h3 className="text-base font-semibold mb-1" style={{ color: theme.colors.textPrimary }}>
+                            Unit {payment.unitNumber}
+                          </h3>
+                          <p className="text-sm mb-2" style={{ color: theme.colors.textSecondary }}>
+                            {payment.tenantName}
+                          </p>
+                          
+                          {/* Payment period */}
+                          <div className="flex items-center mb-2">
+                            <Calendar className="h-3 w-3 mr-1" style={{ color: theme.colors.textSecondary }} />
+                            <span className="text-xs" style={{ color: theme.colors.textSecondary }}>
+                              {formattedPeriod}
+                            </span>
+                          </div>
+                          
+                          {/* Payment details */}
+                          <div className="mt-auto">
+                            <div className="flex justify-between mb-1">
+                              <span className="text-xs" style={{ color: theme.colors.textSecondary }}>Expected:</span>
+                              <span className="text-xs font-medium" style={{ color: theme.colors.textPrimary }}>
+                                ₹{payment.officialRent.toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-xs" style={{ color: theme.colors.textSecondary }}>Collected:</span>
+                              <span 
+                                className={`text-xs font-medium ${isShort ? "text-red-600" : "text-green-600"}`}
+                              >
+                                ₹{payment.actualRent.toLocaleString()}
+                              </span>
+                            </div>
+                            
+                            {/* Status chip for short payments */}
+                            {isShort && (
+                              <div className="mt-2 text-xs text-red-800 bg-red-100 rounded-full px-2 py-1 text-center">
+                                Short by ₹{(payment.officialRent - payment.actualRent).toLocaleString()}
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Collection method chip */}
+                          {payment.collectionMethod && (
+                            <div className="absolute bottom-3 right-3 text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+                              {payment.collectionMethod}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Shine effect on expanded panels */}
+                        {isExpanded && (
+                          <div 
+                            className="absolute inset-0 pointer-events-none"
+                            style={{
+                              background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.05) 100%)',
+                              borderRadius: 'inherit',
+                            }}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Pagination indicators */}
+                <div className="flex justify-center mt-4">
+                  <div className="flex space-x-1">
+                    {Array.from({ length: Math.min(5, Math.ceil(rentPayments.length / (isMobile ? 4 : 7))) }).map((_, i) => (
+                      <div 
+                        key={i}
+                        className="w-2 h-2 rounded-full bg-gray-300"
+                        style={{ backgroundColor: i === 0 ? theme.colors.primary : undefined }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Navigation hints */}
+                <div className="mt-2 text-xs text-center text-gray-500">
+                  {isMobile ? "Tap to expand • Swipe to view more" : "Hover to expand • Scroll to view more"}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-[200px]">
+                <DollarSign className="h-12 w-12 text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-1">No payments yet</h3>
+                <p className="text-gray-500">
+                  Get started by recording a payment above
+                </p>
+              </div>
+            )}
+          </CardContent>
         </Card>
         
         <main className="max-w-7xl mx-auto">
