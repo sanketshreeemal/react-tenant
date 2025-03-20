@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { theme } from "@/theme/theme";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 
 interface Lease {
   id: string;
@@ -679,7 +680,7 @@ export default function RentPage() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       
-      <div className="md:ml-64 p-4">
+      <div className="md:ml-64 p-4 overflow-x-hidden">
         {/* Alert Messages */}
         {alertMessage && (
           <div className="max-w-7xl mx-auto mb-6">
@@ -710,7 +711,7 @@ export default function RentPage() {
                   backgroundColor: theme.colors.button.primary,
                   color: theme.colors.background,
                 }}
-                className={showAddForm ? "hover:bg-secondary/10" : "hover:bg-primary/90"}
+                className={`w-full sm:w-auto ${showAddForm ? "hover:bg-secondary/10" : "hover:bg-primary/90"}`}
               >
                 {showAddForm ? (
                   "Cancel"
@@ -1260,310 +1261,319 @@ export default function RentPage() {
             </div>
           )}
           
-          <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="p-4 border-b flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
-              <div className="relative w-full md:flex-1 md:max-w-md">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  className="block w-full pl-10 pr-8 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="Search payments..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                {searchTerm && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchTerm("")}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                  >
-                    <X className="h-4 w-4 text-gray-400 hover:text-gray-500" aria-hidden="true" />
-                  </button>
-                )}
-              </div>
-              
-              {/* Payment Type Filter */}
-              <div className="relative w-full md:w-auto md:ml-4" ref={filterRef}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowPaymentTypeFilter(!showPaymentTypeFilter)}
-                  className="w-full md:w-auto flex items-center justify-center"
-                >
-                  <Filter className="h-4 w-4 mr-2" />
-                  <span>Filter by Payment Type</span>
-                  {selectedPaymentTypes.length > 0 && (
-                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      {selectedPaymentTypes.length}
-                    </span>
-                  )}
-                </Button>
-                
-                {showPaymentTypeFilter && (
-                  <div className="absolute left-0 mt-2 w-full md:w-64 bg-white rounded-md shadow-lg z-10 p-3 border border-gray-200">
-                    <div className="flex justify-between items-center mb-2">
-                      <h3 className="text-sm font-medium text-gray-700">Payment Types</h3>
-                      <button
-                        onClick={() => setSelectedPaymentTypes([])}
-                        className="text-xs text-blue-600 hover:text-blue-800"
-                      >
-                        Clear All
-                      </button>
+          <Accordion type="single" collapsible>
+            <AccordionItem value="payment-history">
+              <AccordionTrigger className="text-base font-semibold">
+                View Detailed Payment History
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="bg-white shadow rounded-lg overflow-hidden">
+                  <div className="p-4 border-b flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
+                    <div className="relative w-full md:flex-1 md:max-w-md">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Search className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input
+                        type="text"
+                        className="block w-full pl-10 pr-8 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        placeholder="Search payments..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                      {searchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchTerm("")}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        >
+                          <X className="h-4 w-4 text-gray-400 hover:text-gray-500" aria-hidden="true" />
+                        </button>
+                      )}
                     </div>
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {uniquePaymentTypes.map((type) => (
-                        <label key={type} className="flex items-center">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                            checked={selectedPaymentTypes.includes(type)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedPaymentTypes([...selectedPaymentTypes, type]);
-                              } else {
-                                setSelectedPaymentTypes(selectedPaymentTypes.filter(t => t !== type));
-                              }
-                            }}
-                          />
-                          <span className="ml-2 text-sm text-gray-700">{type}</span>
-                        </label>
-                      ))}
+                    
+                    {/* Payment Type Filter */}
+                    <div className="relative w-full md:w-auto md:ml-4" ref={filterRef}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowPaymentTypeFilter(!showPaymentTypeFilter)}
+                        className="w-full md:w-auto flex items-center justify-center"
+                      >
+                        <Filter className="h-4 w-4 mr-2" />
+                        <span>Filter by Payment Type</span>
+                        {selectedPaymentTypes.length > 0 && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {selectedPaymentTypes.length}
+                          </span>
+                        )}
+                      </Button>
+                      
+                      {showPaymentTypeFilter && (
+                        <div className="absolute left-0 right-0 md:right-auto md:w-64 mt-2 bg-white rounded-md shadow-lg z-10 p-3 border border-gray-200">
+                          <div className="flex justify-between items-center mb-2">
+                            <h3 className="text-sm font-medium text-gray-700">Payment Types</h3>
+                            <button
+                              onClick={() => setSelectedPaymentTypes([])}
+                              className="text-xs text-blue-600 hover:text-blue-800"
+                            >
+                              Clear All
+                            </button>
+                          </div>
+                          <div className="space-y-2 max-h-60 overflow-y-auto">
+                            {uniquePaymentTypes.map((type) => (
+                              <label key={type} className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                  checked={selectedPaymentTypes.includes(type)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedPaymentTypes([...selectedPaymentTypes, type]);
+                                    } else {
+                                      setSelectedPaymentTypes(selectedPaymentTypes.filter(t => t !== type));
+                                    }
+                                  }}
+                                />
+                                <span className="ml-2 text-sm text-gray-700">{type}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                )}
-              </div>
-            </div>
-            
-            {isLoading ? (
-              <div className="flex justify-center items-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-              </div>
-            ) : sortedPayments.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th 
-                        scope="col" 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
-                        onClick={() => handleSort('unitNumber')}
-                      >
-                        <div className="flex items-center">
-                          Unit
-                          <span className="ml-2">
-                            {sortColumn === 'unitNumber' ? (
-                              sortDirection === 'asc' ? (
-                                <ArrowUp className="h-4 w-4 text-blue-500" />
-                              ) : (
-                                <ArrowDown className="h-4 w-4 text-blue-500" />
-                              )
-                            ) : (
-                              <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
-                            )}
-                          </span>
-                        </div>
-                      </th>
-                      <th 
-                        scope="col" 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
-                        onClick={() => handleSort('tenantName')}
-                      >
-                        <div className="flex items-center">
-                          Tenant
-                          <span className="ml-2">
-                            {sortColumn === 'tenantName' ? (
-                              sortDirection === 'asc' ? (
-                                <ArrowUp className="h-4 w-4 text-blue-500" />
-                              ) : (
-                                <ArrowDown className="h-4 w-4 text-blue-500" />
-                              )
-                            ) : (
-                              <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
-                            )}
-                          </span>
-                        </div>
-                      </th>
-                      <th 
-                        scope="col" 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
-                        onClick={() => handleSort('paymentType')}
-                      >
-                        <div className="flex items-center">
-                          Payment Type
-                          <span className="ml-2">
-                            {sortColumn === 'paymentType' ? (
-                              sortDirection === 'asc' ? (
-                                <ArrowUp className="h-4 w-4 text-blue-500" />
-                              ) : (
-                                <ArrowDown className="h-4 w-4 text-blue-500" />
-                              )
-                            ) : (
-                              <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
-                            )}
-                          </span>
-                        </div>
-                      </th>
-                      <th 
-                        scope="col" 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
-                        onClick={() => handleSort('rentalPeriod')}
-                      >
-                        <div className="flex items-center">
-                          Rental Period
-                          <span className="ml-2">
-                            {sortColumn === 'rentalPeriod' ? (
-                              sortDirection === 'asc' ? (
-                                <ArrowUp className="h-4 w-4 text-blue-500" />
-                              ) : (
-                                <ArrowDown className="h-4 w-4 text-blue-500" />
-                              )
-                            ) : (
-                              <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
-                            )}
-                          </span>
-                        </div>
-                      </th>
-                      <th 
-                        scope="col" 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
-                        onClick={() => handleSort('officialRent')}
-                      >
-                        <div className="flex items-center">
-                          Expected
-                          <span className="ml-2">
-                            {sortColumn === 'officialRent' ? (
-                              sortDirection === 'asc' ? (
-                                <ArrowUp className="h-4 w-4 text-blue-500" />
-                              ) : (
-                                <ArrowDown className="h-4 w-4 text-blue-500" />
-                              )
-                            ) : (
-                              <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
-                            )}
-                          </span>
-                        </div>
-                      </th>
-                      <th 
-                        scope="col" 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
-                        onClick={() => handleSort('actualRent')}
-                      >
-                        <div className="flex items-center">
-                          Collected
-                          <span className="ml-2">
-                            {sortColumn === 'actualRent' ? (
-                              sortDirection === 'asc' ? (
-                                <ArrowUp className="h-4 w-4 text-blue-500" />
-                              ) : (
-                                <ArrowDown className="h-4 w-4 text-blue-500" />
-                              )
-                            ) : (
-                              <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
-                            )}
-                          </span>
-                        </div>
-                      </th>
-                      <th 
-                        scope="col" 
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
-                        onClick={() => handleSort('createdAt')}
-                      >
-                        <div className="flex items-center">
-                          Date Recorded
-                          <span className="ml-2">
-                            {sortColumn === 'createdAt' ? (
-                              sortDirection === 'asc' ? (
-                                <ArrowUp className="h-4 w-4 text-blue-500" />
-                              ) : (
-                                <ArrowDown className="h-4 w-4 text-blue-500" />
-                              )
-                            ) : (
-                              <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
-                            )}
-                          </span>
-                        </div>
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {sortedPayments.map((payment) => {
-                      // Parse the rentalPeriod directly without creating a Date object
-                      const [year, month] = payment.rentalPeriod.split('-');
-                      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                      const formattedRentalPeriod = `${months[parseInt(month, 10) - 1]} ${year}`;
-                      const isShort = payment.actualRent < payment.officialRent;
-                      
-                      return (
-                        <tr key={payment.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">{payment.unitNumber}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{payment.tenantName}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{payment.paymentType || "Rent Payment"}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <Calendar className="h-4 w-4 text-gray-400 mr-1" />
-                              <span className="text-sm text-gray-900">{formattedRentalPeriod}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            ₹{payment.officialRent.toLocaleString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className={`text-sm font-medium ${isShort ? "text-red-600" : "text-green-600"}`}>
-                              ₹{payment.actualRent.toLocaleString()}
-                              {isShort && (
-                                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                  Short by ₹{(payment.officialRent - payment.actualRent).toLocaleString()}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {payment.createdAt instanceof Date 
-                              ? payment.createdAt.toLocaleDateString()
-                              : payment.createdAt.toDate 
-                                ? payment.createdAt.toDate().toLocaleDateString()
-                                : new Date(payment.createdAt.seconds * 1000).toLocaleDateString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <Button
-                              onClick={() => initiateDeletePayment(payment)}
-                              variant="ghost"
-                              style={{
-                                color: theme.colors.button.destructive,
-                              }}
-                              className="hover:bg-destructive/10"
+                  
+                  {isLoading ? (
+                    <div className="flex justify-center items-center h-64">
+                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+                    </div>
+                  ) : sortedPayments.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th 
+                              scope="col" 
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
+                              onClick={() => handleSort('unitNumber')}
                             >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete
-                            </Button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-64">
-                <DollarSign className="h-12 w-12 text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-1">No rent payments found</h3>
-                <p className="text-gray-500">
-                  {searchTerm ? "Try adjusting your search" : "Get started by recording a payment"}
-                </p>
-              </div>
-            )}
-          </div>
+                              <div className="flex items-center">
+                                Unit
+                                <span className="ml-2">
+                                  {sortColumn === 'unitNumber' ? (
+                                    sortDirection === 'asc' ? (
+                                      <ArrowUp className="h-4 w-4 text-blue-500" />
+                                    ) : (
+                                      <ArrowDown className="h-4 w-4 text-blue-500" />
+                                    )
+                                  ) : (
+                                    <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
+                                  )}
+                                </span>
+                              </div>
+                            </th>
+                            <th 
+                              scope="col" 
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
+                              onClick={() => handleSort('tenantName')}
+                            >
+                              <div className="flex items-center">
+                                Tenant
+                                <span className="ml-2">
+                                  {sortColumn === 'tenantName' ? (
+                                    sortDirection === 'asc' ? (
+                                      <ArrowUp className="h-4 w-4 text-blue-500" />
+                                    ) : (
+                                      <ArrowDown className="h-4 w-4 text-blue-500" />
+                                    )
+                                  ) : (
+                                    <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
+                                  )}
+                                </span>
+                              </div>
+                            </th>
+                            <th 
+                              scope="col" 
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
+                              onClick={() => handleSort('paymentType')}
+                            >
+                              <div className="flex items-center">
+                                Payment Type
+                                <span className="ml-2">
+                                  {sortColumn === 'paymentType' ? (
+                                    sortDirection === 'asc' ? (
+                                      <ArrowUp className="h-4 w-4 text-blue-500" />
+                                    ) : (
+                                      <ArrowDown className="h-4 w-4 text-blue-500" />
+                                    )
+                                  ) : (
+                                    <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
+                                  )}
+                                </span>
+                              </div>
+                            </th>
+                            <th 
+                              scope="col" 
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
+                              onClick={() => handleSort('rentalPeriod')}
+                            >
+                              <div className="flex items-center">
+                                Rental Period
+                                <span className="ml-2">
+                                  {sortColumn === 'rentalPeriod' ? (
+                                    sortDirection === 'asc' ? (
+                                      <ArrowUp className="h-4 w-4 text-blue-500" />
+                                    ) : (
+                                      <ArrowDown className="h-4 w-4 text-blue-500" />
+                                    )
+                                  ) : (
+                                    <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
+                                  )}
+                                </span>
+                              </div>
+                            </th>
+                            <th 
+                              scope="col" 
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
+                              onClick={() => handleSort('officialRent')}
+                            >
+                              <div className="flex items-center">
+                                Expected
+                                <span className="ml-2">
+                                  {sortColumn === 'officialRent' ? (
+                                    sortDirection === 'asc' ? (
+                                      <ArrowUp className="h-4 w-4 text-blue-500" />
+                                    ) : (
+                                      <ArrowDown className="h-4 w-4 text-blue-500" />
+                                    )
+                                  ) : (
+                                    <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
+                                  )}
+                                </span>
+                              </div>
+                            </th>
+                            <th 
+                              scope="col" 
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
+                              onClick={() => handleSort('actualRent')}
+                            >
+                              <div className="flex items-center">
+                                Collected
+                                <span className="ml-2">
+                                  {sortColumn === 'actualRent' ? (
+                                    sortDirection === 'asc' ? (
+                                      <ArrowUp className="h-4 w-4 text-blue-500" />
+                                    ) : (
+                                      <ArrowDown className="h-4 w-4 text-blue-500" />
+                                    )
+                                  ) : (
+                                    <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
+                                  )}
+                                </span>
+                              </div>
+                            </th>
+                            <th 
+                              scope="col" 
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer group"
+                              onClick={() => handleSort('createdAt')}
+                            >
+                              <div className="flex items-center">
+                                Date Recorded
+                                <span className="ml-2">
+                                  {sortColumn === 'createdAt' ? (
+                                    sortDirection === 'asc' ? (
+                                      <ArrowUp className="h-4 w-4 text-blue-500" />
+                                    ) : (
+                                      <ArrowDown className="h-4 w-4 text-blue-500" />
+                                    )
+                                  ) : (
+                                    <ArrowDown className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100" />
+                                  )}
+                                </span>
+                              </div>
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {sortedPayments.map((payment) => {
+                            // Parse the rentalPeriod directly without creating a Date object
+                            const [year, month] = payment.rentalPeriod.split('-');
+                            const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                            const formattedRentalPeriod = `${months[parseInt(month, 10) - 1]} ${year}`;
+                            const isShort = payment.actualRent < payment.officialRent;
+                            
+                            return (
+                              <tr key={payment.id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm font-medium text-gray-900">{payment.unitNumber}</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">{payment.tenantName}</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">{payment.paymentType || "Rent Payment"}</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    <Calendar className="h-4 w-4 text-gray-400 mr-1" />
+                                    <span className="text-sm text-gray-900">{formattedRentalPeriod}</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  ₹{payment.officialRent.toLocaleString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className={`text-sm font-medium ${isShort ? "text-red-600" : "text-green-600"}`}>
+                                    ₹{payment.actualRent.toLocaleString()}
+                                    {isShort && (
+                                      <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                        Short by ₹{(payment.officialRent - payment.actualRent).toLocaleString()}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {payment.createdAt instanceof Date 
+                                    ? payment.createdAt.toLocaleDateString()
+                                    : payment.createdAt.toDate 
+                                      ? payment.createdAt.toDate().toLocaleDateString()
+                                      : new Date(payment.createdAt.seconds * 1000).toLocaleDateString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  <Button
+                                    onClick={() => initiateDeletePayment(payment)}
+                                    variant="ghost"
+                                    style={{
+                                      color: theme.colors.button.destructive,
+                                    }}
+                                    className="hover:bg-destructive/10"
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </Button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-64">
+                      <DollarSign className="h-12 w-12 text-gray-400 mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-1">No rent payments found</h3>
+                      <p className="text-gray-500">
+                        {searchTerm ? "Try adjusting your search" : "Get started by recording a payment"}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </main>
       </div>
     </div>
