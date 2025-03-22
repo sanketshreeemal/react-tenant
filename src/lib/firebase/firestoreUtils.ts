@@ -1,8 +1,8 @@
 // src/lib/firebase/firestoreUtils.ts
 
 import { db } from './firebase'; // Assuming you have firebase.ts to initialize Firebase
-import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, addDoc, getDocs, query, where, orderBy, DocumentData, QuerySnapshot, Timestamp } from 'firebase/firestore';
-import { Tenant, Unit, Lease, RentPayment, RentalInventory } from '@/types'; // Import our TypeScript interfaces
+import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, addDoc, getDocs, query, where, orderBy, DocumentData, QuerySnapshot, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { Tenant, Unit, Lease, RentPayment, RentalInventory, PropertyGroup } from '@/types'; // Import our TypeScript interfaces
 import logger from '@/lib/logger'; // Assuming you have a logger utility
 
 // ---------------------- Tenant Collection Utility Functions ----------------------
@@ -775,3 +775,60 @@ export const getAllActiveLeases = async (): Promise<Lease[]> => {
 
 // ---------------------- Generic Firestore Helpers (Optional for now, can add later) ----------------------
 // You can add generic helper functions here if needed, like a function to convert Firestore Timestamps to Date objects, etc.
+
+// Property Group Functions
+export const addPropertyGroup = async (groupData: Omit<PropertyGroup, 'id' | 'createdAt' | 'updatedAt'>) => {
+  try {
+    const docRef = await addDoc(collection(db, 'property-groups'), {
+      ...groupData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error adding property group:', error);
+    throw error;
+  }
+};
+
+export const getAllPropertyGroups = async (): Promise<PropertyGroup[]> => {
+  try {
+    const q = query(collection(db, 'property-groups'), orderBy('groupName', 'asc'));
+    const querySnapshot = await getDocs(q);
+    
+    return querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        groupName: data.groupName,
+        createdAt: data.createdAt?.toDate(),
+        updatedAt: data.updatedAt?.toDate()
+      };
+    });
+  } catch (error) {
+    console.error('Error getting property groups:', error);
+    throw error;
+  }
+};
+
+export const updatePropertyGroup = async (groupId: string, groupData: Partial<Omit<PropertyGroup, 'id' | 'createdAt' | 'updatedAt'>>) => {
+  try {
+    const docRef = doc(db, 'property-groups', groupId);
+    await updateDoc(docRef, {
+      ...groupData,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error updating property group:', error);
+    throw error;
+  }
+};
+
+export const deletePropertyGroup = async (groupId: string) => {
+  try {
+    await deleteDoc(doc(db, "property-groups", groupId));
+  } catch (error) {
+    console.error("Error deleting property group:", error);
+    throw error;
+  }
+};
