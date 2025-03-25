@@ -59,7 +59,49 @@ const theme = {
       iconBgColor: "#F3F4F6",    // Light gray for icon background
       highlightBgColor: "#ECFDF5", // Light green for highlighted icon background
       highlightIconColor: "#047857", // Dark green for highlighted icon
-    }
+    },
+
+    // Property type pill colors
+    propertyType: {
+      residential: {
+        text: "#3b82f6", // Blue
+        bg: "rgba(59, 130, 246, 0.08)", // Light blue background
+      },
+      commercial: {
+        text: "#8b5cf6", // Purple
+        bg: "rgba(139, 92, 246, 0.08)", // Light purple background
+      }
+    },
+
+    // BHK pill colors for different configurations
+    bhk: {
+      one: {
+        text: "#059669",
+        bg: "rgba(5, 150, 105, 0.08)",
+      },
+      two: {
+        text: "#0891b2",
+        bg: "rgba(155, 178, 8, 0.08)",
+      },
+      three: {
+        text: "#6366f1",
+        bg: "rgba(189, 99, 241, 0.08)",
+      },
+      four: {
+        text: "#9333ea",
+        bg: "rgba(234, 146, 51, 0.08)",
+      },
+      five: {
+        text: "#db2777",
+        bg: "rgba(219, 39, 119, 0.08)",
+      }
+    },
+
+    // Area pill colors for commercial properties
+    area: {
+      text: "#475569",
+      bg: "rgba(71, 85, 105, 0.08)",
+    },
   },
 
   // -------------------------------------------------------------------------

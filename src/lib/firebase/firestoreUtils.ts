@@ -184,15 +184,16 @@ export const getAllRentalInventory = async (): Promise<RentalInventory[]> => {
       console.log(`Processing doc ${doc.id}:`, doc.data());
       const data = doc.data();
       
-      // Ensure data has the required fields
+      // Ensure data has the required fields and preserve the groupName
       const item: RentalInventory = {
         id: doc.id,
         unitNumber: data.unitNumber || '[Unknown]',
         propertyType: data.propertyType || 'Residential',
         ownerDetails: data.ownerDetails || '',
         bankDetails: data.bankDetails,
-        createdAt: data.createdAt?.toDate() || new Date(),
-        updatedAt: data.updatedAt?.toDate() || new Date()
+        groupName: data.groupName, // Keep the original groupName, don't default it
+        numberOfBedrooms: data.numberOfBedrooms !== undefined ? data.numberOfBedrooms : null,
+        squareFeetArea: data.squareFeetArea !== undefined ? data.squareFeetArea : null,
       };
       
       inventoryItems.push(item);

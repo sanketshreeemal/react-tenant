@@ -86,7 +86,7 @@ export interface RentalInventory {
   propertyType: "Commercial" | "Residential";
   ownerDetails: string;
   bankDetails?: string;
-  groupName?: string;  // Changed from propertyGroupId to groupName
-  createdAt?: Date;
-  updatedAt?: Date;
+  groupName?: string;
+  numberOfBedrooms: number | null;
+  squareFeetArea: number | null;
 }

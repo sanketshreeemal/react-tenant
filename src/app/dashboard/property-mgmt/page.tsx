@@ -15,7 +15,7 @@ import {
   deletePropertyGroup,
 } from "@/lib/firebase/firestoreUtils";
 import { downloadInventoryTemplate, uploadInventoryExcel } from "@/lib/excelUtils";
-import { FileUp, FileDown, Loader2, AlertTriangle, CheckCircle, X, Plus, Pencil, Trash2 } from "lucide-react";
+import { FileUp, FileDown, Loader2, AlertTriangle, CheckCircle, X, Plus, Pencil, Trash2, Home, Building, ChevronRight, Users } from "lucide-react";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,10 +30,7 @@ export default function RentalInventoryManagement() {
   const router = useRouter();
   const [inventoryItems, setInventoryItems] = useState<RentalInventory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<RentalInventory | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
-  const formRef = useRef<HTMLDivElement>(null);
+  const [expandedPanelId, setExpandedPanelId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Excel upload state
@@ -49,12 +46,6 @@ export default function RentalInventoryManagement() {
   } | null>(null);
   const [showUploadResults, setShowUploadResults] = useState(false);
   
-  // Form state
-  const [unitNumber, setUnitNumber] = useState("");
-  const [propertyType, setPropertyType] = useState<"Commercial" | "Residential">("Residential");
-  const [ownerDetails, setOwnerDetails] = useState("");
-  const [bankDetails, setBankDetails] = useState("");
-  
   // Consolidated alert message state
   const [alertMessage, setAlertMessage] = useState<{
     type: 'success' | 'error' | 'info' | 'warning';
@@ -62,14 +53,8 @@ export default function RentalInventoryManagement() {
   } | null>(null);
 
   // Property Group state
-  const [isGroupFormOpen, setIsGroupFormOpen] = useState(false);
-  const [groupName, setGroupName] = useState("");
   const [propertyGroups, setPropertyGroups] = useState<PropertyGroup[]>([]);
-  const [groupFormError, setGroupFormError] = useState<string | null>(null);
-
-  // Add new state for selected property group
-  const [selectedPropertyGroup, setSelectedPropertyGroup] = useState<string>("Default");
-
+  
   useEffect(() => {
     if (!loading && !user) {
       router.push("/");
@@ -78,13 +63,6 @@ export default function RentalInventoryManagement() {
       loadPropertyGroups();
     }
   }, [user, loading, router]);
-  
-  // Add effect to scroll to error message when it appears
-  useEffect(() => {
-    if (formError && formRef.current) {
-      formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [formError]);
 
   // Hide upload results after 10 seconds
   useEffect(() => {
@@ -101,11 +79,7 @@ export default function RentalInventoryManagement() {
     try {
       setIsLoading(true);
       const data = await getAllRentalInventory();
-      const updatedData = data.map(item => ({
-        ...item,
-        groupName: item.groupName || "Default"
-      }));
-      setInventoryItems(updatedData);
+      setInventoryItems(data);
     } catch (error: any) {
       console.error("Error loading inventory data:", error);
       setAlertMessage({
@@ -116,86 +90,20 @@ export default function RentalInventoryManagement() {
       setIsLoading(false);
     }
   };
-  
-  const openAddForm = () => {
-    setEditingItem(null);
-    resetForm();
-    setIsFormOpen(true);
-    
-    // Scroll to form
-    setTimeout(() => {
-      formRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
-  };
-  
-  const openEditForm = (item: RentalInventory) => {
-    setEditingItem(item);
-    setUnitNumber(item.unitNumber);
-    setPropertyType(item.propertyType);
-    setOwnerDetails(item.ownerDetails);
-    setBankDetails(item.bankDetails || "");
-    setSelectedPropertyGroup(item.groupName || "Default");
-    setIsFormOpen(true);
-    
-    setTimeout(() => {
-      formRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
-  };
-  
-  const closeForm = () => {
-    setIsFormOpen(false);
-    resetForm();
-  };
-  
-  const resetForm = () => {
-    setUnitNumber("");
-    setPropertyType("Residential");
-    setOwnerDetails("");
-    setBankDetails("");
-    setSelectedPropertyGroup("Default");
-    setFormError(null);
-  };
-  
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError(null);
-    
-    if (!unitNumber.trim()) {
-      setFormError("Unit Number is required");
-      return;
-    }
-    
-    if (!ownerDetails.trim()) {
-      setFormError("Owner Details are required");
-      return;
-    }
-    
+
+  const loadPropertyGroups = async () => {
     try {
-      const inventoryData = {
-        unitNumber: unitNumber.trim(),
-        propertyType,
-        ownerDetails: ownerDetails.trim(),
-        bankDetails: bankDetails.trim() || undefined,
-        groupName: selectedPropertyGroup === "Default" ? undefined : selectedPropertyGroup,
-      };
-      
-      if (editingItem && editingItem.id) {
-        await updateRentalInventory(editingItem.id, inventoryData);
-      } else {
-        await addRentalInventory(inventoryData);
-      }
-      
-      await loadInventoryData();
-      closeForm();
-      setAlertMessage({
-        type: 'success',
-        message: editingItem ? 'Property updated successfully' : 'Property added successfully'
-      });
+      const groups = await getAllPropertyGroups();
+      setPropertyGroups(groups);
     } catch (error: any) {
-      setFormError(error.message || "An error occurred while saving the inventory item");
+      console.error("Error loading property groups:", error);
+      setAlertMessage({
+        type: 'error',
+        message: error.message || "Failed to load property groups"
+      });
     }
   };
-  
+
   const handleDelete = async (itemId: string) => {
     if (confirm("Are you sure you want to delete this inventory item? This action cannot be undone.")) {
       try {
@@ -232,13 +140,6 @@ export default function RentalInventoryManagement() {
     handleUploadFile(file);
   };
 
-  // Trigger file input click
-  const triggerFileInput = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
   // Handle file upload
   const handleUploadFile = async (file: File) => {
     try {
@@ -268,103 +169,229 @@ export default function RentalInventoryManagement() {
     }
   };
 
-  // Close upload results
-  const closeUploadResults = () => {
-    setShowUploadResults(false);
+  // Toggle panel expansion
+  const togglePanelExpansion = (panelId: string) => {
+    setExpandedPanelId(expandedPanelId === panelId ? null : panelId);
   };
-
-  const loadPropertyGroups = async () => {
-    try {
-      const groups = await getAllPropertyGroups();
-      setPropertyGroups(groups);
-    } catch (error: any) {
-      console.error("Error loading property groups:", error);
-      setAlertMessage({
-        type: 'error',
-        message: error.message || "Failed to load property groups"
-      });
+  
+  // Get color based on property type
+  const getPropertyTypeColor = (type: string) => {
+    switch (type.toLowerCase()) {
+      case "residential":
+        return {
+          color: theme.colors.propertyType.residential.text,
+          bgColor: theme.colors.propertyType.residential.bg,
+          icon: <Home className="h-4 w-4" />
+        };
+      case "commercial":
+        return {
+          color: theme.colors.propertyType.commercial.text,
+          bgColor: theme.colors.propertyType.commercial.bg,
+          icon: <Building className="h-4 w-4" />
+        };
+      default:
+        return {
+          color: theme.colors.textSecondary,
+          bgColor: "rgba(107, 114, 128, 0.08)",
+          icon: <Home className="h-4 w-4" />
+        };
     }
   };
 
-  const handleGroupSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setGroupFormError(null);
+  // Get BHK pill color based on number of bedrooms
+  const getBHKColor = (bedrooms: number) => {
+    switch (bedrooms) {
+      case 1:
+        return {
+          text: theme.colors.bhk.one.text,
+          bg: theme.colors.bhk.one.bg
+        };
+      case 2:
+        return {
+          text: theme.colors.bhk.two.text,
+          bg: theme.colors.bhk.two.bg
+        };
+      case 3:
+        return {
+          text: theme.colors.bhk.three.text,
+          bg: theme.colors.bhk.three.bg
+        };
+      case 4:
+        return {
+          text: theme.colors.bhk.four.text,
+          bg: theme.colors.bhk.four.bg
+        };
+      case 5:
+        return {
+          text: theme.colors.bhk.five.text,
+          bg: theme.colors.bhk.five.bg
+        };
+      default:
+        return {
+          text: theme.colors.textSecondary,
+          bg: "rgba(107, 114, 128, 0.08)"
+        };
+    }
+  };
+
+  // PropertyGroupPanel component
+  const PropertyGroupPanel = ({ 
+    groupName, 
+    properties
+  }: { 
+    groupName: string; 
+    properties: RentalInventory[];
+  }) => {
+    const panelId = `group-${groupName.replace(/\s+/g, '-').toLowerCase()}`;
+    const isExpanded = expandedPanelId === panelId;
+    const propertyCount = properties.length;
     
-    if (!groupName.trim()) {
-      setGroupFormError("Property group name is required");
-      return;
-    }
-
-    const isDuplicate = propertyGroups.some(
-      group => group.groupName.toLowerCase() === groupName.trim().toLowerCase()
-    );
-    
-    if (isDuplicate) {
-      setGroupFormError("This property group already exists");
-      return;
-    }
-    
-    try {
-      const groupData = {
-        groupName: groupName.trim(),
-      };
-      
-      await addPropertyGroup(groupData);
-      await loadPropertyGroups();
-      setGroupName("");
-      setAlertMessage({
-        type: 'success',
-        message: 'Property group added successfully'
-      });
-    } catch (error: any) {
-      setGroupFormError(error.message || "An error occurred while saving the property group");
-    }
-  };
-
-  const handleDeleteGroup = async (groupId: string) => {
-    if (confirm("Are you sure you want to delete this property group? This action cannot be undone.")) {
-      try {
-        await deletePropertyGroup(groupId);
-        await loadPropertyGroups(); // Reload data
-        setAlertMessage({
-          type: 'success',
-          message: 'Property group deleted successfully'
-        });
-      } catch (error: any) {
-        console.error("Error deleting property group:", error);
-        setAlertMessage({
-          type: 'error',
-          message: error.message || "An error occurred while deleting the property group"
-        });
-      }
-    }
-  };
-
-  // Add property group dropdown component
-  const renderPropertyGroupDropdown = () => {
     return (
-      <div className="col-span-1">
-        <label htmlFor="propertyGroup" className="block text-sm font-medium text-textSecondary mb-1">
-          Property Group *
-        </label>
-        <Select 
-          value={selectedPropertyGroup} 
-          onValueChange={(value) => setSelectedPropertyGroup(value)}
+      <div
+        className={`
+          flex-shrink-0 snap-start rounded-xl overflow-hidden transition-all duration-300 ease-in-out
+          ${isExpanded ? 'w-[320px] md:w-[380px]' : 'w-[240px]'}
+          h-[280px] shadow-sm hover:shadow-md relative
+        `}
+        style={{
+          backgroundColor: theme.colors.background,
+          border: `1px solid ${theme.colors.border}`,
+        }}
+        onClick={() => togglePanelExpansion(panelId)}
+      >
+        {/* Header */}
+        <div 
+          className="p-4 border-b flex justify-between items-center"
+          style={{ borderColor: theme.colors.border }}
         >
-          <SelectTrigger>
-            <SelectValue placeholder="Select property group" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Default">Default</SelectItem>
-            {propertyGroups.map((group) => (
-              <SelectItem key={group.id} value={group.groupName}>
-                {group.groupName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <div className="flex items-center">
+            <div 
+              className="w-9 h-9 rounded-full flex items-center justify-center mr-3"
+              style={{ 
+                backgroundColor: groupName === "Default" 
+                  ? theme.colors.propertyType.residential.bg
+                  : theme.colors.propertyType.commercial.bg,
+                color: groupName === "Default"
+                  ? theme.colors.propertyType.residential.text
+                  : theme.colors.propertyType.commercial.text
+              }}
+            >
+              {groupName === "Default" ? (
+                <Home className="h-5 w-5" />
+              ) : (
+                <Building className="h-5 w-5" />
+              )}
+            </div>
+            <div>
+              <h3 className="font-semibold text-base" style={{ color: theme.colors.textPrimary }}>
+                {groupName}
+              </h3>
+              <p className="text-xs" style={{ color: theme.colors.textSecondary }}>
+                {propertyCount} {propertyCount === 1 ? 'property' : 'properties'}
+              </p>
+            </div>
+          </div>
+          <ChevronRight 
+            className={`h-5 w-5 transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`} 
+            style={{ color: theme.colors.textSecondary }}
+          />
+        </div>
+        
+        {/* Properties List */}
+        <div className="p-3 overflow-y-auto" style={{ height: "calc(100% - 73px)" }}>
+          {properties.length > 0 ? (
+            <div className="space-y-1.5">
+              {properties.map((property) => {
+                const typeInfo = getPropertyTypeColor(property.propertyType);
+                
+                return (
+                  <div 
+                    key={property.id} 
+                    className="p-2.5 rounded-lg bg-white border transition-all hover:shadow-sm"
+                    style={{ borderColor: theme.colors.border }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+                        style={{ 
+                          backgroundColor: typeInfo.bgColor,
+                          color: typeInfo.color
+                        }}
+                      >
+                        {typeInfo.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 
+                          className="font-medium text-sm truncate"
+                          style={{ color: theme.colors.textPrimary }}
+                        >
+                          Unit {property.unitNumber}
+                        </h4>
+                      </div>
+                      <div 
+                        className="text-xs py-1 px-2 rounded-full flex-shrink-0"
+                        style={{ 
+                          backgroundColor: typeInfo.bgColor,
+                          color: typeInfo.color
+                        }}
+                      >
+                        {property.propertyType.slice(0, 3)}
+                      </div>
+                    </div>
+                    {isExpanded && (
+                      <div className="mt-1.5 flex items-start justify-between text-xs text-gray-500">
+                        <div className="flex items-start gap-1 flex-1 min-w-0">
+                          <Users className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                          <p className="leading-tight line-clamp-1">{property.ownerDetails}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {property.propertyType === "Residential" && property.numberOfBedrooms && (
+                            <span 
+                              className="text-xs px-1.5 py-0.5 rounded"
+                              style={{ 
+                                backgroundColor: getBHKColor(property.numberOfBedrooms).bg,
+                                color: getBHKColor(property.numberOfBedrooms).text
+                              }}
+                            >
+                              {property.numberOfBedrooms} BHK
+                            </span>
+                          )}
+                          {property.propertyType === "Commercial" && property.squareFeetArea && (
+                            <span 
+                              className="text-xs px-1.5 py-0.5 rounded"
+                              style={{ 
+                                backgroundColor: theme.colors.area.bg,
+                                color: theme.colors.area.text
+                              }}
+                            >
+                              {property.squareFeetArea} sq.ft
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center text-center">
+              <div>
+                <Building className="h-10 w-10 mx-auto mb-2 text-gray-300" />
+                <p className="text-sm text-gray-500">No properties in this group</p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
+  };
+
+  // Trigger file input click
+  const triggerFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
   };
 
   if (loading || isLoading) {
@@ -378,97 +405,6 @@ export default function RentalInventoryManagement() {
   if (!user) {
     return null;
   }
-  
-  const renderGroupForm = () => {
-    return (
-      <Card ref={formRef} className="mb-8">
-        <CardHeader>
-          <CardTitle>Add Property Group</CardTitle>
-        </CardHeader>
-        
-        <CardContent className="px-2 sm:px-6">
-          {groupFormError && (
-            <AlertMessage
-              variant="error"
-              message={groupFormError}
-              className="mb-6"
-            />
-          )}
-          
-          <form onSubmit={handleGroupSubmit}>
-            <Card className="bg-surface border-border">
-              <CardContent className="grid grid-cols-1 gap-4 px-3 sm:px-6 py-4">
-                <div className="col-span-1">
-                  <label htmlFor="groupName" className="block text-sm font-medium text-textSecondary mb-1">
-                    Group Name *
-                  </label>
-                  <Input
-                    type="text"
-                    id="groupName"
-                    value={groupName}
-                    onChange={(e) => setGroupName(e.target.value)}
-                    placeholder="e.g., Building 1"
-                    required
-                  />
-                </div>
-              </CardContent>
-            </Card>
-            
-            <div className="flex justify-end space-x-3 mt-6 mb-6">
-              <Button
-                type="button"
-                onClick={() => setIsGroupFormOpen(false)}
-                variant="outline"
-                style={{
-                  backgroundColor: theme.colors.button.secondary,
-                  color: theme.colors.button.secondaryText,
-                  borderColor: theme.colors.button.secondaryBorder,
-                }}
-                className="hover:bg-secondary/10"
-              >
-                Exit
-              </Button>
-              
-              <Button type="submit">
-                Add Group
-              </Button>
-            </div>
-          </form>
-
-          {/* Property Groups List */}
-          <Card className="bg-surface border-border">
-            <CardHeader className="px-3 sm:px-6">
-              <CardTitle className="text-base">Property Groups</CardTitle>
-            </CardHeader>
-            <CardContent className="px-3 sm:px-6 py-4">
-              {propertyGroups.length > 0 ? (
-                <div className="space-y-2">
-                  {propertyGroups.map((group) => (
-                    <div
-                      key={group.id}
-                      className="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm border border-gray-100"
-                    >
-                      <span className="font-medium text-gray-900">{group.groupName}</span>
-                      <button
-                        onClick={() => group.id && handleDeleteGroup(group.id)}
-                        className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
-                        title="Delete property group"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        <span className="sr-only">Delete</span>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500 text-center py-2">No property groups added yet.</p>
-              )}
-            </CardContent>
-          </Card>
-        </CardContent>
-      </Card>
-    );
-  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -484,6 +420,27 @@ export default function RentalInventoryManagement() {
             />
           </div>
         )}
+
+        <style jsx global>{`
+          /* Hide scrollbar for Chrome, Safari and Opera */
+          .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+          }
+          
+          /* Hide scrollbar for IE, Edge and Firefox */
+          .hide-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+          }
+          
+          /* For line clamp */
+          .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+          }
+        `}</style>
 
         <Card className="mb-6">
           <CardHeader className="py-4 px-4 sm:px-6 lg:px-8">
@@ -521,58 +478,34 @@ export default function RentalInventoryManagement() {
 
                 {/* Add Property Group Button */}
                 <Button
-                  onClick={() => {
-                    setIsGroupFormOpen(!isGroupFormOpen);
-                    setIsFormOpen(false);
-                  }}
-                  variant={isGroupFormOpen ? "outline" : "default"}
+                  onClick={() => router.push("/dashboard/property-mgmt/forms?type=group")}
+                  variant="outline"
                   size="sm"
-                  style={isGroupFormOpen ? {
+                  style={{
                     backgroundColor: theme.colors.button.secondary,
                     color: theme.colors.button.secondaryText,
                     borderColor: theme.colors.button.secondaryBorder,
-                  } : {
-                    backgroundColor: theme.colors.button.primary,
-                    color: theme.colors.background,
                   }}
-                  className={isGroupFormOpen ? "hover:bg-secondary/10" : "hover:bg-primary/90"}
+                  className="hover:bg-secondary/10"
                 >
-                  {isGroupFormOpen ? (
-                    "Cancel"
-                  ) : (
-                    <>
-                      <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                      <span>Type</span>
-                    </>
-                  )}
+                  <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                  <span>Type</span>
                 </Button>
                 
                 {/* Add Property Button */}
                 <Button
-                  onClick={() => {
-                    setIsFormOpen(!isFormOpen);
-                    setIsGroupFormOpen(false);
-                  }}
-                  variant={isFormOpen ? "outline" : "default"}
+                  onClick={() => router.push("/dashboard/property-mgmt/forms?type=property")}
+                  variant="outline"
                   size="sm"
-                  style={isFormOpen ? {
+                  style={{
                     backgroundColor: theme.colors.button.secondary,
                     color: theme.colors.button.secondaryText,
                     borderColor: theme.colors.button.secondaryBorder,
-                  } : {
-                    backgroundColor: theme.colors.button.primary,
-                    color: theme.colors.background,
                   }}
-                  className={isFormOpen ? "hover:bg-secondary/10" : "hover:bg-primary/90"}
+                  className="hover:bg-secondary/10"
                 >
-                  {isFormOpen ? (
-                    "Cancel"
-                  ) : (
-                    <>
-                      <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                      <span>Manual Add</span>
-                    </>
-                  )}
+                  <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                  <span>Manual Add</span>
                 </Button>
                 
                 {/* Hidden file input */}
@@ -586,146 +519,15 @@ export default function RentalInventoryManagement() {
               </div>
             </div>
           </CardHeader>
-        </Card>
-        
-        <main className="max-w-7xl mx-auto">
-          {/* Upload Results Notification */}
-          {showUploadResults && uploadResults && (
-            <AlertMessage
-              variant={uploadResults.success ? 'success' : 'error'}
-              message={
-                uploadResults.message || 
-                (uploadResults.success 
-                  ? `Successfully added ${uploadResults.successful} properties. ${uploadResults.failed ? `Failed to add ${uploadResults.failed} properties.` : ''} ${uploadResults.skipped ? `Skipped ${uploadResults.skipped} rows.` : ''}`
-                  : uploadResults.error || 'Upload failed'
-                )
-              }
-            />
-          )}
-          
-          {/* Property Group Form */}
-          {isGroupFormOpen && renderGroupForm()}
-          
-          {/* Add/Edit Form - Embedded directly in the page */}
-          {isFormOpen && (
-            <Card ref={formRef} className="mb-8">
-              <CardHeader>
-                <CardTitle>
-                  {editingItem 
-                    ? `Edit ${editingItem.unitNumber} ${editingItem.propertyType} Property`
-                    : 'Add Property'
-                  }
-                </CardTitle>
-              </CardHeader>
-              
-              <CardContent className="px-2 sm:px-6">
-                {formError && (
-                  <AlertMessage
-                    variant="error"
-                    message={formError}
-                    className="mb-6"
-                  />
-                )}
-                
-                <form onSubmit={handleSubmit}>
-                  <Card className="bg-surface border-border">
-                    <CardHeader className="px-3 sm:px-6">
-                      <CardTitle className="text-base">Property Information</CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2 px-3 sm:px-6">
-                      <div className="col-span-1">
-                        <label htmlFor="unitNumber" className="block text-sm font-medium text-textSecondary mb-1">
-                          Unit Number *
-                        </label>
-                        <Input
-                          type="text"
-                          id="unitNumber"
-                          value={unitNumber}
-                          onChange={(e) => setUnitNumber(e.target.value)}
-                          placeholder="e.g., 101 or HSR2"
-                          required
-                        />
-                      </div>
-                      
-                      <div className="col-span-1">
-                        <label htmlFor="propertyType" className="block text-sm font-medium text-textSecondary mb-1">
-                          Property Type *
-                        </label>
-                        <Select value={propertyType} onValueChange={(value) => setPropertyType(value as "Commercial" | "Residential")}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select property type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Residential">Residential</SelectItem>
-                            <SelectItem value="Commercial">Commercial</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
 
-                      {/* Add Property Group Dropdown */}
-                      {renderPropertyGroupDropdown()}
-                      
-                      <div className="col-span-2">
-                        <label htmlFor="ownerDetails" className="block text-sm font-medium text-textSecondary mb-1">
-                          Owner Details *
-                        </label>
-                        <Textarea
-                          id="ownerDetails"
-                          value={ownerDetails}
-                          onChange={(e) => setOwnerDetails(e.target.value)}
-                          rows={3}
-                          placeholder="Enter owner name, contact info, etc."
-                          required
-                        />
-                      </div>
-                      
-                      <div className="col-span-2">
-                        <label htmlFor="bankDetails" className="block text-sm font-medium text-textSecondary mb-1">
-                          Bank Details (Optional)
-                        </label>
-                        <Textarea
-                          id="bankDetails"
-                          value={bankDetails}
-                          onChange={(e) => setBankDetails(e.target.value)}
-                          rows={3}
-                          placeholder="Enter bank account info, IFSC code, etc."
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
-                  
-                  <div className="flex justify-end space-x-3 mt-6">
-                    <Button
-                      type="button"
-                      onClick={closeForm}
-                      variant="outline"
-                      style={{
-                        backgroundColor: theme.colors.button.secondary,
-                        color: theme.colors.button.secondaryText,
-                        borderColor: theme.colors.button.secondaryBorder,
-                      }}
-                      className="hover:bg-secondary/10"
-                    >
-                      Cancel
-                    </Button>
-                    
-                    <Button type="submit">
-                      {editingItem ? 'Update Property' : 'Add Property'}
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          )}
-          
-          {/* Excel Upload Instructions - Collapsible Banner */}
-          {!isFormOpen && (
-            <Accordion type="single" collapsible className="mb-8">
+          {/* Bulk Upload Instructions */}
+          <CardContent className="px-4 sm:px-6 lg:px-8 pb-6">
+            <Accordion type="single" collapsible>
               <AccordionItem value="bulk-upload">
                 <AccordionTrigger>
                   <div className="flex items-center gap-2">
                     <FileUp className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                    <span>Bulk upload properties using Excel template</span>
+                    <span>Bulk upload using Excel template</span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
@@ -766,83 +568,205 @@ export default function RentalInventoryManagement() {
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
-          )}
-          
-          {/* Inventory Table */}
-          <div className="bg-white shadow rounded-lg overflow-hidden mb-8">
-            <div className="overflow-x-auto">
-              <div className="min-w-full inline-block align-middle">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Unit Number
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Property Type
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Owner Details
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Bank Details
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {inventoryItems.length > 0 ? (
-                      inventoryItems.map((item) => (
-                        <tr key={item.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {item.unitNumber}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {item.propertyType}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {item.ownerDetails}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {item.bankDetails || "-"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => openEditForm(item)}
-                                className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
-                                title="Edit property"
-                              >
-                                <Pencil className="h-4 w-4" />
-                                <span className="sr-only">Edit</span>
-                              </button>
-                              <button
-                                onClick={() => item.id && handleDelete(item.id)}
-                                className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
-                                title="Delete property"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                <span className="sr-only">Delete</span>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-500">
-                          No rental inventory items found. Click &quot;+ Manually Add&quot; to create one or use the Excel upload feature.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+          </CardContent>
+        </Card>
+
+        {/* Property Group Carousel */}
+        {propertyGroups.length > 0 && (
+          <div className="mb-6 overflow-hidden">
+            <h3 className="text-lg font-medium mb-4" style={{ color: theme.colors.textPrimary }}>
+              Property Groups
+            </h3>
+            
+            {isLoading ? (
+              <div className="flex items-center justify-center h-56">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
-            </div>
+            ) : (
+              <div 
+                className="flex overflow-x-auto snap-x snap-mandatory pb-4 hide-scrollbar gap-4"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              >
+                {[
+                  // Default group first
+                  {
+                    id: 'default',
+                    groupName: 'Default',
+                    properties: inventoryItems.filter(item => !item.groupName || item.groupName === "Default")
+                  },
+                  // Then all other groups
+                  ...propertyGroups.map(group => ({
+                    id: group.id,
+                    groupName: group.groupName,
+                    properties: inventoryItems.filter(item => item.groupName === group.groupName)
+                  }))
+                ]
+                  // Sort by number of properties (descending)
+                  .sort((a, b) => b.properties.length - a.properties.length)
+                  .map(group => (
+                    <PropertyGroupPanel 
+                      key={group.id}
+                      groupName={group.groupName}
+                      properties={group.properties}
+                    />
+                  ))
+                }
+              </div>
+            )}
           </div>
-        </main>
+        )}
+
+        {/* Property Details Section */}
+        <Accordion 
+          type="single" 
+          collapsible 
+          className={`mb-8 ${!propertyGroups.length ? 'mt-6' : ''}`}
+          defaultValue={!propertyGroups.length ? "property-details" : undefined}
+        >
+          <AccordionItem value="property-details">
+            <AccordionTrigger>
+              <div className="flex items-center gap-2">
+                <span>Property Details</span>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent>
+              {/* Inventory Table */}
+              <div className="bg-white shadow rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                  <div className="min-w-full inline-block align-middle">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Unit Number
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Property Type
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Owner Details
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Bank Details
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            BHK
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Area (sq.ft)
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {inventoryItems.length > 0 ? (
+                          inventoryItems.map((item) => {
+                            const typeInfo = getPropertyTypeColor(item.propertyType);
+                            const bhkColor = item.numberOfBedrooms ? getBHKColor(item.numberOfBedrooms) : null;
+                            
+                            return (
+                              <tr key={item.id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                  {item.unitNumber}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-2">
+                                    <div
+                                      className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                                      style={{ 
+                                        backgroundColor: typeInfo.bgColor,
+                                        color: typeInfo.color
+                                      }}
+                                    >
+                                      {typeInfo.icon}
+                                    </div>
+                                    <span 
+                                      className="text-xs px-2 py-1 rounded-full"
+                                      style={{ 
+                                        backgroundColor: typeInfo.bgColor,
+                                        color: typeInfo.color
+                                      }}
+                                    >
+                                      {item.propertyType}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {item.ownerDetails}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {item.bankDetails || "-"}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {item.propertyType === "Residential" && item.numberOfBedrooms ? (
+                                    <span 
+                                      className="text-xs px-2 py-1 rounded-full"
+                                      style={{ 
+                                        backgroundColor: bhkColor?.bg,
+                                        color: bhkColor?.text
+                                      }}
+                                    >
+                                      {item.numberOfBedrooms} BHK
+                                    </span>
+                                  ) : (
+                                    <span className="text-sm text-gray-500">N/A</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {item.propertyType === "Commercial" && item.squareFeetArea ? (
+                                    <span 
+                                      className="text-xs px-2 py-1 rounded-full"
+                                      style={{ 
+                                        backgroundColor: theme.colors.area.bg,
+                                        color: theme.colors.area.text
+                                      }}
+                                    >
+                                      {item.squareFeetArea} sq.ft
+                                    </span>
+                                  ) : (
+                                    <span className="text-sm text-gray-500">-</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button
+                                      onClick={() => router.push(`/dashboard/property-mgmt/forms?type=property&edit=${item.id}`)}
+                                      className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                                      title="Edit property"
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                      <span className="sr-only">Edit</span>
+                                    </button>
+                                    <button
+                                      onClick={() => item.id && handleDelete(item.id)}
+                                      className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                                      title="Delete property"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      <span className="sr-only">Delete</span>
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan={7} className="px-6 py-10 text-center text-sm text-gray-500">
+                              No rental inventory items found. Click &quot;+ Manual Add&quot; to create one or use the Excel upload feature.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
     </div>
   );
