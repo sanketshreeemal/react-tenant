@@ -574,45 +574,55 @@ export default function RentalInventoryManagement() {
         {/* Property Group Carousel */}
         {propertyGroups.length > 0 && (
           <div className="mb-6 overflow-hidden">
-            <h3 className="text-lg font-medium mb-4" style={{ color: theme.colors.textPrimary }}>
-              Property Groups
-            </h3>
-            
-            {isLoading ? (
-              <div className="flex items-center justify-center h-56">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : (
-              <div 
-                className="flex overflow-x-auto snap-x snap-mandatory pb-4 hide-scrollbar gap-4"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-              >
-                {[
-                  // Default group first
-                  {
-                    id: 'default',
-                    groupName: 'Default',
-                    properties: inventoryItems.filter(item => !item.groupName || item.groupName === "Default")
-                  },
-                  // Then all other groups
-                  ...propertyGroups.map(group => ({
+            {/* Get active groups - those with at least one property */}
+            {(() => {
+              const activeGroups = [
+                // Default group if it has properties
+                ...(inventoryItems.some(item => !item.groupName || item.groupName === "Default") ? [{
+                  id: 'default',
+                  groupName: 'Default',
+                  properties: inventoryItems.filter(item => !item.groupName || item.groupName === "Default")
+                }] : []),
+                // Other groups with properties
+                ...propertyGroups
+                  .map(group => ({
                     id: group.id,
                     groupName: group.groupName,
                     properties: inventoryItems.filter(item => item.groupName === group.groupName)
                   }))
-                ]
-                  // Sort by number of properties (descending)
-                  .sort((a, b) => b.properties.length - a.properties.length)
-                  .map(group => (
-                    <PropertyGroupPanel 
-                      key={group.id}
-                      groupName={group.groupName}
-                      properties={group.properties}
-                    />
-                  ))
-                }
-              </div>
-            )}
+                  .filter(group => group.properties.length > 0)
+              ].sort((a, b) => b.properties.length - a.properties.length);
+
+              // Only render if there are active groups
+              if (activeGroups.length === 0) return null;
+
+              return (
+                <>
+                  <h3 className="text-lg font-medium mb-4" style={{ color: theme.colors.textPrimary }}>
+                    Active Property Groups
+                  </h3>
+                  
+                  {isLoading ? (
+                    <div className="flex items-center justify-center h-56">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  ) : (
+                    <div 
+                      className="flex overflow-x-auto snap-x snap-mandatory pb-4 hide-scrollbar gap-4"
+                      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                    >
+                      {activeGroups.map(group => (
+                        <PropertyGroupPanel 
+                          key={group.id}
+                          groupName={group.groupName}
+                          properties={group.properties}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 

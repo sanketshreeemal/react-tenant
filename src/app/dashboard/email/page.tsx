@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
 import Navigation from "../../../components/Navigation";
 import { getDocumentsWithTimeout } from "../../../lib/firebase/firestoreUtils";
-import { Mail, Send, Users, AlertTriangle, CheckCircle, RefreshCw } from "lucide-react";
+import { Mail, Send, Users, AlertTriangle, CheckCircle, RefreshCw, Trash2 } from "lucide-react";
 import logger from "../../../lib/logger";
 import { Button } from "../../../components/ui/button";
 import { theme } from "../../../theme/theme";
 import { AlertMessage } from "../../../components/ui/alert-message";
+import { sendTransactionalEmail, generateMonthlyReport, addAdminRecipient, removeAdminRecipient, getAdminRecipients } from '../../../lib/services/emailService';
 
 interface Tenant {
   id: string;
@@ -17,6 +18,12 @@ interface Tenant {
   lastName: string;
   email: string;
   unitNumber: string;
+}
+
+interface AdminRecipient {
+  id?: string;
+  name: string;
+  email: string;
 }
 
 export default function EmailNotificationsPage() {
@@ -39,6 +46,10 @@ export default function EmailNotificationsPage() {
     success: null,
     message: null,
   });
+  const [adminRecipients, setAdminRecipients] = useState<AdminRecipient[]>([]);
+  const [newRecipientName, setNewRecipientName] = useState('');
+  const [newRecipientEmail, setNewRecipientEmail] = useState('');
+  const [recipientError, setRecipientError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -83,6 +94,24 @@ export default function EmailNotificationsPage() {
 
     if (user) {
       fetchTenants();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const fetchAdminRecipients = async () => {
+      try {
+        const recipients = await getAdminRecipients();
+        setAdminRecipients(recipients);
+      } catch (error) {
+        logger.error('Failed to fetch admin recipients', {
+          component: 'EmailNotificationsPage',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    };
+
+    if (user) {
+      fetchAdminRecipients();
     }
   }, [user]);
 
@@ -137,28 +166,17 @@ export default function EmailNotificationsPage() {
         }
       });
       
-      // In a real implementation, you would call your API endpoint here
-      // For now, we'll simulate a successful API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Simulate API call
-      // const response = await fetch('/api/email/send', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify({
-      //     recipients: selectedTenantEmails,
-      //     subject: emailSubject,
-      //     body: emailBody,
-      //   }),
-      // });
-      
-      // if (!response.ok) {
-      //   throw new Error('Failed to send email');
-      // }
-      
-      // const data = await response.json();
+      // Send email to each selected tenant
+      await Promise.all(selectedTenantEmails.map(email => 
+        sendTransactionalEmail({
+          type: 'custom_email',
+          data: {
+            subject: emailSubject,
+            message: emailBody
+          },
+          recipientEmail: email
+        })
+      ));
       
       setSendSuccess(true);
       logger.info("Email sent successfully", {
@@ -184,6 +202,42 @@ export default function EmailNotificationsPage() {
     }
   };
 
+  const handleAddRecipient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecipientError(null);
+
+    if (!newRecipientName.trim() || !newRecipientEmail.trim()) {
+      setRecipientError('Please fill in both name and email');
+      return;
+    }
+
+    try {
+      const newRecipient = await addAdminRecipient({
+        name: newRecipientName,
+        email: newRecipientEmail
+      });
+
+      setAdminRecipients([...adminRecipients, newRecipient]);
+      setNewRecipientName('');
+      setNewRecipientEmail('');
+    } catch (error) {
+      setRecipientError('Failed to add recipient. Please try again.');
+    }
+  };
+
+  const handleRemoveRecipient = async (recipientId: string) => {
+    try {
+      await removeAdminRecipient(recipientId);
+      setAdminRecipients(adminRecipients.filter(r => r.id !== recipientId));
+    } catch (error) {
+      logger.error('Failed to remove admin recipient', {
+        component: 'EmailNotificationsPage',
+        recipientId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
   const handleGenerateMonthlyReport = async () => {
     try {
       setIsGeneratingReport(true);
@@ -192,25 +246,16 @@ export default function EmailNotificationsPage() {
         message: null
       });
       
+      if (adminRecipients.length === 0) {
+        throw new Error('Please add at least one admin recipient to receive reports');
+      }
+      
       logger.info("Generating monthly report", {
         component: "EmailNotificationsPage",
         action: "handleGenerateMonthlyReport"
       });
       
-      // In a real implementation, you would call your API endpoint here
-      // For now, we'll simulate a successful API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Simulate API call
-      // const response = await fetch('/api/email/monthly-report', {
-      //   method: 'GET',
-      // });
-      
-      // if (!response.ok) {
-      //   throw new Error('Failed to generate monthly report');
-      // }
-      
-      // const data = await response.json();
+      await generateMonthlyReport();
       
       setReportStatus({
         success: true,
@@ -231,7 +276,7 @@ export default function EmailNotificationsPage() {
       
       setReportStatus({
         success: false,
-        message: "Failed to generate monthly report. Please try again later."
+        message: errorMessage
       });
     } finally {
       setIsGeneratingReport(false);
@@ -331,6 +376,86 @@ export default function EmailNotificationsPage() {
                   </>
                 )}
               </Button>
+            </div>
+          </div>
+          
+          {/* Admin Recipients Management */}
+          <div className="bg-white shadow rounded-lg p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Admin Recipients</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Add email addresses of administrators who should receive monthly reports and important notifications.
+            </p>
+
+            {recipientError && (
+              <AlertMessage
+                variant="error"
+                message={recipientError}
+              />
+            )}
+
+            <form onSubmit={handleAddRecipient} className="mb-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="recipientName" className="block text-sm font-medium text-gray-700">
+                    Name
+                  </label>
+                  <input
+                    type="text"
+                    id="recipientName"
+                    value={newRecipientName}
+                    onChange={(e) => setNewRecipientName(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    placeholder="John Doe"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="recipientEmail" className="block text-sm font-medium text-gray-700">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    id="recipientEmail"
+                    value={newRecipientEmail}
+                    onChange={(e) => setNewRecipientEmail(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    placeholder="john@example.com"
+                  />
+                </div>
+              </div>
+              <div className="mt-4">
+                <Button
+                  type="submit"
+                  variant="default"
+                  size="default"
+                  className="w-full bg-theme-primary hover:bg-theme-primary/90"
+                >
+                  Add Recipient
+                </Button>
+              </div>
+            </form>
+
+            <div className="divide-y divide-gray-200">
+              {adminRecipients.map((recipient) => (
+                <div key={recipient.id} className="py-3 flex justify-between items-center">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{recipient.name}</p>
+                    <p className="text-sm text-gray-500">{recipient.email}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => recipient.id && handleRemoveRecipient(recipient.id)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              {adminRecipients.length === 0 && (
+                <p className="py-4 text-sm text-gray-500 text-center">
+                  No recipients added yet
+                </p>
+              )}
             </div>
           </div>
           

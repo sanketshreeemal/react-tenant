@@ -701,14 +701,14 @@ export const getRentalInventoryDetails = async (unitId: string): Promise<RentalI
     const data = docSnap.data();
     const inventoryData: RentalInventory = {
       id: docSnap.id,
-      ...data,
-      createdAt: data.createdAt instanceof Timestamp 
-        ? data.createdAt.toDate() 
-        : new Date(data.createdAt),
-      updatedAt: data.updatedAt instanceof Timestamp 
-        ? data.updatedAt.toDate() 
-        : new Date(data.updatedAt)
-    } as RentalInventory;
+      unitNumber: data.unitNumber || '[Unknown]',
+      propertyType: data.propertyType || 'Residential',
+      ownerDetails: data.ownerDetails || '',
+      bankDetails: data.bankDetails,
+      groupName: data.groupName,
+      numberOfBedrooms: data.numberOfBedrooms !== undefined ? data.numberOfBedrooms : null,
+      squareFeetArea: data.squareFeetArea !== undefined ? data.squareFeetArea : null,
+    };
     
     logger.info(`firestoreUtils: Found rental inventory for unit ${unitId}.`);
     return inventoryData;

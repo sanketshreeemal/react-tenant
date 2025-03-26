@@ -36,9 +36,9 @@ export default function Navigation() {
     { name: "Tenants", href: "/dashboard/tenants", icon: Users },
     { name: "Property Management", href: "/dashboard/property-mgmt", icon: Building },
     { name: "Payments", href: "/dashboard/payments", icon: DollarSign },
+    { name: "Email Notifications", href: "/dashboard/email", icon: Mail },
     // Development Phase Features
     // { name: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
-    // { name: "Email Notifications", href: "/dashboard/email", icon: Mail },
     // { name: "WhatsApp Messaging", href: "/dashboard/whatsapp", icon: MessageSquare },
     // { name: "Documents", href: "/dashboard/documents", icon: FileImage },
   ];
