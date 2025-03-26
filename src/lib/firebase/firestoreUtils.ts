@@ -833,3 +833,24 @@ export const deletePropertyGroup = async (groupId: string) => {
     throw error;
   }
 };
+
+/**
+ * Checks if a user's email exists in the adminAccess collection.
+ * @param {string} email - The email address to check.
+ * @returns {Promise<boolean>} True if the email exists in adminAccess collection, false otherwise.
+ */
+export const checkAdminAccess = async (email: string): Promise<boolean> => {
+  try {
+    logger.info(`firestoreUtils: Checking admin access for email ${email}...`);
+    const adminAccessCollection = collection(db, 'adminAccess');
+    const q = query(adminAccessCollection, where('email', '==', email));
+    const querySnapshot = await getDocs(q);
+    
+    const hasAccess = !querySnapshot.empty;
+    logger.info(`firestoreUtils: Admin access for email ${email}: ${hasAccess}`);
+    return hasAccess;
+  } catch (error: any) {
+    logger.error(`firestoreUtils: Error checking admin access for email ${email}: ${error.message}`);
+    throw new Error('Failed to check admin access.');
+  }
+};

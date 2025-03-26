@@ -4,12 +4,15 @@ import React, { createContext, useEffect, useState } from "react";
 import { signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut } from "firebase/auth";
 import { User } from "firebase/auth";
 import { auth } from "../firebase/firebase";
+import { checkAdminAccess } from "../firebase/firestoreUtils";
+import { useRouter } from "next/navigation";
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  error: string | null;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -17,11 +20,14 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   signInWithGoogle: async () => {},
   signOut: async () => {},
+  error: null,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -37,7 +43,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log("Attempting to sign in with Google...");
       const result = await signInWithPopup(auth, provider);
+      
+      // Check if user has admin access
+      const hasAdminAccess = await checkAdminAccess(result.user.email || '');
+      
+      if (!hasAdminAccess) {
+        // Sign out the user if they don't have admin access
+        await firebaseSignOut(auth);
+        setError("Sorry, you are not authorized to sign in.");
+        router.push('/'); // Redirect to landing page
+        return;
+      }
+      
       console.log("Google sign-in successful:", result.user.uid);
+      setError(null); // Clear any previous errors
+      router.push('/dashboard'); // Redirect to dashboard on successful auth
     } catch (error: any) {
       console.error("Error signing in with Google:", error);
       console.error("Error code:", error.code);
@@ -45,13 +65,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Log specific Firebase Auth errors
       if (error.code === 'auth/popup-closed-by-user') {
-        console.error("Authentication popup was closed by the user before completing the sign-in process.");
+        setError("Authentication was cancelled.");
       } else if (error.code === 'auth/popup-blocked') {
-        console.error("The popup was blocked by the browser. Please allow popups for this site.");
-      } else if (error.code === 'auth/cancelled-popup-request') {
-        console.error("Multiple popup requests were triggered. Only the latest one will be displayed.");
+        setError("The popup was blocked by your browser. Please allow popups for this site.");
       } else if (error.code === 'auth/unauthorized-domain') {
-        console.error("The domain of this site is not authorized for OAuth operations. This is likely a configuration issue.");
+        setError("This domain is not authorized for sign-in operations.");
+      } else {
+        setError("An error occurred during sign-in. Please try again.");
       }
       
       throw error; // Re-throw to allow handling in components
@@ -61,13 +81,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOutUser = async () => {
     try {
       await firebaseSignOut(auth);
+      setError(null); // Clear any errors on sign out
+      router.push('/'); // Redirect to landing page
     } catch (error) {
       console.error("Error signing out", error);
+      setError("An error occurred while signing out.");
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut: signOutUser }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut: signOutUser, error }}>
       {children}
     </AuthContext.Provider>
   );

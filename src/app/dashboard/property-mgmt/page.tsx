@@ -479,14 +479,9 @@ export default function RentalInventoryManagement() {
                 {/* Add Property Group Button */}
                 <Button
                   onClick={() => router.push("/dashboard/property-mgmt/forms?type=group")}
-                  variant="outline"
+                  variant="default"
                   size="sm"
-                  style={{
-                    backgroundColor: theme.colors.button.secondary,
-                    color: theme.colors.button.secondaryText,
-                    borderColor: theme.colors.button.secondaryBorder,
-                  }}
-                  className="hover:bg-secondary/10"
+                  className="bg-[#1F2937] hover:bg-[#111827] text-white transition-colors"
                 >
                   <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                   <span>Type</span>
@@ -495,14 +490,9 @@ export default function RentalInventoryManagement() {
                 {/* Add Property Button */}
                 <Button
                   onClick={() => router.push("/dashboard/property-mgmt/forms?type=property")}
-                  variant="outline"
+                  variant="default"
                   size="sm"
-                  style={{
-                    backgroundColor: theme.colors.button.secondary,
-                    color: theme.colors.button.secondaryText,
-                    borderColor: theme.colors.button.secondaryBorder,
-                  }}
-                  className="hover:bg-secondary/10"
+                  className="bg-[#1F2937] hover:bg-[#111827] text-white transition-colors"
                 >
                   <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                   <span>Manual Add</span>

@@ -19,7 +19,12 @@ import {
   LogOut, 
   Menu, 
   X,
-  Building
+  Building,
+  UserCog,
+  Building2,
+  Wallet,
+  MessageCircle,
+  Settings
 } from "lucide-react";
 
 export default function Navigation() {
@@ -33,10 +38,10 @@ export default function Navigation() {
 
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: Home },
+    { name: "Payments", href: "/dashboard/payments", icon: Wallet },
     { name: "Tenants", href: "/dashboard/tenants", icon: Users },
-    { name: "Property Management", href: "/dashboard/property-mgmt", icon: Building },
-    { name: "Payments", href: "/dashboard/payments", icon: DollarSign },
-    { name: "Email Notifications", href: "/dashboard/email", icon: Mail },
+    { name: "Manage Properties", href: "/dashboard/property-mgmt", icon: Building },
+    { name: "Manage Users", href: "/dashboard/manage-users", icon: UserCog },
     // Development Phase Features
     // { name: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
     // { name: "WhatsApp Messaging", href: "/dashboard/whatsapp", icon: MessageSquare },
