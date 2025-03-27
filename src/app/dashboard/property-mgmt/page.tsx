@@ -755,7 +755,7 @@ export default function RentalInventoryManagement() {
                         ) : (
                           <tr>
                             <td colSpan={7} className="px-2 sm:px-6 py-10 text-center text-sm text-gray-500">
-                              No rental inventory items found. Click "+ Manual Add" to create one or use the Excel upload feature.
+                              No rental inventory items found. Click &quot;+ Manual Add&quot; to create one or use the Excel upload feature.
                             </td>
                           </tr>
                         )}

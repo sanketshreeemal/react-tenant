@@ -2,7 +2,7 @@
 
 import { db } from './firebase'; // Assuming you have firebase.ts to initialize Firebase
 import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, addDoc, getDocs, query, where, orderBy, DocumentData, QuerySnapshot, Timestamp, serverTimestamp } from 'firebase/firestore';
-import { Tenant, Unit, Lease, RentPayment, RentalInventory, PropertyGroup } from '@/types'; // Import our TypeScript interfaces
+import { Tenant, Lease, RentPayment, RentalInventory, PropertyGroup } from '@/types'; // Import our TypeScript interfaces
 import logger from '@/lib/logger'; // Assuming you have a logger utility
 
 // ---------------------- Tenant Collection Utility Functions ----------------------
@@ -770,12 +770,6 @@ export const getAllActiveLeases = async (): Promise<Lease[]> => {
   }
 };
 
-// Add more Firestore utility functions here for Units, Leases, RentPayments as we progress
-// (e.g., getUnit, addLease, recordRentPayment, updateTenant, deleteTenant, etc.)
-
-
-// ---------------------- Generic Firestore Helpers (Optional for now, can add later) ----------------------
-// You can add generic helper functions here if needed, like a function to convert Firestore Timestamps to Date objects, etc.
 
 // Property Group Functions
 export const addPropertyGroup = async (groupData: Omit<PropertyGroup, 'id' | 'createdAt' | 'updatedAt'>) => {

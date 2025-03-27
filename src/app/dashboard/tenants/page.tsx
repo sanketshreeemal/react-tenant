@@ -1306,7 +1306,7 @@ export default function TenantsManagement() {
                   ) : (
                     <tr>
                       <td colSpan={6} className="px-2 sm:px-6 py-10 text-center text-sm text-gray-500">
-                        No lease records found. Click "Add Tenant" to create one.
+                        No lease records found. Click &quot;Add Tenant&quot; to create one.
                       </td>
                     </tr>
                   )}

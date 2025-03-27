@@ -353,7 +353,7 @@ export default function AnalyticsPage() {
 
     // Generate data for charts and table
     generateMonthlyData();
-  }, [rentalInventory, activeLeases, rentPayments, leases, timeRange, totalUnits, generateMonthlyData]);
+  }, [rentalInventory, activeLeases, rentPayments, leases, totalUnits, generateMonthlyData]);
 
   useEffect(() => {
     if (!isLoading) {
