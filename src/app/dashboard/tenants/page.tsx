@@ -1230,22 +1230,22 @@ export default function TenantsManagement() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Unit Number
+                    <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Unit
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Tenant Name
+                    <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Tenant
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Contact
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Lease Period
+                    <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Lease
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Rent
                     </th>
-                    <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
@@ -1254,26 +1254,26 @@ export default function TenantsManagement() {
                   {filteredLeases.length > 0 ? (
                     filteredLeases.map((lease) => (
                       <tr key={lease.id} className={`hover:bg-gray-50 ${!lease.isActive ? 'bg-gray-50' : ''}`}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">
                           {lease.unitNumber || getUnitNumber(lease.unitId)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">
                           {lease.tenantName}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <div>
+                        <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                          <div className="flex flex-col items-center">
                             <div>{lease.email}</div>
                             <div className="text-xs">{lease.countryCode} {lease.phoneNumber}</div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
                           {formatLeasePeriod(lease.leaseStartDate, lease.leaseEndDate)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
                           ₹{lease.rentAmount.toLocaleString()}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <div className="flex items-center justify-end gap-3">
+                        <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                          <div className="flex items-center justify-center gap-3">
                             {/* Edit Button */}
                             <button
                               onClick={() => toggleForm(lease.id)}
@@ -1305,8 +1305,8 @@ export default function TenantsManagement() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={6} className="px-6 py-10 text-center text-sm text-gray-500">
-                        No lease records found. Click &quot;Add Tenant&quot; to create one.
+                      <td colSpan={6} className="px-2 sm:px-6 py-10 text-center text-sm text-gray-500">
+                        No lease records found. Click "Add Tenant" to create one.
                       </td>
                     </tr>
                   )}

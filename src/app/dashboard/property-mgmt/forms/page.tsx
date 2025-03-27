@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import Navigation from "@/components/Navigation";
@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { theme } from "@/theme/theme";
 import { Building, Home, ArrowLeft, Trash2 } from "lucide-react";
 
-export default function PropertyForms() {
+function PropertyFormsContent() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -528,5 +528,17 @@ export default function PropertyForms() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PropertyForms() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    }>
+      <PropertyFormsContent />
+    </Suspense>
   );
 } 

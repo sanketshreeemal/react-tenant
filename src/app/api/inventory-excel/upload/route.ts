@@ -145,7 +145,9 @@ export async function POST(req: NextRequest) {
           unitNumber,
           propertyType: propertyType as 'Commercial' | 'Residential',
           ownerDetails,
-          bankDetails: bankDetails || undefined
+          bankDetails: bankDetails || undefined,
+          numberOfBedrooms: null,  // Default to null as per type definition
+          squareFeetArea: null     // Default to null as per type definition
         });
         
         results.successful++;

@@ -637,25 +637,25 @@ export default function RentalInventoryManagement() {
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Unit Number
+                          <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Unit
                           </th>
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Property Type
+                          <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Type
                           </th>
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Owner Details
+                          <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Owner
                           </th>
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Bank Details
+                          <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Bank
                           </th>
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                             BHK
                           </th>
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Area (sq.ft)
                           </th>
-                          <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Actions
                           </th>
                         </tr>
@@ -668,11 +668,11 @@ export default function RentalInventoryManagement() {
                             
                             return (
                               <tr key={item.id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">
                                   {item.unitNumber}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="flex items-center gap-2">
+                                <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center">
+                                  <div className="flex items-center justify-center gap-2">
                                     <div
                                       className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
                                       style={{ 
@@ -693,13 +693,13 @@ export default function RentalInventoryManagement() {
                                     </span>
                                   </div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
                                   {item.ownerDetails}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
                                   {item.bankDetails || "-"}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
+                                <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center">
                                   {item.propertyType === "Residential" && item.numberOfBedrooms ? (
                                     <span 
                                       className="text-xs px-2 py-1 rounded-full"
@@ -714,7 +714,7 @@ export default function RentalInventoryManagement() {
                                     <span className="text-sm text-gray-500">N/A</span>
                                   )}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
+                                <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center">
                                   {item.propertyType === "Commercial" && item.squareFeetArea ? (
                                     <span 
                                       className="text-xs px-2 py-1 rounded-full"
@@ -729,8 +729,8 @@ export default function RentalInventoryManagement() {
                                     <span className="text-sm text-gray-500">-</span>
                                   )}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                  <div className="flex items-center justify-end gap-2">
+                                <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                  <div className="flex items-center justify-center gap-2">
                                     <button
                                       onClick={() => router.push(`/dashboard/property-mgmt/forms?type=property&edit=${item.id}`)}
                                       className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
@@ -754,8 +754,8 @@ export default function RentalInventoryManagement() {
                           })
                         ) : (
                           <tr>
-                            <td colSpan={7} className="px-6 py-10 text-center text-sm text-gray-500">
-                              No rental inventory items found. Click &quot;+ Manual Add&quot; to create one or use the Excel upload feature.
+                            <td colSpan={7} className="px-2 sm:px-6 py-10 text-center text-sm text-gray-500">
+                              No rental inventory items found. Click "+ Manual Add" to create one or use the Excel upload feature.
                             </td>
                           </tr>
                         )}

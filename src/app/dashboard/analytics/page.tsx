@@ -168,98 +168,7 @@ export default function AnalyticsPage() {
     }
   }, [user]);
 
-  const calculateAnalytics = useCallback(() => {
-    if (rentalInventory.length === 0) return;
-
-    // Total units from rental inventory
-    setTotalUnits(rentalInventory.length);
-
-    // Occupied units (units with active leases)
-    // Get unique unit IDs that have active leases
-    const uniqueOccupiedUnitIds = Array.from(new Set(activeLeases.map(lease => lease.unitId)));
-    const occupiedCount = uniqueOccupiedUnitIds.length;
-    setOccupiedUnits(occupiedCount);
-
-    // Vacant units
-    const vacant = totalUnits - occupiedCount;
-    setVacantUnits(vacant);
-
-    // Occupancy rate - ensure we're using the latest values for the calculation
-    // Occupancy rate = (number of units with active leases / total number of units) * 100
-    const occupancyRateValue = rentalInventory.length > 0 ? (occupiedCount / rentalInventory.length) * 100 : 0;
-    setOccupancyRate(occupancyRateValue);
-
-    // Current monthly revenue from active leases
-    const monthlyRevenue = activeLeases.reduce((sum, lease) => sum + lease.rentAmount, 0);
-    setMonthlyRevenue(monthlyRevenue || 0); // Ensure it's never undefined
-
-    // Calculate foregone rent for vacant units
-    let foregoneRentAmount = 0;
-
-    // For each vacant unit, find its potential rent
-    rentalInventory.forEach((unit) => {
-      // Check if unit has an active lease
-      const hasActiveLease = activeLeases.some(lease => lease.unitId === unit.id);
-      
-      if (!hasActiveLease) {
-        // Unit is vacant, find the most recent lease for this unit
-        const unitLeases = leases
-          .filter(lease => lease.unitId === unit.id)
-          .sort((a, b) => new Date(b.leaseEndDate).getTime() - new Date(a.leaseEndDate).getTime());
-        
-        if (unitLeases.length > 0) {
-          // Use the most recent lease's rent amount
-          foregoneRentAmount += unitLeases[0].rentAmount;
-        } else {
-          // If no previous lease, use the unit's default rent amount
-          foregoneRentAmount += unit.rentAmount;
-        }
-      }
-    });
-    
-    setForegoneRent(foregoneRentAmount || 0); // Ensure it's never undefined
-
-    // Calculate current month's rent collection rate
-    const currentMonth = format(new Date(), "yyyy-MM");
-    const currentMonthStart = startOfMonth(new Date());
-    const currentMonthEnd = endOfMonth(new Date());
-
-    // Expected rent from active leases
-    const expectedRent = monthlyRevenue;
-
-    // Collected rent for current month
-    const currentMonthPayments = rentPayments.filter(payment => 
-      isWithinInterval(new Date(payment.paymentDate), {
-        start: currentMonthStart,
-        end: currentMonthEnd
-      })
-    );
-    
-    const collectedRent = currentMonthPayments.reduce((sum, payment) => sum + payment.amount, 0);
-    
-    // Prevent division by zero for collection rate
-    let collectionRate = 0;
-    if (expectedRent > 0) {
-      collectionRate = (collectedRent / expectedRent) * 100;
-    } else if (collectedRent > 0) {
-      // If we have collections but no expected rent, set to 100%
-      collectionRate = 100;
-    } 
-    // Otherwise it stays at 0%
-    
-    setRentCollectionRate(collectionRate);
-
-    // Generate data for charts and table
-    generateMonthlyData();
-  }, [rentalInventory, activeLeases, rentPayments, leases, timeRange]);
-
-  useEffect(() => {
-    if (!isLoading) {
-      calculateAnalytics();
-    }
-  }, [isLoading, calculateAnalytics]);
-
-  const generateMonthlyData = () => {
+  const generateMonthlyData = useCallback(() => {
     const tableData: MonthlyTableData[] = [];
     const occupancyData: OccupancyChartData[] = [];
     const rentData: RentCollectionChartData[] = [];
@@ -308,7 +217,6 @@ export default function AnalyticsPage() {
       const vacantCount = totalUnitCount - occupiedCount;
       
       // Calculate occupancy rate for this month
-      // Occupancy rate = (number of units with active leases / total number of units) * 100
       const occupancyRate = totalUnitCount > 0 ? (occupiedCount / totalUnitCount) * 100 : 0;
 
       // Calculate rent collection for this month
@@ -317,7 +225,7 @@ export default function AnalyticsPage() {
           start: monthStart,
           end: monthEnd
         }) && 
-        (payment.paymentType === "Rent Payment" || !payment.paymentType) // Include payments without type for backward compatibility
+        (payment.paymentType === "Rent Payment" || !payment.paymentType)
       );
       
       const rentCollected = monthPayments.reduce((sum, payment) => sum + payment.amount, 0);
@@ -361,14 +269,14 @@ export default function AnalyticsPage() {
         collectionRate: collectionRate.toFixed(1),
       });
 
-      // Create simplified occupancy chart data - just occupancy rate
+      // Create simplified occupancy chart data
       occupancyData.push({
         month: monthLabel,
         Occupied: occupancyRate,
         Vacant: 100 - occupancyRate,
       });
 
-      // Create simplified rent collection chart data - just collected and foregone
+      // Create simplified rent collection chart data
       rentData.push({
         month: monthLabel,
         'Expected Rent': expectedRent,
@@ -380,7 +288,78 @@ export default function AnalyticsPage() {
     setMonthlyData(tableData);
     setOccupancyChartData(occupancyData);
     setRentCollectionChartData(rentData);
-  };
+  }, [rentalInventory, leases, rentPayments, timeRange]);
+
+  const calculateAnalytics = useCallback(() => {
+    if (rentalInventory.length === 0) return;
+
+    // Total units from rental inventory
+    setTotalUnits(rentalInventory.length);
+
+    // Occupied units (units with active leases)
+    const uniqueOccupiedUnitIds = Array.from(new Set(activeLeases.map(lease => lease.unitId)));
+    const occupiedCount = uniqueOccupiedUnitIds.length;
+    setOccupiedUnits(occupiedCount);
+
+    // Vacant units
+    const vacant = totalUnits - occupiedCount;
+    setVacantUnits(vacant);
+
+    // Occupancy rate
+    const occupancyRateValue = rentalInventory.length > 0 ? (occupiedCount / rentalInventory.length) * 100 : 0;
+    setOccupancyRate(occupancyRateValue);
+
+    // Current monthly revenue from active leases
+    const monthlyRevenue = activeLeases.reduce((sum, lease) => sum + lease.rentAmount, 0);
+    setMonthlyRevenue(monthlyRevenue || 0);
+
+    // Calculate foregone rent for vacant units
+    let foregoneRentAmount = 0;
+    rentalInventory.forEach((unit) => {
+      const hasActiveLease = activeLeases.some(lease => lease.unitId === unit.id);
+      if (!hasActiveLease) {
+        const unitLeases = leases
+          .filter(lease => lease.unitId === unit.id)
+          .sort((a, b) => new Date(b.leaseEndDate).getTime() - new Date(a.leaseEndDate).getTime());
+        
+        if (unitLeases.length > 0) {
+          foregoneRentAmount += unitLeases[0].rentAmount;
+        } else {
+          foregoneRentAmount += unit.rentAmount;
+        }
+      }
+    });
+    setForegoneRent(foregoneRentAmount || 0);
+
+    // Calculate current month's rent collection rate
+    const currentMonthStart = startOfMonth(new Date());
+    const currentMonthEnd = endOfMonth(new Date());
+    const expectedRent = monthlyRevenue;
+    const currentMonthPayments = rentPayments.filter(payment => 
+      isWithinInterval(new Date(payment.paymentDate), {
+        start: currentMonthStart,
+        end: currentMonthEnd
+      })
+    );
+    const collectedRent = currentMonthPayments.reduce((sum, payment) => sum + payment.amount, 0);
+    
+    let collectionRate = 0;
+    if (expectedRent > 0) {
+      collectionRate = (collectedRent / expectedRent) * 100;
+    } else if (collectedRent > 0) {
+      collectionRate = 100;
+    }
+    setRentCollectionRate(collectionRate);
+
+    // Generate data for charts and table
+    generateMonthlyData();
+  }, [rentalInventory, activeLeases, rentPayments, leases, timeRange, totalUnits, generateMonthlyData]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      calculateAnalytics();
+    }
+  }, [isLoading, calculateAnalytics]);
 
   if (loading || !user) {
     return (

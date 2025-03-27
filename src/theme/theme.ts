@@ -85,7 +85,7 @@ const theme = {
       },
       three: {
         text: "#6366f1",
-        bg: "rgba(189, 99, 241, 0.08)",
+        bg: "rgba(185, 33, 63, 0.08)",
       },
       four: {
         text: "#9333ea",
