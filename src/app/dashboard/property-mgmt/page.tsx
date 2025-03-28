@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, ChangeEvent } from "react";
+import React, { useState, useEffect, useRef, ChangeEvent, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
 import Navigation from "../../../components/Navigation";
@@ -55,6 +55,41 @@ export default function RentalInventoryManagement() {
   // Property Group state
   const [propertyGroups, setPropertyGroups] = useState<PropertyGroup[]>([]);
   
+  const loadInventoryData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      if (!user?.landlordId) {
+        throw new Error("Landlord ID not found");
+      }
+      const data = await getAllRentalInventory(user.landlordId);
+      setInventoryItems(data);
+    } catch (error: any) {
+      console.error("Error loading inventory data:", error);
+      setAlertMessage({
+        type: 'error',
+        message: error.message || "Failed to load inventory data"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.landlordId]);
+
+  const loadPropertyGroups = useCallback(async () => {
+    try {
+      if (!user?.landlordId) {
+        throw new Error("Landlord ID not found");
+      }
+      const groups = await getAllPropertyGroups(user.landlordId);
+      setPropertyGroups(groups);
+    } catch (error: any) {
+      console.error("Error loading property groups:", error);
+      setAlertMessage({
+        type: 'error',
+        message: error.message || "Failed to load property groups"
+      });
+    }
+  }, [user?.landlordId]);
+  
   useEffect(() => {
     if (!loading && !user) {
       router.push("/");
@@ -62,7 +97,7 @@ export default function RentalInventoryManagement() {
       loadInventoryData();
       loadPropertyGroups();
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, loadInventoryData, loadPropertyGroups]);
 
   // Hide upload results after 10 seconds
   useEffect(() => {
@@ -74,40 +109,14 @@ export default function RentalInventoryManagement() {
       return () => clearTimeout(timer);
     }
   }, [showUploadResults]);
-  
-  const loadInventoryData = async () => {
-    try {
-      setIsLoading(true);
-      const data = await getAllRentalInventory();
-      setInventoryItems(data);
-    } catch (error: any) {
-      console.error("Error loading inventory data:", error);
-      setAlertMessage({
-        type: 'error',
-        message: error.message || "Failed to load inventory data"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loadPropertyGroups = async () => {
-    try {
-      const groups = await getAllPropertyGroups();
-      setPropertyGroups(groups);
-    } catch (error: any) {
-      console.error("Error loading property groups:", error);
-      setAlertMessage({
-        type: 'error',
-        message: error.message || "Failed to load property groups"
-      });
-    }
-  };
 
   const handleDelete = async (itemId: string) => {
     if (confirm("Are you sure you want to delete this inventory item? This action cannot be undone.")) {
       try {
-        await deleteRentalInventory(itemId);
+        if (!user?.landlordId) {
+          throw new Error("Landlord ID not found");
+        }
+        await deleteRentalInventory(user.landlordId, itemId);
         await loadInventoryData(); // Reload data
         setAlertMessage({
           type: 'success',

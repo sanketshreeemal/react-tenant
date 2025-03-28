@@ -1,0 +1,45 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+## Specific Refactoring Rules
+
+1.  **Landlord ID Handling:**
+    * Always retrieve the `landlordId` from the authentication context before making Firestore queries.
+    * Pass the `landlordId` as a parameter to all Firestore functions.
+    * Implement robust error handling for cases where the `landlordId` is missing or invalid.
+    * Avoid hardcoding `landlordId` values.
+2.  **Firestore Queries:**
+    * Always use the `landlordId` to scope Firestore queries to the current landlord's data.
+    * Avoid querying data from other landlords' subcollections.
+    * Use appropriate Firestore indexes to optimize queries.
+3.  **Cloud Functions:**
+    * Ensure that all Cloud Functions are correctly integrated with the application's data handling logic.
+    * Pass the `landlordId` to Cloud Functions when they are triggered.
+    * Handle any errors that occur during Cloud Function execution.
+    * Ensure that cloud functions respect the Firestore security rules.
+4.  **Data Entry and Updates:**
+    * Always set the `landlordId` when creating new documents.
+    * Prevent users from updating or deleting data that belongs to other landlords.
+    * Implement data validation to ensure data integrity.
+5.  **UI Adjustments:**
+    * Ensure that all data displayed in the UI is scoped to the current landlord.
+    * Provide clear and informative feedback to the user.
+    * Implement user-friendly error handling.
+    * Ensure that navigation is adjusted to the new multi-tenant structure.
+6.  **Testing:**
+    * Write tests that cover all scenarios, including multi-tenant specific scenarios.
+    * Test authentication, authorization, data access, and UI components.
+    * Test all edge cases and error scenarios.
+7.  **Version Control (Git):**
+    * Use Git for version control.
+    * Create branches for each feature or bug fix.
+    * Write clear and descriptive commit messages.
+    * Use pull requests for code reviews.
+    * Resolve merge conflicts carefully.
+8.  **Communication:**
+    * Communicate effectively with your teammates and project manager.
+    * Ask questions when you are unsure about something.
+    * Provide regular updates on your progress.
+    * Report any issues or blockers promptly.

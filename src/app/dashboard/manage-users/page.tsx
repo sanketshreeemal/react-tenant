@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
+import { useLandlordId } from "../../../lib/hooks/useLandlordId";
 import Navigation from "../../../components/Navigation";
 import { Users, Trash2, UserPlus } from "lucide-react";
 import logger from "../../../lib/logger";
@@ -21,6 +22,7 @@ interface AdminAccess {
 
 export default function ManageUsersPage() {
   const { user, loading } = useAuth();
+  const { landlordId } = useLandlordId();
   const router = useRouter();
   const [adminAccess, setAdminAccess] = useState<AdminAccess[]>([]);
   const [newRecipientName, setNewRecipientName] = useState('');
@@ -36,7 +38,7 @@ export default function ManageUsersPage() {
   useEffect(() => {
     const fetchAdminAccess = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, 'adminAccess'));
+        const querySnapshot = await getDocs(collection(db, `landlords/${landlordId}/adminAccess`));
         const recipients = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
@@ -50,10 +52,10 @@ export default function ManageUsersPage() {
       }
     };
 
-    if (user) {
+    if (user && landlordId) {
       fetchAdminAccess();
     }
-  }, [user]);
+  }, [user, landlordId]);
 
   const handleAddRecipient = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,9 +67,11 @@ export default function ManageUsersPage() {
     }
 
     try {
-      const docRef = await addDoc(collection(db, 'adminAccess'), {
+      const docRef = await addDoc(collection(db, `landlords/${landlordId}/adminAccess`), {
         name: newRecipientName,
-        email: newRecipientEmail
+        email: newRecipientEmail,
+        createdAt: new Date(),
+        updatedAt: new Date()
       });
 
       const newRecipient = {
@@ -86,7 +90,7 @@ export default function ManageUsersPage() {
 
   const handleRemoveRecipient = async (recipientId: string) => {
     try {
-      await deleteDoc(doc(db, 'adminAccess', recipientId));
+      await deleteDoc(doc(db, `landlords/${landlordId}/adminAccess`, recipientId));
       setAdminAccess(adminAccess.filter(r => r.id !== recipientId));
     } catch (error) {
       logger.error('Failed to remove admin access', {

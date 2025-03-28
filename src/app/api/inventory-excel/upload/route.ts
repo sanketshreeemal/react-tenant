@@ -13,10 +13,18 @@ export async function POST(req: NextRequest) {
     // Check if the request contains multipart/form-data
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
+    const landlordId = formData.get('landlordId') as string | null;
 
     if (!file) {
       return NextResponse.json(
         { error: 'No file uploaded' },
+        { status: 400 }
+      );
+    }
+
+    if (!landlordId) {
+      return NextResponse.json(
+        { error: 'Landlord ID is required' },
         { status: 400 }
       );
     }
@@ -131,7 +139,7 @@ export async function POST(req: NextRequest) {
         }
         
         // Check if the unit number already exists
-        const exists = await checkUnitNumberExists(unitNumber);
+        const exists = await checkUnitNumberExists(landlordId, unitNumber);
         if (exists) {
           results.failed++;
           results.errors.push(`Unit ${unitNumber}: Already exists in the database`);
@@ -141,7 +149,7 @@ export async function POST(req: NextRequest) {
         // Add the rental inventory item
         const bankDetails = bankDetailsIndex >= 0 ? String(row[bankDetailsIndex] || '').trim() : '';
         
-        await addRentalInventory({
+        await addRentalInventory(landlordId, {
           unitNumber,
           propertyType: propertyType as 'Commercial' | 'Residential',
           ownerDetails,

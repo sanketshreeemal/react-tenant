@@ -57,11 +57,14 @@ export default function Dashboard() {
       const fetchDashboardData = async () => {
         setDataLoading(true);
         try {
+          if (!user?.landlordId) {
+            throw new Error("Landlord ID not found");
+          }
           const [propertiesData, activeLeaseData, allLeasesData, paymentsData] = await Promise.all([
-            getAllRentalInventory(),
-            getAllActiveLeases(),
-            getAllLeases(),
-            getAllPayments()
+            getAllRentalInventory(user.landlordId),
+            getAllActiveLeases(user.landlordId),
+            getAllLeases(user.landlordId),
+            getAllPayments(user.landlordId)
           ]);
           
           setProperties(propertiesData);

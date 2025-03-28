@@ -4,15 +4,22 @@ import React, { createContext, useEffect, useState } from "react";
 import { signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut } from "firebase/auth";
 import { User } from "firebase/auth";
 import { auth } from "../firebase/firebase";
-import { checkAdminAccess } from "../firebase/firestoreUtils";
+import { handleAuthFlow, getUserLandlordId } from "../firebase/firestoreUtils";
 import { useRouter } from "next/navigation";
 
+// Extend the User type to include landlordId
+interface ExtendedUser extends User {
+  landlordId?: string;
+  isSandboxUser?: boolean;
+}
+
 interface AuthContextType {
-  user: User | null;
+  user: ExtendedUser | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   error: string | null;
+  isNewUser: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -21,17 +28,35 @@ const AuthContext = createContext<AuthContextType>({
   signInWithGoogle: async () => {},
   signOut: async () => {},
   error: null,
+  isNewUser: false
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<ExtendedUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isNewUser, setIsNewUser] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      setUser(user);
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          // Fetch landlordId for existing users
+          const landlordId = await getUserLandlordId(firebaseUser.email || '');
+          const extendedUser: ExtendedUser = {
+            ...firebaseUser,
+            landlordId: landlordId || undefined,
+            isSandboxUser: landlordId === 'sandbox'
+          };
+          setUser(extendedUser);
+        } catch (error) {
+          console.error("Error getting landlord ID:", error);
+          setUser(firebaseUser);
+        }
+      } else {
+        setUser(null);
+      }
       setLoading(false);
     });
 
@@ -44,19 +69,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log("Attempting to sign in with Google...");
       const result = await signInWithPopup(auth, provider);
       
-      // Check if user has admin access
-      const hasAdminAccess = await checkAdminAccess(result.user.email || '');
+      // Handle the authentication flow
+      const { landlordId, isNewUser: newUser, isSandboxUser } = await handleAuthFlow(result.user);
       
-      if (!hasAdminAccess) {
-        // Sign out the user if they don't have admin access
+      if (!landlordId) {
+        // This should not happen based on our flow, but just in case
         await firebaseSignOut(auth);
-        setError("Sorry, you are not authorized to sign in.");
+        setError("Sorry, something went wrong during sign-in. Please try again.");
         router.push('/'); // Redirect to landing page
         return;
       }
       
-      console.log("Google sign-in successful:", result.user.uid);
+      // Set user with landlordId
+      const extendedUser: ExtendedUser = {
+        ...result.user,
+        landlordId,
+        isSandboxUser
+      };
+      
+      setUser(extendedUser);
+      setIsNewUser(newUser);
       setError(null); // Clear any previous errors
+      
+      if (isSandboxUser) {
+        console.log("Sandbox user signed in:", result.user.uid, "with landlordId:", landlordId);
+        // You could show a different welcome message or tour for sandbox users
+      } else {
+        console.log("User signed in:", result.user.uid, "with landlordId:", landlordId);
+      }
+      
       router.push('/dashboard'); // Redirect to dashboard on successful auth
     } catch (error: any) {
       console.error("Error signing in with Google:", error);
@@ -82,6 +123,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await firebaseSignOut(auth);
       setError(null); // Clear any errors on sign out
+      setUser(null);
+      setIsNewUser(false);
       router.push('/'); // Redirect to landing page
     } catch (error) {
       console.error("Error signing out", error);
@@ -90,7 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut: signOutUser, error }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut: signOutUser, error, isNewUser }}>
       {children}
     </AuthContext.Provider>
   );

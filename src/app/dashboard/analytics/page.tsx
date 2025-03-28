@@ -20,6 +20,7 @@ import {
   parseISO,
   isAfter,
   isBefore,
+  addMonths,
 } from "date-fns";
 import {
   BarChart,
@@ -41,57 +42,12 @@ import {
   getAllActiveLeases,
   getAllPayments,
 } from "../../../lib/firebase/firestoreUtils";
+import { RentalInventory, Lease, RentPayment } from '@/types';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { theme } from '@/theme/theme';
 
 // Define type interfaces that match Firestore document structures
-interface RentalInventory {
-  id: string;
-  unitNumber: string;
-  propertyType: string;
-  address: string;
-  bedrooms: number;
-  bathrooms: number;
-  squareFeet: number;
-  isAvailable: boolean;
-  rentAmount: number;
-  securityDeposit: number;
-  createdAt: Date;
-  updatedAt?: Date;
-}
-
-interface Lease {
-  id: string;
-  unitId: string;
-  unitNumber: string;
-  tenantId: string;
-  tenantName: string;
-  leaseStartDate: Date;
-  leaseEndDate: Date;
-  rentAmount: number;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt?: Date;
-}
-
-interface RentPayment {
-  id: string;
-  leaseId: string;
-  unitId: string;
-  unitNumber: string;
-  tenantId: string;
-  tenantName: string;
-  paymentDate: Date;
-  amount: number;
-  paymentMethod: string;
-  paymentStatus: string;
-  notes?: string;
-  createdAt: Date;
-  updatedAt?: Date;
-  dueDate?: Date;
-  paymentType?: string;
-  collectionMethod?: string;
-}
-
-// Chart data interfaces
 interface OccupancyChartData {
   month: string;
   Occupied: number;
@@ -100,9 +56,9 @@ interface OccupancyChartData {
 
 interface RentCollectionChartData {
   month: string;
-  'Expected Rent': number;
-  'Collected Rent': number;
-  'Foregone Rent': number;
+  Expected: number;
+  Collected: number;
+  Foregone: number;
 }
 
 interface MonthlyTableData {
@@ -116,13 +72,15 @@ interface MonthlyTableData {
 }
 
 export default function AnalyticsPage() {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const landlordId = user?.landlordId;
   const [rentalInventory, setRentalInventory] = useState<RentalInventory[]>([]);
   const [leases, setLeases] = useState<Lease[]>([]);
   const [activeLeases, setActiveLeases] = useState<Lease[]>([]);
   const [rentPayments, setRentPayments] = useState<RentPayment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<"3m" | "6m" | "1y" | "all">("6m");
 
   // Analytics data
@@ -136,232 +94,207 @@ export default function AnalyticsPage() {
   const [monthlyData, setMonthlyData] = useState<MonthlyTableData[]>([]);
   const [occupancyChartData, setOccupancyChartData] = useState<OccupancyChartData[]>([]);
   const [rentCollectionChartData, setRentCollectionChartData] = useState<RentCollectionChartData[]>([]);
+  const [monthlyTableData, setMonthlyTableData] = useState<MonthlyTableData[]>([]);
+
+  // Helper function to get start date based on time range
+  const getStartDate = (range: "3m" | "6m" | "1y" | "all"): Date => {
+    const now = new Date();
+    switch (range) {
+      case "3m":
+        return subMonths(now, 3);
+      case "6m":
+        return subMonths(now, 6);
+      case "1y":
+        return subMonths(now, 12);
+      case "all":
+        return subMonths(now, 24); // Show up to 2 years of data
+      default:
+        return subMonths(now, 6);
+    }
+  };
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       router.push("/");
     }
-  }, [user, loading, router]);
+  }, [user, authLoading, router]);
 
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (landlordId) {
       try {
         // Use firestoreUtils to fetch data
-        const inventoryData = await getAllRentalInventory();
-        const allLeases = await getAllLeases();
-        const currentActiveLeases = await getAllActiveLeases();
-        const allRentPayments = await getAllPayments();
+        const inventoryData = await getAllRentalInventory(landlordId);
+        const allLeases = await getAllLeases(landlordId);
+        const currentActiveLeases = await getAllActiveLeases(landlordId);
+        const allRentPayments = await getAllPayments(landlordId);
 
-        setRentalInventory(inventoryData as unknown as RentalInventory[]);
-        setLeases(allLeases as unknown as Lease[]);
-        setActiveLeases(currentActiveLeases as unknown as Lease[]);
-        setRentPayments(allRentPayments as unknown as RentPayment[]);
-        setIsLoading(false);
-      } catch (error) {
-        console.error("Error fetching data:", error);
+        setRentalInventory(inventoryData);
+        setLeases(allLeases);
+        setActiveLeases(currentActiveLeases);
+        setRentPayments(allRentPayments);
+
+        // Calculate analytics
+        calculateAnalytics(inventoryData, currentActiveLeases, allRentPayments);
+      } catch (error: any) {
+        console.error('Error fetching data:', error);
+        setError(error.message || 'An error occurred while fetching data');
+      } finally {
         setIsLoading(false);
       }
-    };
+    }
+  }, [landlordId]);
 
-    if (user) {
+  useEffect(() => {
+    if (!isLoading) {
       fetchData();
     }
-  }, [user]);
+  }, [isLoading, fetchData]);
 
-  const generateMonthlyData = useCallback(() => {
-    const tableData: MonthlyTableData[] = [];
-    const occupancyData: OccupancyChartData[] = [];
-    const rentData: RentCollectionChartData[] = [];
-    const now = new Date();
-    let monthsToShow = 6;
-
-    switch (timeRange) {
-      case "3m":
-        monthsToShow = 3;
-        break;
-      case "6m":
-        monthsToShow = 6;
-        break;
-      case "1y":
-        monthsToShow = 12;
-        break;
-      case "all":
-        monthsToShow = 24; // Show up to 2 years of data
-        break;
-    }
-
-    // Get the total number of units - use the rental inventory directly
-    const totalUnitCount = rentalInventory.length;
-
-    for (let i = monthsToShow - 1; i >= 0; i--) {
-      const month = subMonths(now, i);
-      const monthStart = startOfMonth(month);
-      const monthEnd = endOfMonth(month);
-      const monthLabel = format(month, "MMM yyyy");
-      const monthKey = format(month, "yyyy-MM");
-
-      // Filter leases active during this month
-      const monthLeases = leases.filter(lease => {
-        const leaseStart = new Date(lease.leaseStartDate);
-        const leaseEnd = new Date(lease.leaseEndDate);
-        return (
-          (isBefore(leaseStart, monthEnd) && isAfter(leaseEnd, monthStart)) ||
-          isWithinInterval(monthStart, { start: leaseStart, end: leaseEnd }) ||
-          isWithinInterval(monthEnd, { start: leaseStart, end: leaseEnd })
-        );
-      });
-
-      // Get unique unit IDs that had active leases during this month
-      const uniqueOccupiedUnitIds = Array.from(new Set(monthLeases.map(lease => lease.unitId)));
-      const occupiedCount = uniqueOccupiedUnitIds.length;
-      const vacantCount = totalUnitCount - occupiedCount;
-      
-      // Calculate occupancy rate for this month
-      const occupancyRate = totalUnitCount > 0 ? (occupiedCount / totalUnitCount) * 100 : 0;
-
-      // Calculate rent collection for this month
-      const monthPayments = rentPayments.filter(payment => 
-        isWithinInterval(new Date(payment.paymentDate), {
-          start: monthStart,
-          end: monthEnd
-        }) && 
-        (payment.paymentType === "Rent Payment" || !payment.paymentType)
-      );
-      
-      const rentCollected = monthPayments.reduce((sum, payment) => sum + payment.amount, 0);
-
-      // Calculate expected rent for this month
-      const expectedRent = monthLeases.reduce((sum, lease) => sum + lease.rentAmount, 0);
-      
-      // Calculate foregone rent for this month
-      let monthForegoneRent = 0;
-      rentalInventory.forEach((unit) => {
-        const hasLease = monthLeases.some(lease => lease.unitId === unit.id);
-        if (!hasLease) {
-          const unitLeases = leases
-            .filter(lease => lease.unitId === unit.id)
-            .sort((a, b) => new Date(b.leaseEndDate).getTime() - new Date(a.leaseEndDate).getTime());
-          
-          if (unitLeases.length > 0) {
-            monthForegoneRent += unitLeases[0].rentAmount;
-          } else {
-            monthForegoneRent += unit.rentAmount;
-          }
-        }
-      });
-
-      // Collection rate with safeguard for division by zero
-      let collectionRate = 0;
-      if (expectedRent > 0) {
-        collectionRate = (rentCollected / expectedRent) * 100;
-      } else if (rentCollected > 0) {
-        collectionRate = 100;
-      }
-
-      // Create table data entry
-      tableData.push({
-        month: monthLabel,
-        occupiedUnits: occupiedCount,
-        vacantUnits: vacantCount,
-        occupancyRate: occupancyRate.toFixed(1),
-        expectedRent,
-        rentCollected,
-        collectionRate: collectionRate.toFixed(1),
-      });
-
-      // Create simplified occupancy chart data
-      occupancyData.push({
-        month: monthLabel,
-        Occupied: occupancyRate,
-        Vacant: 100 - occupancyRate,
-      });
-
-      // Create simplified rent collection chart data
-      rentData.push({
-        month: monthLabel,
-        'Expected Rent': expectedRent,
-        'Collected Rent': rentCollected,
-        'Foregone Rent': monthForegoneRent,
-      });
-    }
-
-    setMonthlyData(tableData);
-    setOccupancyChartData(occupancyData);
-    setRentCollectionChartData(rentData);
-  }, [rentalInventory, leases, rentPayments, timeRange]);
-
-  const calculateAnalytics = useCallback(() => {
-    if (rentalInventory.length === 0) return;
-
-    // Total units from rental inventory
-    setTotalUnits(rentalInventory.length);
+  const calculateAnalytics = useCallback((
+    inventory: RentalInventory[],
+    active: Lease[],
+    payments: RentPayment[]
+  ) => {
+    // Total units
+    const total = inventory.length;
+    setTotalUnits(total);
 
     // Occupied units (units with active leases)
-    const uniqueOccupiedUnitIds = Array.from(new Set(activeLeases.map(lease => lease.unitId)));
-    const occupiedCount = uniqueOccupiedUnitIds.length;
-    setOccupiedUnits(occupiedCount);
+    const occupied = active.length;
+    setOccupiedUnits(occupied);
 
     // Vacant units
-    const vacant = totalUnits - occupiedCount;
+    const vacant = total - occupied;
     setVacantUnits(vacant);
 
     // Occupancy rate
-    const occupancyRateValue = rentalInventory.length > 0 ? (occupiedCount / rentalInventory.length) * 100 : 0;
-    setOccupancyRate(occupancyRateValue);
+    const rate = total > 0 ? (occupied / total) * 100 : 0;
+    setOccupancyRate(rate);
 
-    // Current monthly revenue from active leases
-    const monthlyRevenue = activeLeases.reduce((sum, lease) => sum + lease.rentAmount, 0);
-    setMonthlyRevenue(monthlyRevenue || 0);
+    // Monthly revenue (sum of rent amounts from active leases)
+    const revenue = active.reduce((sum, lease) => sum + lease.rentAmount, 0);
+    setMonthlyRevenue(revenue);
 
-    // Calculate foregone rent for vacant units
-    let foregoneRentAmount = 0;
-    rentalInventory.forEach((unit) => {
-      const hasActiveLease = activeLeases.some(lease => lease.unitId === unit.id);
-      if (!hasActiveLease) {
-        const unitLeases = leases
-          .filter(lease => lease.unitId === unit.id)
-          .sort((a, b) => new Date(b.leaseEndDate).getTime() - new Date(a.leaseEndDate).getTime());
-        
-        if (unitLeases.length > 0) {
-          foregoneRentAmount += unitLeases[0].rentAmount;
-        } else {
-          foregoneRentAmount += unit.rentAmount;
-        }
-      }
-    });
-    setForegoneRent(foregoneRentAmount || 0);
+    // Foregone rent (potential rent from vacant units, using average rent)
+    const avgRent = active.length > 0
+      ? active.reduce((sum, lease) => sum + lease.rentAmount, 0) / active.length
+      : 0;
+    const foregone = vacant * avgRent;
+    setForegoneRent(foregone);
 
     // Calculate current month's rent collection rate
     const currentMonthStart = startOfMonth(new Date());
     const currentMonthEnd = endOfMonth(new Date());
-    const expectedRent = monthlyRevenue;
-    const currentMonthPayments = rentPayments.filter(payment => 
+    const expectedRent = revenue;
+    const currentMonthPayments = payments.filter(payment => 
       isWithinInterval(new Date(payment.paymentDate), {
         start: currentMonthStart,
         end: currentMonthEnd
       })
     );
-    const collectedRent = currentMonthPayments.reduce((sum, payment) => sum + payment.amount, 0);
-    
-    let collectionRate = 0;
-    if (expectedRent > 0) {
-      collectionRate = (collectedRent / expectedRent) * 100;
-    } else if (collectedRent > 0) {
-      collectionRate = 100;
-    }
+    const collectedRent = currentMonthPayments.reduce((sum, payment) => sum + payment.actualRentPaid, 0);
+    const collectionRate = expectedRent > 0 ? (collectedRent / expectedRent) * 100 : 0;
     setRentCollectionRate(collectionRate);
 
     // Generate data for charts and table
-    generateMonthlyData();
-  }, [rentalInventory, activeLeases, rentPayments, leases, totalUnits, generateMonthlyData]);
+    const monthlyData: MonthlyTableData[] = [];
+    const occupancyData: OccupancyChartData[] = [];
+    const rentCollectionData: RentCollectionChartData[] = [];
+
+    // Calculate data for each month in the selected time range
+    let startDate = getStartDate(timeRange);
+    let currentDate = new Date();
+
+    while (startDate <= currentDate) {
+      const monthStr = format(startDate, 'MMM yyyy');
+      const monthStart = startOfMonth(startDate);
+      const monthEnd = endOfMonth(startDate);
+
+      // Filter leases active in this month
+      const monthLeases = leases.filter(lease =>
+        isWithinInterval(startDate, {
+          start: new Date(lease.leaseStartDate),
+          end: new Date(lease.leaseEndDate)
+        })
+      );
+
+      // Calculate occupancy for this month
+      const monthOccupied = monthLeases.length;
+      const monthVacant = inventory.length - monthOccupied;
+      const monthOccupancyRate = inventory.length > 0
+        ? (monthOccupied / inventory.length) * 100
+        : 0;
+
+      // Calculate rent collection for this month
+      let monthExpectedRent = 0;
+      let monthCollectedRent = 0;
+      let monthForegoneRent = 0;
+
+      // Calculate expected and foregone rent
+      inventory.forEach(unit => {
+        const unitLeases = monthLeases.filter(lease => lease.unitId === unit.id);
+        if (unitLeases.length > 0) {
+          monthExpectedRent += unitLeases[0].rentAmount;
+        } else {
+          monthForegoneRent += avgRent; // Use average rent for vacant units
+        }
+      });
+
+      // Calculate collected rent
+      const monthPayments = rentPayments.filter(payment =>
+        isWithinInterval(new Date(payment.paymentDate), {
+          start: monthStart,
+          end: monthEnd
+        })
+      );
+      monthCollectedRent = monthPayments.reduce((sum, payment) => sum + payment.actualRentPaid, 0);
+
+      // Calculate collection rate
+      const monthCollectionRate = monthExpectedRent > 0
+        ? (monthCollectedRent / monthExpectedRent) * 100
+        : 0;
+
+      // Add data to arrays
+      monthlyData.push({
+        month: monthStr,
+        occupiedUnits: monthOccupied,
+        vacantUnits: monthVacant,
+        occupancyRate: `${monthOccupancyRate.toFixed(1)}%`,
+        expectedRent: monthExpectedRent,
+        rentCollected: monthCollectedRent,
+        collectionRate: `${monthCollectionRate.toFixed(1)}%`
+      });
+
+      occupancyData.push({
+        month: monthStr,
+        Occupied: monthOccupied,
+        Vacant: monthVacant
+      });
+
+      rentCollectionData.push({
+        month: monthStr,
+        Expected: monthExpectedRent,
+        Collected: monthCollectedRent,
+        Foregone: monthForegoneRent
+      });
+
+      // Move to next month
+      startDate = addMonths(startDate, 1);
+    }
+
+    // Update state with the generated data
+    setMonthlyData(monthlyData.reverse()); // Most recent first
+    setOccupancyChartData(occupancyData);
+    setRentCollectionChartData(rentCollectionData);
+  }, [timeRange, rentalInventory, leases, rentPayments]);
 
   useEffect(() => {
     if (!isLoading) {
-      calculateAnalytics();
+      calculateAnalytics(rentalInventory, activeLeases, rentPayments);
     }
-  }, [isLoading, calculateAnalytics]);
+  }, [isLoading, calculateAnalytics, rentalInventory, activeLeases, rentPayments]);
 
-  if (loading || !user) {
+  if (authLoading || !user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -569,16 +502,8 @@ export default function AnalyticsPage() {
                         <Legend />
                         <Line
                           type="monotone"
-                          dataKey="Collected Rent"
+                          dataKey="Collected"
                           stroke="#34d399"
-                          strokeWidth={2}
-                          dot={{ r: 4 }}
-                          activeDot={{ r: 6 }}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="Foregone Rent"
-                          stroke="#f43f5e"
                           strokeWidth={2}
                           dot={{ r: 4 }}
                           activeDot={{ r: 6 }}

@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useRef, ChangeEvent } from "react";
+import React, { useState, useEffect, useRef, ChangeEvent, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
+import { useLandlordId } from "@/lib/hooks/useLandlordId";
 import Navigation from "../../../components/Navigation";
 import { Lease, RentalInventory } from "@/types";
 import { 
@@ -24,7 +25,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { theme } from "@/theme/theme";
 
 export default function TenantsManagement() {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { landlordId, loading: landlordLoading } = useLandlordId();
   const router = useRouter();
   const [leases, setLeases] = useState<Lease[]>([]);
   const [rentalInventory, setRentalInventory] = useState<RentalInventory[]>([]);
@@ -51,7 +53,6 @@ export default function TenantsManagement() {
   } | null>(null);
   const [showUploadResults, setShowUploadResults] = useState(false);
   const [isInstructionsExpanded, setIsInstructionsExpanded] = useState(false);
-  
   const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error' | 'info' | 'warning', message: string } | null>(null);
   
   // Add effect to scroll to error message when it appears
@@ -102,22 +103,12 @@ export default function TenantsManagement() {
   const [additionalComments, setAdditionalComments] = useState("");
   const [isActive, setIsActive] = useState(true);
   
-  // Load data when component mounts or user changes
-  useEffect(() => {
-    if (user && !loading) {
-      console.log("User authenticated, loading tenant data...");
-      loadData();
-    }
-  }, [user, loading]);
-  
- 
-  
   // Debug useEffect to log rental inventory changes
   useEffect(() => {
     console.log("rentalInventory state updated:", rentalInventory);
   }, [rentalInventory]);
   
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
       console.log("Starting to load data for tenant page...");
@@ -127,7 +118,7 @@ export default function TenantsManagement() {
       let inventoryData: RentalInventory[] = [];
       
       try {
-        inventoryData = await getAllRentalInventory();
+        inventoryData = await getAllRentalInventory(landlordId!);
         console.log("Raw inventory data from getAllRentalInventory:", JSON.stringify(inventoryData, null, 2));
         console.log("Number of inventory items:", inventoryData.length);
         if (inventoryData.length > 0) {
@@ -143,7 +134,7 @@ export default function TenantsManagement() {
       let leasesData: Lease[] = [];
       
       try {
-        leasesData = await getAllLeases();
+        leasesData = await getAllLeases(landlordId!);
         console.log("Raw lease data from getAllLeases:", JSON.stringify(leasesData, null, 2));
         console.log("Number of leases:", leasesData.length);
         if (leasesData.length > 0) {
@@ -189,7 +180,15 @@ export default function TenantsManagement() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [landlordId, setRentalInventory, setLeases, setIsLoading]);
+  
+  // Load data when component mounts or user changes
+  useEffect(() => {
+    if (user && !authLoading && !landlordLoading && landlordId) {
+      console.log("User authenticated, loading tenant data...");
+      loadData();
+    }
+  }, [user, authLoading, landlordLoading, landlordId, loadData]);
   
   const toggleForm = (leaseId?: string) => {
     setIsFormOpen(!isFormOpen);
@@ -265,15 +264,13 @@ export default function TenantsManagement() {
     setFormError(null);
     
     // Form validation
-    if (!unitId) {
-      setFormError("Unit Number is required");
+    if (!landlordId) {
+      setFormError("Landlord ID is missing. Please log in again.");
       return;
     }
-    
-    // Check if the unit exists in the rental inventory
-    const unitExists = rentalInventory.some(unit => unit.id === unitId);
-    if (!unitExists) {
-      setFormError("The selected unit does not exist in the rental inventory. Please select a valid unit.");
+
+    if (!unitId) {
+      setFormError("Unit Number is required");
       return;
     }
     
@@ -340,7 +337,8 @@ export default function TenantsManagement() {
     }
     
     try {
-      const leaseData = {
+      const leaseData: Omit<Lease, 'id' | 'createdAt' | 'updatedAt'> = {
+        landlordId,
         unitId,
         unitNumber: unitNumber || getUnitNumber(unitId),
         tenantName: tenantName.trim(),
@@ -362,10 +360,10 @@ export default function TenantsManagement() {
       
       if (editingLeaseId) {
         // Update existing lease
-        await updateLease(editingLeaseId, leaseData);
+        await updateLease(landlordId, editingLeaseId, leaseData);
       } else {
         // Add new lease
-        await addLease(leaseData);
+        await addLease(landlordId, leaseData);
       }
       
       await loadData(); // Reload data
@@ -403,7 +401,7 @@ export default function TenantsManagement() {
       }
       
       // If we get here, we can safely update the lease status
-      await updateLease(leaseId, { isActive: !isActive });
+      await updateLease(landlordId!, leaseId, { isActive: !isActive } as Partial<Lease>);
       
       // Update the local state to reflect the change
       setLeases(
@@ -435,7 +433,7 @@ export default function TenantsManagement() {
     if (!leaseToDelete) return;
     
     try {
-      await deleteLease(leaseToDelete);
+      await deleteLease(landlordId!, leaseToDelete);
       
       // Update local state and reset UI
       setLeases(leases.filter(lease => lease.id !== leaseToDelete));
@@ -591,7 +589,7 @@ export default function TenantsManagement() {
     setIsInstructionsExpanded(!isInstructionsExpanded);
   };
   
-  if (loading || isLoading) {
+  if (authLoading || landlordLoading || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>

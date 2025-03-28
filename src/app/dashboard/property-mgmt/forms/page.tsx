@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useRef, Suspense } from "react";
+import React, { useState, useEffect, useRef, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { useLandlordId } from "@/lib/hooks/useLandlordId";
 import Navigation from "@/components/Navigation";
 import { RentalInventory, PropertyGroup } from "@/types";
 import { 
@@ -23,7 +24,8 @@ import { theme } from "@/theme/theme";
 import { Building, Home, ArrowLeft, Trash2 } from "lucide-react";
 
 function PropertyFormsContent() {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { landlordId, loading: landlordLoading } = useLandlordId();
   const router = useRouter();
   const searchParams = useSearchParams();
   const formType = searchParams.get("type"); // 'property' or 'group'
@@ -54,35 +56,9 @@ function PropertyFormsContent() {
     message: string;
   } | null>(null);
 
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push("/");
-    } else if (user) {
-      loadPropertyGroups();
-      loadInventoryData();
-    }
-  }, [user, loading, router]);
-
-  // Add effect to handle pre-populating form data when editing
-  useEffect(() => {
-    if (editId && inventoryItems.length > 0) {
-      const propertyToEdit = inventoryItems.find(item => item.id === editId);
-      if (propertyToEdit) {
-        setUnitNumber(propertyToEdit.unitNumber);
-        setPropertyType(propertyToEdit.propertyType);
-        setOwnerDetails(propertyToEdit.ownerDetails);
-        setBankDetails(propertyToEdit.bankDetails || "");
-        setSelectedPropertyGroup(propertyToEdit.groupName || "Default");
-        // Handle new fields gracefully
-        setNumberOfBedrooms(propertyToEdit.numberOfBedrooms || null);
-        setSquareFeetArea(propertyToEdit.squareFeetArea || null);
-      }
-    }
-  }, [editId, inventoryItems]);
-
-  const loadInventoryData = async () => {
+  const loadInventoryData = useCallback(async () => {
     try {
-      const data = await getAllRentalInventory();
+      const data = await getAllRentalInventory(landlordId!);
       setInventoryItems(data);
     } catch (error: any) {
       console.error("Error loading inventory data:", error);
@@ -91,11 +67,11 @@ function PropertyFormsContent() {
         message: error.message || "Failed to load inventory data"
       });
     }
-  };
+  }, [landlordId, setAlertMessage]);
 
-  const loadPropertyGroups = async () => {
+  const loadPropertyGroups = useCallback(async () => {
     try {
-      const groups = await getAllPropertyGroups();
+      const groups = await getAllPropertyGroups(landlordId!);
       setPropertyGroups(groups);
     } catch (error: any) {
       console.error("Error loading property groups:", error);
@@ -104,7 +80,30 @@ function PropertyFormsContent() {
         message: error.message || "Failed to load property groups"
       });
     }
-  };
+  }, [landlordId, setAlertMessage]);
+  
+  useEffect(() => {
+    if (!authLoading && !landlordLoading && landlordId && user) {
+      loadPropertyGroups();
+      loadInventoryData();
+    }
+  }, [user, authLoading, landlordId, landlordLoading, loadPropertyGroups, loadInventoryData]);
+
+  // Add effect to handle pre-populating form data when editing
+  useEffect(() => {
+    if (editId && inventoryItems.length > 0) {
+      const propertyToEdit = inventoryItems.find((item: RentalInventory) => item.id === editId);
+      if (propertyToEdit) {
+        setUnitNumber(propertyToEdit.unitNumber);
+        setPropertyType(propertyToEdit.propertyType);
+        setOwnerDetails(propertyToEdit.ownerDetails);
+        setBankDetails(propertyToEdit.bankDetails || "");
+        setSelectedPropertyGroup(propertyToEdit.groupName || "Default");
+        setNumberOfBedrooms(propertyToEdit.numberOfBedrooms || null);
+        setSquareFeetArea(propertyToEdit.squareFeetArea || null);
+      }
+    }
+  }, [editId, inventoryItems]);
 
   const handlePropertySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,7 +125,7 @@ function PropertyFormsContent() {
     }
     
     try {
-      const propertyData = {
+      const propertyData: Omit<RentalInventory, 'id' | 'createdAt' | 'updatedAt'> = {
         unitNumber: unitNumber.trim(),
         propertyType,
         ownerDetails: ownerDetails.trim(),
@@ -137,9 +136,9 @@ function PropertyFormsContent() {
       };
       
       if (editId) {
-        await updateRentalInventory(editId, propertyData);
+        await updateRentalInventory(landlordId!, editId, propertyData);
       } else {
-        await addRentalInventory(propertyData);
+        await addRentalInventory(landlordId!, propertyData);
       }
       router.push("/dashboard/property-mgmt");
     } catch (error: any) {
@@ -166,11 +165,11 @@ function PropertyFormsContent() {
     }
     
     try {
-      const groupData = {
+      const groupData: Omit<PropertyGroup, 'id' | 'createdAt' | 'updatedAt'> = {
         groupName: groupName.trim(),
       };
       
-      await addPropertyGroup(groupData);
+      await addPropertyGroup(landlordId!, groupData);
       router.push("/dashboard/property-mgmt");
     } catch (error: any) {
       setGroupFormError(error.message || "An error occurred while saving the property group");
@@ -190,16 +189,25 @@ function PropertyFormsContent() {
         // First update all properties in this group to "Default"
         if (propertiesInGroup.length > 0) {
           const updatePromises = propertiesInGroup.map(property => 
-            property.id ? updateRentalInventory(property.id, {
-              ...property,
-              groupName: "Default"
-            }) : Promise.resolve()
+            property.id ? updateRentalInventory(
+              landlordId!,
+              property.id,
+              {
+                unitNumber: property.unitNumber,
+                propertyType: property.propertyType,
+                ownerDetails: property.ownerDetails,
+                bankDetails: property.bankDetails,
+                groupName: "Default",
+                numberOfBedrooms: property.numberOfBedrooms,
+                squareFeetArea: property.squareFeetArea,
+              }
+            ) : Promise.resolve()
           );
           await Promise.all(updatePromises);
         }
 
         // Then delete the group
-        await deletePropertyGroup(groupId);
+        await deletePropertyGroup(landlordId!, groupId);
         await loadPropertyGroups();
         await loadInventoryData();
 
@@ -221,7 +229,7 @@ function PropertyFormsContent() {
     }
   };
 
-  if (loading) {
+  if (authLoading || landlordLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>

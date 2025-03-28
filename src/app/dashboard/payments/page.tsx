@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
+import { useLandlordId } from "../../../lib/hooks/useLandlordId";
 import Navigation from "../../../components/Navigation";
 import { collection, getDocs, query, orderBy, where, addDoc, doc, getDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase/firebase";
@@ -64,6 +65,7 @@ type SortDirection = 'asc' | 'desc';
 
 export default function RentPage() {
   const { user, loading } = useAuth();
+  const { landlordId } = useLandlordId();
   const router = useRouter();
   const [activeLeases, setActiveLeases] = useState<Lease[]>([]);
   const [rentPayments, setRentPayments] = useState<RentPayment[]>([]);
@@ -143,7 +145,7 @@ export default function RentPage() {
 
         // Fetch active leases
         const leasesQuery = query(
-          collection(db, "leases"),
+          collection(db, `landlords/${landlordId}/leases`),
           where("isActive", "==", true),
           orderBy("unitId")
         );
@@ -178,7 +180,7 @@ export default function RentPage() {
         
         // Fetch rent payments
         const paymentsQuery = query(
-          collection(db, "rent-collection"),
+          collection(db, `landlords/${landlordId}/rent-collection`),
           orderBy("createdAt", "desc")
         );
         const paymentsSnapshot = await getDocs(paymentsQuery);
@@ -222,10 +224,10 @@ export default function RentPage() {
       }
     };
 
-    if (user) {
+    if (user && landlordId) {
       fetchData();
     }
-  }, [user]);
+  }, [user, landlordId]);
 
   const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -256,7 +258,7 @@ export default function RentPage() {
 
           // Fetch additional details from rental inventory
           try {
-            const inventoryDetails = await getRentalInventoryDetails(selectedLease.unitId);
+            const inventoryDetails = await getRentalInventoryDetails(landlordId, selectedLease.unitId);
             
             if (inventoryDetails) {
               logger.info(`RentPage: Retrieved inventory details for unit ${selectedLease.unitId}`);
@@ -381,7 +383,7 @@ export default function RentPage() {
         updatedAt: new Date(),
       };
       
-      const docRef = await addDoc(collection(db, "rent-collection"), paymentData);
+      const docRef = await addDoc(collection(db, `landlords/${landlordId}/rent-collection`), paymentData);
       logger.info(`RentPage: Rent payment added successfully with ID: ${docRef.id}`);
       
       // Add to local state
@@ -469,7 +471,7 @@ export default function RentPage() {
       logger.info(`RentPage: Deleting rent payment ${paymentToDelete.id}...`);
       
       // First, get the complete payment data
-      const paymentDocRef = doc(db, "rent-collection", paymentToDelete.id);
+      const paymentDocRef = doc(db, `landlords/${landlordId}/rent-collection`, paymentToDelete.id);
       const paymentDoc = await getDoc(paymentDocRef);
       
       if (!paymentDoc.exists()) {
@@ -486,7 +488,7 @@ export default function RentPage() {
         deletedAt: new Date(),
       };
       
-      await addDoc(collection(db, "deleted-rents"), deletedRentData);
+      await addDoc(collection(db, `landlords/${landlordId}/deleted-rents`), deletedRentData);
       logger.info(`RentPage: Added payment to deleted-rents collection`);
       
       // Delete from rent-collection

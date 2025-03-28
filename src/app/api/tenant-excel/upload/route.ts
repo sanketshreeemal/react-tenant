@@ -17,10 +17,18 @@ export async function POST(req: NextRequest) {
     // Check if the request contains multipart/form-data
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
+    const landlordId = formData.get('landlordId') as string | null;
 
     if (!file) {
       return NextResponse.json(
         { error: 'No file uploaded' },
+        { status: 400 }
+      );
+    }
+
+    if (!landlordId) {
+      return NextResponse.json(
+        { error: 'Landlord ID is required' },
         { status: 400 }
       );
     }
@@ -44,7 +52,7 @@ export async function POST(req: NextRequest) {
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
     
     // Get rental inventory for validation
-    const rentalInventory = await getAllRentalInventory();
+    const rentalInventory = await getAllRentalInventory(landlordId);
     
     // Find header row (skip instruction rows)
     let headerRowIndex = -1;
@@ -283,8 +291,9 @@ export async function POST(req: NextRequest) {
         const employerName = employerNameIndex >= 0 ? String(row[employerNameIndex] || '').trim() : '';
         const permanentAddress = permanentAddressIndex >= 0 ? String(row[permanentAddressIndex] || '').trim() : '';
         
-        // Create the lease
-        const leaseData = {
+        // Add the lease
+        await addLease(landlordId, {
+          landlordId,
           unitId: unit.id || '',
           unitNumber: unit.unitNumber,
           tenantName,
@@ -292,19 +301,16 @@ export async function POST(req: NextRequest) {
           phoneNumber,
           email,
           adhaarNumber,
-          panNumber,
-          employerName,
-          permanentAddress,
+          panNumber: panNumber || undefined,
+          employerName: employerName || undefined,
+          permanentAddress: permanentAddress || undefined,
           leaseStartDate,
           leaseEndDate,
           rentAmount,
           securityDeposit,
           depositMethod: depositMethod as 'Cash' | 'Bank transfer' | 'UPI' | 'Check',
-          additionalComments: `Imported via Excel on ${new Date().toLocaleString()}`,
-          isActive: true
-        };
-        
-        await addLease(leaseData);
+          isActive: true,
+        });
         results.successful++;
         
       } catch (error: any) {

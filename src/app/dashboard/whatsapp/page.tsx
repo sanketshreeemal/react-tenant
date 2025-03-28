@@ -86,8 +86,12 @@ export default function WhatsAppPage() {
     try {
       setIsLoading(true);
       
+      if (!user?.landlordId) {
+        throw new Error("Landlord ID not found");
+      }
+
       // Fetch active leases using the firestoreUtils function
-      const firebaseLeases = await getAllActiveLeases();
+      const firebaseLeases = await getAllActiveLeases(user.landlordId);
       
       // Convert Firebase leases to our local Lease type
       const leases: Lease[] = firebaseLeases.map(lease => ({
@@ -107,7 +111,7 @@ export default function WhatsAppPage() {
       setActiveLeases(leases);
       
       // Fetch recent messages
-      const messagesCollection = collection(db, "messages");
+      const messagesCollection = collection(db, `landlords/${user.landlordId}/messages`);
       const messagesQuery = query(
         messagesCollection,
         orderBy("sentAt", "desc")

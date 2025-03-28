@@ -44,7 +44,7 @@ export default function DocumentsPage() {
         
         logger.info("Fetching tenant documents");
         
-        const tenantsData = await getDocumentsWithTimeout("tenants");
+        const tenantsData = await getDocumentsWithTimeout(user?.landlordId, "tenants");
         const tenants = tenantsData.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
           id: doc.id,
           ...doc.data()
