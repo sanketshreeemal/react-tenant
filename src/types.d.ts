@@ -102,3 +102,12 @@ export interface UserProfile {
   createdAt: Date;
   updatedAt: Date;
 }
+
+// Interface for allUsers collection - centralized user registry
+export interface AllUser {
+  uid: string; // Firebase Auth UID as document ID
+  email: string;
+  landlordId: string; // ID of the landlord this user belongs to
+  role: 'admin' | 'user' | 'tenant'; // User role within their landlord organization
+  updatedAt: Date; // Last update timestamp
+}

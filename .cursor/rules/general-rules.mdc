@@ -13,6 +13,8 @@ This document outlines the coding standards and best practices that must be foll
 
 ## General Principles
 
+1. **DO NOT DELETE CODE THAT HAS BEEN COMMENTED OUT - WILL NEED IT FOR LATER**
+
 1.  **Single Responsibility Principle (SRP):**
     * Each function and component should have a single, well-defined responsibility.
     * Avoid creating "god functions" that perform multiple unrelated tasks.

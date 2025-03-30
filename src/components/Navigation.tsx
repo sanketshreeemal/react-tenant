@@ -11,7 +11,6 @@ import {
   Home, 
   Users, 
   FileText, 
-  DollarSign, 
   BarChart2, 
   Mail, 
   MessageSquare, 

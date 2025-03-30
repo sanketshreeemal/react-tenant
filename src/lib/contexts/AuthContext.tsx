@@ -4,13 +4,13 @@ import React, { createContext, useEffect, useState } from "react";
 import { signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut } from "firebase/auth";
 import { User } from "firebase/auth";
 import { auth } from "../firebase/firebase";
-import { handleAuthFlow, getUserLandlordId } from "../firebase/firestoreUtils";
+import { handleAuthFlow } from "../firebase/firestoreUtils";
 import { useRouter } from "next/navigation";
 
 // Extend the User type to include landlordId
 interface ExtendedUser extends User {
   landlordId?: string;
-  isSandboxUser?: boolean;
+  // isSandboxUser?: boolean; // Commented out sandbox functionality
 }
 
 interface AuthContextType {
@@ -41,19 +41,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       if (firebaseUser) {
-        try {
-          // Fetch landlordId for existing users
-          const landlordId = await getUserLandlordId(firebaseUser.email || '');
-          const extendedUser: ExtendedUser = {
-            ...firebaseUser,
-            landlordId: landlordId || undefined,
-            isSandboxUser: landlordId === 'sandbox'
-          };
-          setUser(extendedUser);
-        } catch (error) {
-          console.error("Error getting landlord ID:", error);
-          setUser(firebaseUser);
-        }
+        // JUST set the basic firebase user initially.
+        // The landlordId will be added by signInWithGoogle/handleAuthFlow later.
+        setUser(firebaseUser);
+        // Optionally, you could try to fetch landlordId here IF AND ONLY IF
+        // you are sure handleAuthFlow hasn't run yet for this session,
+        // but it's cleaner to let handleAuthFlow manage it.
       } else {
         setUser(null);
       }
@@ -68,37 +61,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log("Attempting to sign in with Google...");
       const result = await signInWithPopup(auth, provider);
-      
-      // Handle the authentication flow
-      const { landlordId, isNewUser: newUser, isSandboxUser } = await handleAuthFlow(result.user);
-      
-      if (!landlordId) {
-        // This should not happen based on our flow, but just in case
-        await firebaseSignOut(auth);
-        setError("Sorry, something went wrong during sign-in. Please try again.");
-        router.push('/'); // Redirect to landing page
-        return;
-      }
-      
-      // Set user with landlordId
-      const extendedUser: ExtendedUser = {
-        ...result.user,
-        landlordId,
-        isSandboxUser
-      };
-      
-      setUser(extendedUser);
-      setIsNewUser(newUser);
-      setError(null); // Clear any previous errors
-      
-      if (isSandboxUser) {
-        console.log("Sandbox user signed in:", result.user.uid, "with landlordId:", landlordId);
-        // You could show a different welcome message or tour for sandbox users
-      } else {
+
+      try {
+        // Handle the authentication flow - THIS is where landlordId is determined
+        const { landlordId, isNewUser: newUser } = await handleAuthFlow(result.user);
+
+        if (!landlordId) {
+          // User is not authorized, sign them out and show error
+          await firebaseSignOut(auth);
+          setError("Access denied. You are not authorized to use this application.");
+          setUser(null);
+          setIsNewUser(false);
+          return; // Don't redirect, stay on the landing page
+        }
+
+        // Set user WITH landlordId - this updates the context properly
+        const extendedUser: ExtendedUser = {
+          ...result.user,
+          landlordId,
+          // isSandboxUser: false // Commented out sandbox functionality
+        };
+
+        setUser(extendedUser);
+        setIsNewUser(newUser);
+        setError(null); // Clear any previous errors
+
         console.log("User signed in:", result.user.uid, "with landlordId:", landlordId);
+
+        router.push('/dashboard'); // Only redirect to dashboard if authorized
+      } catch (authError: any) {
+        // Handle specific auth flow errors
+        console.error("Auth flow error:", authError);
+
+        // Sign out the user
+        await firebaseSignOut(auth);
+        setUser(null);
+        setIsNewUser(false);
+
+        // Set specific error message based on error code
+        if (authError.code === 'auth/unauthorized') {
+          setError(authError.message || "You do not have permission to access this application.");
+        } else if (authError.code === 'auth/no-email') {
+          setError("No email address associated with this account. Please use an account with a valid email.");
+        } else if (authError.code === 'auth/check-failed') {
+          setError("Unable to verify your authorization. Please try again later.");
+        } else {
+          setError(authError.message || "An error occurred during authentication. Please try again.");
+        }
+        return; // Stay on landing page
       }
-      
-      router.push('/dashboard'); // Redirect to dashboard on successful auth
     } catch (error: any) {
       console.error("Error signing in with Google:", error);
       console.error("Error code:", error.code);
@@ -114,6 +125,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setError("An error occurred during sign-in. Please try again.");
       }
+      
+      // Ensure user is signed out on error
+      await firebaseSignOut(auth);
+      setUser(null);
+      setIsNewUser(false);
       
       throw error; // Re-throw to allow handling in components
     }

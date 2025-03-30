@@ -58,7 +58,7 @@ const initDriveClient = (accessToken: string) => {
     
     return google.drive({
       version: 'v3',
-      auth: oauth2Client
+      auth: oauth2Client as any
     });
   } catch (error: any) {
     logger.apiError(error as Error, 'Google Drive', 'initDriveClient', { accessToken: '***' });

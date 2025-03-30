@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../lib/hooks/useAuth";
+import { useLandlordId } from "../../lib/hooks/useLandlordId";
 import Navigation from "../../components/Navigation";
 import Link from "next/link";
 import { 
@@ -27,6 +28,7 @@ import { Timestamp } from 'firebase/firestore';
 export default function Dashboard() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const { landlordId } = useLandlordId();
   const [properties, setProperties] = useState<RentalInventory[]>([]);
   const [activeLeases, setActiveLeases] = useState<Lease[]>([]);
   const [allLeases, setAllLeases] = useState<Lease[]>([]);
@@ -53,35 +55,47 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (user) {
+    if (user && landlordId) {
       const fetchDashboardData = async () => {
         setDataLoading(true);
+        setError(null); // Clear previous errors on new fetch
         try {
-          if (!user?.landlordId) {
-            throw new Error("Landlord ID not found");
-          }
           const [propertiesData, activeLeaseData, allLeasesData, paymentsData] = await Promise.all([
-            getAllRentalInventory(user.landlordId),
-            getAllActiveLeases(user.landlordId),
-            getAllLeases(user.landlordId),
-            getAllPayments(user.landlordId)
+            getAllRentalInventory(landlordId),
+            getAllActiveLeases(landlordId),
+            getAllLeases(landlordId),
+            getAllPayments(landlordId)
           ]);
-          
+
           setProperties(propertiesData);
           setActiveLeases(activeLeaseData);
           setAllLeases(allLeasesData);
           setRentPayments(paymentsData);
         } catch (err) {
           console.error("Error fetching dashboard data:", err);
-          setError("Failed to load dashboard data. Please try again later.");
+          if (err instanceof Error && err.message.includes("permission")) {
+             setError("Permission denied fetching data. Please check Firestore rules or contact support.");
+          } else {
+             setError("Failed to load dashboard data. Please try again later.");
+          }
         } finally {
           setDataLoading(false);
         }
       };
 
       fetchDashboardData();
+    } else if (!loading && user && !landlordId) {
+       setDataLoading(true); // Keep showing loading until landlordId arrives
+       setError(null);
+    } else if (!loading && !user) {
+       setDataLoading(false);
+       setError(null);
+       setProperties([]);
+       setActiveLeases([]);
+       setAllLeases([]);
+       setRentPayments([]);
     }
-  }, [user]);
+  }, [user, landlordId, loading]);
 
   // Calculate dashboard metrics
   const calculateDashboardMetrics = () => {

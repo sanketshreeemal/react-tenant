@@ -5,8 +5,8 @@ import { db } from '../firebase/firebase';
 
 /**
  * A hook that provides access to the current landlordId from the auth context
- * @returns {{landlordId: string | null, isLoading: boolean, isSandboxUser: boolean}}
- * An object containing the landlordId, loading state, and whether the user is a sandbox user
+ * @returns {{landlordId: string | null, isLoading: boolean}}
+ * An object containing the landlordId and loading state
  */
 export const useLandlordId = () => {
   const { user } = useAuth();
@@ -24,7 +24,8 @@ export const useLandlordId = () => {
       try {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
-          setLandlordId(userDoc.data().landlordId);
+          const userData = userDoc.data();
+          setLandlordId(userData.landlordId);
         } else {
           setError('User document not found');
         }
