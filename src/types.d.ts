@@ -96,6 +96,7 @@ export interface Landlord {
 // Extended User interface with landlordId
 export interface UserProfile {
   id: string;
+  name?: string;
   email: string;
   landlordId: string;
   role: 'admin' | 'user' | 'tenant';
@@ -106,6 +107,7 @@ export interface UserProfile {
 // Interface for allUsers collection - centralized user registry
 export interface AllUser {
   uid: string; // Firebase Auth UID as document ID
+  name?: string;
   email: string;
   landlordId: string; // ID of the landlord this user belongs to
   role: 'admin' | 'user' | 'tenant'; // User role within their landlord organization

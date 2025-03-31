@@ -26,7 +26,7 @@ import { theme } from "@/theme/theme";
 
 export default function TenantsManagement() {
   const { user, loading: authLoading } = useAuth();
-  const { landlordId, loading: landlordLoading } = useLandlordId();
+  const { landlordId, loading: landlordLoading, error: landlordIdError } = useLandlordId();
   const router = useRouter();
   const [leases, setLeases] = useState<Lease[]>([]);
   const [rentalInventory, setRentalInventory] = useState<RentalInventory[]>([]);
@@ -109,6 +109,7 @@ export default function TenantsManagement() {
   }, [rentalInventory]);
   
   const loadData = useCallback(async () => {
+    if (!landlordId) return;
     try {
       setIsLoading(true);
       console.log("Starting to load data for tenant page...");
@@ -118,7 +119,7 @@ export default function TenantsManagement() {
       let inventoryData: RentalInventory[] = [];
       
       try {
-        inventoryData = await getAllRentalInventory(landlordId!);
+        inventoryData = await getAllRentalInventory(landlordId);
         console.log("Raw inventory data from getAllRentalInventory:", JSON.stringify(inventoryData, null, 2));
         console.log("Number of inventory items:", inventoryData.length);
         if (inventoryData.length > 0) {
@@ -134,7 +135,7 @@ export default function TenantsManagement() {
       let leasesData: Lease[] = [];
       
       try {
-        leasesData = await getAllLeases(landlordId!);
+        leasesData = await getAllLeases(landlordId);
         console.log("Raw lease data from getAllLeases:", JSON.stringify(leasesData, null, 2));
         console.log("Number of leases:", leasesData.length);
         if (leasesData.length > 0) {
@@ -177,6 +178,7 @@ export default function TenantsManagement() {
       setLeases(leasesData || []);
     } catch (error: any) {
       console.error("Error loading data:", error.message || error);
+      setAlertMessage({ type: 'error', message: 'Failed to load tenant and inventory data.' });
     } finally {
       setIsLoading(false);
     }
@@ -187,8 +189,13 @@ export default function TenantsManagement() {
     if (user && !authLoading && !landlordLoading && landlordId) {
       console.log("User authenticated, loading tenant data...");
       loadData();
+    } else if (landlordIdError) {
+      setAlertMessage({ type: 'error', message: `Failed to load landlord details: ${landlordIdError}` });
+      setIsLoading(false);
+    } else if (!authLoading && !user) {
+      router.push("/");
     }
-  }, [user, authLoading, landlordLoading, landlordId, loadData]);
+  }, [user, authLoading, landlordLoading, landlordId, landlordIdError, loadData, router]);
   
   const toggleForm = (leaseId?: string) => {
     setIsFormOpen(!isFormOpen);
@@ -375,6 +382,10 @@ export default function TenantsManagement() {
   };
 
   const handleToggleLeaseStatus = async (leaseId: string, isActive: boolean) => {
+    if (!landlordId) {
+      setAlertMessage({ type: 'error', message: 'Cannot update status: Landlord ID missing.' });
+      return;
+    }
     try {
       // If we're activating the lease, we need to make sure there's no other active lease
       if (!isActive) {
@@ -401,7 +412,7 @@ export default function TenantsManagement() {
       }
       
       // If we get here, we can safely update the lease status
-      await updateLease(landlordId!, leaseId, { isActive: !isActive } as Partial<Lease>);
+      await updateLease(landlordId, leaseId, { isActive: !isActive } as Partial<Lease>);
       
       // Update the local state to reflect the change
       setLeases(
@@ -431,9 +442,16 @@ export default function TenantsManagement() {
 
   const confirmDeleteLease = async () => {
     if (!leaseToDelete) return;
+
+    if (!landlordId) {
+       setAlertMessage({ type: 'error', message: 'Cannot delete lease: Landlord ID missing.' });
+       setShowDeleteConfirmation(false);
+       setLeaseToDelete(null);
+       return;
+    }
     
     try {
-      await deleteLease(landlordId!, leaseToDelete);
+      await deleteLease(landlordId, leaseToDelete);
       
       // Update local state and reset UI
       setLeases(leases.filter(lease => lease.id !== leaseToDelete));
@@ -592,12 +610,12 @@ export default function TenantsManagement() {
   if (authLoading || landlordLoading || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
       </div>
     );
   }
   
-  if (!user) {
+  if (!user || !landlordId) {
     return null;
   }
   

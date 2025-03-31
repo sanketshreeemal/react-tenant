@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, ChangeEvent, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
+import { useLandlordId } from "../../../lib/hooks/useLandlordId";
 import Navigation from "../../../components/Navigation";
 import { RentalInventory, PropertyGroup } from "@/types";
 import { 
@@ -24,9 +25,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { theme } from "@/theme/theme";
+import { PanelContainer } from "@/components/ui/panel";
 
 export default function RentalInventoryManagement() {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { landlordId, loading: landlordIdLoading, error: landlordIdError } = useLandlordId();
   const router = useRouter();
   const [inventoryItems, setInventoryItems] = useState<RentalInventory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,13 +59,18 @@ export default function RentalInventoryManagement() {
   const [propertyGroups, setPropertyGroups] = useState<PropertyGroup[]>([]);
   
   const loadInventoryData = useCallback(async () => {
+    if (!landlordId) return;
+
     try {
       setIsLoading(true);
-      if (!user?.landlordId) {
-        throw new Error("Landlord ID not found");
+      const data = await getAllRentalInventory(landlordId);
+      console.log("Raw inventory data from getAllRentalInventory:", data);
+      console.log("Number of inventory items:", data.length);
+      if (data.length > 0) {
+        console.log("Sample inventory item:", data[0]);
       }
-      const data = await getAllRentalInventory(user.landlordId);
       setInventoryItems(data);
+      console.log("Rental inventory data fetched:", data);
     } catch (error: any) {
       console.error("Error loading inventory data:", error);
       setAlertMessage({
@@ -72,14 +80,13 @@ export default function RentalInventoryManagement() {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.landlordId]);
+  }, [landlordId]);
 
   const loadPropertyGroups = useCallback(async () => {
+    if (!landlordId) return;
+
     try {
-      if (!user?.landlordId) {
-        throw new Error("Landlord ID not found");
-      }
-      const groups = await getAllPropertyGroups(user.landlordId);
+      const groups = await getAllPropertyGroups(landlordId);
       setPropertyGroups(groups);
     } catch (error: any) {
       console.error("Error loading property groups:", error);
@@ -88,16 +95,21 @@ export default function RentalInventoryManagement() {
         message: error.message || "Failed to load property groups"
       });
     }
-  }, [user?.landlordId]);
+  }, [landlordId]);
   
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       router.push("/");
-    } else if (user) {
+    } else if (user && landlordId && !landlordIdLoading) {
       loadInventoryData();
       loadPropertyGroups();
+    } else if (landlordIdError) {
+       setAlertMessage({ type: 'error', message: `Failed to get landlord ID: ${landlordIdError}` });
+       setIsLoading(false);
+    } else {
+       setIsLoading(true);
     }
-  }, [user, loading, router, loadInventoryData, loadPropertyGroups]);
+  }, [user, authLoading, landlordId, landlordIdLoading, landlordIdError, router, loadInventoryData, loadPropertyGroups]);
 
   // Hide upload results after 10 seconds
   useEffect(() => {
@@ -113,11 +125,11 @@ export default function RentalInventoryManagement() {
   const handleDelete = async (itemId: string) => {
     if (confirm("Are you sure you want to delete this inventory item? This action cannot be undone.")) {
       try {
-        if (!user?.landlordId) {
+        if (!landlordId) {
           throw new Error("Landlord ID not found");
         }
-        await deleteRentalInventory(user.landlordId, itemId);
-        await loadInventoryData(); // Reload data
+        await deleteRentalInventory(landlordId, itemId);
+        await loadInventoryData();
         setAlertMessage({
           type: 'success',
           message: 'Inventory item deleted successfully'
@@ -155,12 +167,16 @@ export default function RentalInventoryManagement() {
       setIsUploading(true);
       setUploadResults(null);
       
+      if (!landlordId) {
+          throw new Error("Landlord ID not found for upload");
+      }
+
       const result = await uploadInventoryExcel(file);
       setUploadResults(result);
       setShowUploadResults(true);
       
       if (result.success && result.successful && result.successful > 0) {
-        await loadInventoryData(); // Reload data if any items were added successfully
+        await loadInventoryData();
       }
     } catch (error: any) {
       setUploadResults({
@@ -403,17 +419,46 @@ export default function RentalInventoryManagement() {
     }
   };
 
-  if (loading || isLoading) {
+  if (authLoading || landlordIdLoading || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
       </div>
     );
   }
   
-  if (!user) {
+  if (!user || !landlordId) {
     return null;
   }
+
+  // Group inventory items by property group name
+  const groupedInventory = inventoryItems.reduce((acc, item) => {
+    const groupName = item.groupName || "Default";
+    if (!acc[groupName]) {
+      acc[groupName] = [];
+    }
+    acc[groupName].push(item);
+    return acc;
+  }, {} as Record<string, RentalInventory[]>);
+
+  // Ensure property groups from state are included, even if empty
+  propertyGroups.forEach(group => {
+    if (!groupedInventory[group.groupName]) {
+      groupedInventory[group.groupName] = [];
+    }
+  });
+
+  // Add "Default" explicitly if not present and there are ungrouped items
+  if (inventoryItems.some(item => !item.groupName) && !groupedInventory["Default"]) {
+    groupedInventory["Default"] = inventoryItems.filter(item => !item.groupName);
+  }
+
+  // Sort group names by number of properties (descending) and keep Default last
+  const sortedGroupNames = Object.keys(groupedInventory).sort((a, b) => {
+    if (a === "Default") return 1;
+    if (b === "Default") return -1;
+    return groupedInventory[b].length - groupedInventory[a].length;
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -570,58 +615,26 @@ export default function RentalInventoryManagement() {
           </CardContent>
         </Card>
 
-        {/* Property Group Carousel */}
-        {propertyGroups.length > 0 && (
-          <div className="mb-6 overflow-hidden">
-            {/* Get active groups - those with at least one property */}
-            {(() => {
-              const activeGroups = [
-                // Default group if it has properties
-                ...(inventoryItems.some(item => !item.groupName || item.groupName === "Default") ? [{
-                  id: 'default',
-                  groupName: 'Default',
-                  properties: inventoryItems.filter(item => !item.groupName || item.groupName === "Default")
-                }] : []),
-                // Other groups with properties
-                ...propertyGroups
-                  .map(group => ({
-                    id: group.id,
-                    groupName: group.groupName,
-                    properties: inventoryItems.filter(item => item.groupName === group.groupName)
-                  }))
-                  .filter(group => group.properties.length > 0)
-              ].sort((a, b) => b.properties.length - a.properties.length);
+        {/* Property Group Carousel using PanelContainer */}
+        {sortedGroupNames.length > 1 && (
+          <PanelContainer className="mb-6 gap-4">
+            {sortedGroupNames.map((groupName) => (
+              <PropertyGroupPanel
+                key={groupName}
+                groupName={groupName}
+                properties={groupedInventory[groupName]}
+              />
+            ))}
+          </PanelContainer>
+        )}
 
-              // Only render if there are active groups
-              if (activeGroups.length === 0) return null;
-
-              return (
-                <>
-                  <h3 className="text-lg font-medium mb-4" style={{ color: theme.colors.textPrimary }}>
-                    Active Property Groups
-                  </h3>
-                  
-                  {isLoading ? (
-                    <div className="flex items-center justify-center h-56">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    </div>
-                  ) : (
-                    <div 
-                      className="flex overflow-x-auto snap-x snap-mandatory pb-4 hide-scrollbar gap-4"
-                      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                    >
-                      {activeGroups.map(group => (
-                        <PropertyGroupPanel 
-                          key={group.id}
-                          groupName={group.groupName}
-                          properties={group.properties}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </>
-              );
-            })()}
+        {/* If only one group, show it without the carousel */}
+        {sortedGroupNames.length === 1 && (
+          <div className="mb-6">
+            <PropertyGroupPanel
+              groupName={sortedGroupNames[0]}
+              properties={groupedInventory[sortedGroupNames[0]]}
+            />
           </div>
         )}
 
@@ -724,10 +737,10 @@ export default function RentalInventoryManagement() {
                                   )}
                                 </td>
                                 <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center">
-                                  {item.propertyType === "Commercial" && item.squareFeetArea ? (
-                                    <span 
+                                  {item.squareFeetArea && item.squareFeetArea > 0 ? (
+                                    <span
                                       className="text-xs px-2 py-1 rounded-full"
-                                      style={{ 
+                                      style={{
                                         backgroundColor: theme.colors.area.bg,
                                         color: theme.colors.area.text
                                       }}

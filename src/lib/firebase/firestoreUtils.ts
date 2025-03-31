@@ -3,7 +3,7 @@
 import { db } from './firebase'; // Assuming you have firebase.ts to initialize Firebase
 import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, addDoc, getDocs, query, where, orderBy, DocumentData, QuerySnapshot, Timestamp, serverTimestamp } from 'firebase/firestore';
 import { User } from 'firebase/auth';
-import { Tenant, Lease, RentPayment, RentalInventory, PropertyGroup } from '@/types'; // Import our TypeScript interfaces
+import { Tenant, Lease, RentPayment, RentalInventory, PropertyGroup, UserProfile, AllUser } from '@/types'; // Import our TypeScript interfaces
 import logger from '@/lib/logger'; // Assuming you have a logger utility
 
 // Add this at the top of the file after imports
@@ -1167,12 +1167,13 @@ export const checkAllUsersCollection = async (email: string): Promise<{uid: stri
 };
 
 /**
- * Adds or updates a user in the allUsers collection.
- * @param {string} uid - The Firebase Authentication UID of the user.
- * @param {string} email - The email address of the user.
- * @param {string} landlordId - The ID of the landlord the user belongs to.
- * @param {string} role - The role of the user.
- * @returns {Promise<void>} A promise that resolves when the user is added/updated.
+ * Updates or creates the document in the 'allUsers' collection.
+ * Stores UID -> landlordId and role mapping.
+ * @param {string} uid - Firebase Auth UID.
+ * @param {string} email - User's original case email.
+ * @param {string} landlordId - Associated landlord ID.
+ * @param {'admin' | 'user' | 'tenant'} [role='admin'] - User's role.
+ * @returns {Promise<void>}
  */
 export const updateAllUsersCollection = async (
   uid: string,
@@ -1181,31 +1182,38 @@ export const updateAllUsersCollection = async (
   role: 'admin' | 'user' | 'tenant' = 'admin'
 ): Promise<void> => {
   try {
-    logger.info(`firestoreUtils: Updating allUsers collection for ${email}...`);
-    const userDocRef = doc(db, 'allUsers', uid);
-    
-    // Update or create the user document in allUsers collection
-    await setDoc(userDocRef, {
-      email,
-      landlordId,
-      role,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-    
-    logger.info(`firestoreUtils: User document in allUsers collection updated for ${email}.`);
+    const validLandlordId = validateLandlordId(landlordId);
+    if (!uid) throw new Error('UID is required to update allUsers collection');
+    if (!email) throw new Error('Email is required to update allUsers collection');
+
+    logger.info(`firestoreUtils: Updating allUsers collection for UID ${uid}`);
+
+    const allUsersDocRef = doc(db, 'allUsers', uid);
+    // Prepare data specifically for Firestore write, allowing FieldValue
+    const userDataForWrite: { [key: string]: any } = { 
+      email: email, 
+      landlordId: validLandlordId,
+      role: role,
+      updatedAt: serverTimestamp() // Use serverTimestamp directly here
+    };
+
+    // Use setDoc with merge: true to create or update
+    await setDoc(allUsersDocRef, userDataForWrite, { merge: true });
+
+    logger.info(`firestoreUtils: Successfully updated allUsers collection for UID ${uid}`);
   } catch (error: any) {
-    logger.error(`firestoreUtils: Error updating allUsers collection for ${email}: ${error.message}`);
-    throw new Error('Failed to update allUsers collection.');
+    logger.error(`firestoreUtils: Error updating allUsers collection for UID ${uid}: ${error.message}`);
+    throw new Error(error.message || 'Failed to update allUsers collection.');
   }
 };
 
 /**
- * Creates a user document in the users collection.
- * @param {string} uid - The Firebase Authentication UID of the user.
- * @param {string} email - The email address of the user.
- * @param {string} landlordId - The ID of the landlord the user belongs to.
- * @param {string} role - The role of the user (default: 'admin').
- * @returns {Promise<void>} A promise that resolves when the user document is created.
+ * Creates or updates the user document in the 'users' collection AND updates the 'allUsers' collection.
+ * @param {string} uid - Firebase Auth UID.
+ * @param {string} email - User's original case email.
+ * @param {string} landlordId - Associated landlord ID.
+ * @param {'admin' | 'user' | 'tenant'} [role='admin'] - User's role.
+ * @returns {Promise<void>}
  */
 export const createUserDocument = async (
   uid: string,
@@ -1214,84 +1222,96 @@ export const createUserDocument = async (
   role: 'admin' | 'user' | 'tenant' = 'admin'
 ): Promise<void> => {
   try {
-    logger.info(`firestoreUtils: Creating user document for ${email}...`);
+    const validLandlordId = validateLandlordId(landlordId);
+    if (!uid) throw new Error('UID is required to create user document');
+    if (!email) throw new Error('Email is required to create user document');
+
+    logger.info(`firestoreUtils: Creating/updating user document for UID ${uid}`);
+
     const userDocRef = doc(db, 'users', uid);
-    
-    // Check if the user document already exists
-    const userDocSnap = await getDoc(userDocRef);
-    
-    if (userDocSnap.exists()) {
-      logger.info(`firestoreUtils: User document for ${email} already exists.`);
-    } else {
-      // Create a new user document
-      await setDoc(userDocRef, {
-        email,
-        landlordId,
-        role,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      
-      logger.info(`firestoreUtils: User document created for ${email}.`);
+    // Prepare data specifically for Firestore write, allowing FieldValue
+    const userDataForWrite: { [key: string]: any } = { 
+      email: email, 
+      landlordId: validLandlordId,
+      role: role,
+      updatedAt: serverTimestamp() // Use serverTimestamp directly here
+    };
+
+    // Check if document exists to set createdAt only once
+    const docSnap = await getDoc(userDocRef);
+    if (!docSnap.exists()) {
+      userDataForWrite.createdAt = serverTimestamp(); // Use serverTimestamp here too
     }
-    
-    // Always update the allUsers collection
+
+    // Use setDoc with merge: true to create or update
+    await setDoc(userDocRef, userDataForWrite, { merge: true });
+
+    // **Crucially, update the allUsers collection as well**
     await updateAllUsersCollection(uid, email, landlordId, role);
-    
+
+    logger.info(`firestoreUtils: Successfully created/updated user document for UID ${uid}`);
   } catch (error: any) {
-    logger.error(`firestoreUtils: Error creating user document for ${email}: ${error.message}`);
-    throw new Error('Failed to create user document.');
+    logger.error(`firestoreUtils: Error creating/updating user document for UID ${uid}: ${error.message}`);
+    throw new Error(error.message || 'Failed to create/update user document.');
   }
 };
 
 /**
- * Adds a user invitation to the 'invitations' collection.
- * @param {string} landlordId - The ID of the landlord sending the invitation.
- * @param {string} email - The email address of the user being invited.
- * @param {string} role - The role assigned to the invited user (default: 'user').
+ * Creates an invitation document in the 'invitations' collection.
+ * @param {string} landlordId - The ID of the inviting landlord.
+ * @param {string} email - The email address of the invitee.
+ * @param {'admin' | 'user' | 'tenant'} [role='user'] - The role assigned to the invitee.
+ * @param {string} [name] - Optional name of the invitee.
  * @returns {Promise<void>}
- * @throws {Error} If landlordId or email is missing, or if there is an error adding the invitation.
+ * @throws {Error} If landlordId is missing or if there is an error creating the invitation.
  */
 export const inviteUser = async (
   landlordId: string | undefined | null,
   email: string,
-  role: 'admin' | 'user' | 'tenant' = 'user' // Default role can be adjusted
+  role: 'admin' | 'user' | 'tenant' = 'user', 
+  name?: string 
 ): Promise<void> => {
-  const validLandlordId = validateLandlordId(landlordId);
-  if (!email) {
-    throw new Error('Email is required for invitation.');
-  }
   try {
-    logger.info(`firestoreUtils: Inviting user ${email} for landlord ${validLandlordId}...`);
-    const invitationsCollection = collection(db, 'invitations');
-    const lowercaseEmail = email.toLowerCase(); // Store and query email lowercase for consistency
+    const validLandlordId = validateLandlordId(landlordId);
+    const lowerCaseEmail = email.trim().toLowerCase();
 
-    // Check if an invitation already exists for this email
-    const q = query(invitationsCollection, where('email', '==', lowercaseEmail));
-    const existingInvites = await getDocs(q);
-    if (!existingInvites.empty) {
-      // Overwrite/update the existing invitation
-      logger.warn(`firestoreUtils: Invitation for ${email} already exists. Updating.`);
-      const existingInviteId = existingInvites.docs[0].id;
-      await setDoc(doc(db, 'invitations', existingInviteId), {
-        email: lowercaseEmail,
-        landlordId: validLandlordId,
-        role,
-        invitedAt: serverTimestamp(),
-      }, { merge: true });
-    } else {
-      // Add new invitation
-      await addDoc(invitationsCollection, {
-        email: lowercaseEmail,
-        landlordId: validLandlordId,
-        role,
-        invitedAt: serverTimestamp(),
-      });
+    if (!lowerCaseEmail) {
+      throw new Error('Email address cannot be empty.');
     }
-    logger.info(`firestoreUtils: User ${email} invited successfully by landlord ${validLandlordId}.`);
+    if (!/\S+@\S+\.\S+/.test(lowerCaseEmail)) {
+      throw new Error('Invalid email address format.');
+    }
+
+    logger.info(`firestoreUtils: Creating invitation for ${lowerCaseEmail} to landlord ${validLandlordId} with role ${role}${name ? ' and name ' + name : ''}`);
+
+    const invitationsCollection = collection(db, 'invitations');
+
+    // Consider querying first if you want to prevent duplicate pending invitations
+    // const q = query(invitationsCollection, where('email', '==', lowerCaseEmail), where('landlordId', '==', validLandlordId));
+    // const existingInvites = await getDocs(q);
+    // if (!existingInvites.empty) {
+    //   logger.warn(`firestoreUtils: Invitation already exists for ${lowerCaseEmail} and landlord ${validLandlordId}.`);
+    //   // Decide how to handle: throw error, update existing, or silently ignore?
+    //   // For now, let's allow overwriting/creating multiple, cleanup happens on accept.
+    // }
+
+    const invitationData: any = { // Use any temporarily for flexibility
+      email: lowerCaseEmail, // Store email in lowercase for case-insensitive lookup
+      landlordId: validLandlordId,
+      role: role,
+      invitedAt: serverTimestamp()
+    };
+
+    if (name) {
+      invitationData.name = name.trim(); // Store the name if provided
+    }
+
+    await addDoc(invitationsCollection, invitationData);
+
+    logger.info(`firestoreUtils: Invitation created successfully for ${lowerCaseEmail}.`);
   } catch (error: any) {
-    logger.error(`firestoreUtils: Error inviting user ${email}: ${error.message}`);
-    throw new Error(error.message || 'Failed to invite user.');
+    logger.error(`firestoreUtils: Error creating invitation for ${email}: ${error.message}`);
+    throw new Error(error.message || 'Failed to create invitation.');
   }
 };
 
@@ -1364,179 +1384,193 @@ export const removeUserAccess = async (emailToRemove: string): Promise<void> => 
 };
 
 /**
- * Handles the authentication flow for a user.
- * Checks if the user is an approved landlord, in allUsers collection, or needs to be created.
- * @param {User} user - The Firebase Authentication user object.
- * @returns {Promise<{landlordId: string | null, isNewUser: boolean}>}
- *          The landlordId of the user and whether they are a new user.
+ * Handles the core authentication flow after Google Sign-In.
+ * Checks invitations, approved landlords, and existing users to determine landlordId and role.
+ * Creates/updates user records in 'users' and 'allUsers' collections.
+ * @param {User} user - The Firebase Auth User object.
+ * @returns {Promise<{ landlordId: string | null, isNewUser: boolean }>} The determined landlordId and whether the user is new.
+ * @throws {AuthError} If user has no email or is unauthorized.
  */
 export const handleAuthFlow = async (user: User): Promise<{
   landlordId: string | null;
   isNewUser: boolean;
 }> => {
-  try {
-    if (!user.email) {
-      logger.error('firestoreUtils: User has no email address');
-      throw new AuthError('No email address associated with this account.', 'auth/no-email');
+  if (!user || !user.email) {
+    logger.error('handleAuthFlow: User object or email is missing.');
+    throw new AuthError('Authentication failed: User email not available.', 'auth/no-email');
+  }
+
+  const userEmail = user.email;
+  const userEmailLower = userEmail.toLowerCase();
+  const uid = user.uid;
+
+  logger.info(`handleAuthFlow: Starting auth flow for ${userEmail} (UID: ${uid})`);
+
+  // 1. Check Invitations (using userEmailLower)
+  logger.debug(`handleAuthFlow: Checking invitations for ${userEmailLower}`);
+  const invitation = await getInvitation(userEmailLower);
+  if (invitation) {
+    logger.info(`handleAuthFlow: Found invitation for ${userEmailLower}. Landlord: ${invitation.landlordId}, Role: ${invitation.role}`);
+    await createUserDocument(uid, userEmail, invitation.landlordId, invitation.role);
+    await deleteInvitation(invitation.id); // Consume invitation
+    logger.info(`handleAuthFlow: Invitation processed. Returning landlordId: ${invitation.landlordId}`);
+    return { landlordId: invitation.landlordId, isNewUser: true };
+  }
+
+  // 2. Check Approved Landlord (using original case userEmail)
+  logger.debug(`handleAuthFlow: No invitation found. Checking approved landlords for ${userEmail}`);
+  const isApproved = await isApprovedLandlord(userEmail);
+  if (isApproved) {
+    logger.info(`handleAuthFlow: Email ${userEmail} is approved to create/access a landlord account.`);
+    // Check if user already exists in 'users' collection
+    const existingUserDoc = await getUserDoc(uid);
+    if (existingUserDoc) {
+      logger.info(`handleAuthFlow: Existing user found in 'users' collection (UID: ${uid}). Updating allUsers.`);
+      await updateAllUsersCollection(uid, userEmail, existingUserDoc.landlordId, existingUserDoc.role || 'admin');
+      return { landlordId: existingUserDoc.landlordId, isNewUser: false };
+    } else {
+      logger.info(`handleAuthFlow: No existing user found for UID ${uid}. Creating new landlord and user (admin).`);
+      const landlordName = user.displayName || userEmail;
+      const newLandlordId = await createLandlord(userEmail, landlordName);
+      await createUserDocument(uid, userEmail, newLandlordId, 'admin'); 
+      return { landlordId: newLandlordId, isNewUser: true };
     }
-    const userEmailLower = user.email.toLowerCase(); // Use lowercase email consistently
+  }
 
-    logger.info(`firestoreUtils: Handling auth flow for ${userEmailLower}...`);
+  // 3. Check allUsers Collection (using original case userEmail)
+  logger.debug(`handleAuthFlow: Not approved landlord. Checking allUsers collection for ${userEmail}`);
+  const allUserData = await checkAllUsersCollection(userEmail);
+  if (allUserData) {
+    logger.info(`handleAuthFlow: User found in allUsers collection for email ${userEmail}. Ensuring user doc exists.`);
+    const userRole = allUserData.role as 'admin' | 'user' | 'tenant'; 
+    await createUserDocument(allUserData.uid, userEmail, allUserData.landlordId, userRole);
+    return { landlordId: allUserData.landlordId, isNewUser: false };
+  }
 
-    try {
-      // Step 0: Check for Invitations
-      logger.info(`firestoreUtils: Checking invitations for ${userEmailLower}...`);
-      const invitationsCollection = collection(db, 'invitations');
-      const invitationQuery = query(invitationsCollection, where('email', '==', userEmailLower));
-      const invitationSnapshot = await getDocs(invitationQuery);
+  // 4. Check users Collection (Legacy Fallback - by UID)
+  logger.debug(`handleAuthFlow: Not found in allUsers. Checking users collection directly for UID ${uid}`);
+  const userDoc = await getUserDoc(uid);
+  if (userDoc) {
+    logger.warn(`handleAuthFlow: User found in users collection (UID: ${uid}) but not in allUsers. This indicates potential inconsistency.`);
+    await updateAllUsersCollection(uid, userEmail, userDoc.landlordId, userDoc.role || 'user');
+    return { landlordId: userDoc.landlordId, isNewUser: false };
+  }
 
-      if (!invitationSnapshot.empty) {
-          const invitationData = invitationSnapshot.docs[0].data();
-          const invitationId = invitationSnapshot.docs[0].id;
-          const invitedLandlordId = invitationData.landlordId;
-          const invitedRole = invitationData.role || 'user'; // Default to 'user' if role missing
+  // 5. Deny Access
+  logger.warn(`handleAuthFlow: User ${userEmail} (UID: ${uid}) is not authorized. No invitation, not approved, not found in allUsers or users.`);
+  throw new AuthError('You do not have permission to access this application. Please contact your administrator.', 'auth/unauthorized');
+};
 
-          logger.info(`firestoreUtils: Found invitation for ${userEmailLower}. Landlord: ${invitedLandlordId}, Role: ${invitedRole}`);
+// --- Helper Functions used by handleAuthFlow ---
 
-          // Create user documents (in 'users' and 'allUsers') using the invitation details
-          // Pass user.email (original case) as createUserDocument expects it
-          await createUserDocument(user.uid, user.email, invitedLandlordId, invitedRole as 'admin' | 'user' | 'tenant');
+/**
+ * Retrieves an invitation document from Firestore by email (lowercase).
+ * @param {string} emailLower - The lowercase email address to search for.
+ * @returns {Promise<{id: string, landlordId: string, role: 'admin' | 'user' | 'tenant', name?: string} | null>} Invitation data or null.
+ */
+const getInvitation = async (emailLower: string): Promise<{id: string, landlordId: string, role: 'admin' | 'user' | 'tenant', name?: string} | null> => {
+  if (!emailLower) return null;
+  try {
+    const invitationsRef = collection(db, 'invitations');
+    const q = query(invitationsRef, where("email", "==", emailLower));
+    const querySnapshot = await getDocs(q);
 
-          // Delete the invitation document now that it's processed
-          try {
-              await deleteDoc(doc(db, 'invitations', invitationId));
-              logger.info(`firestoreUtils: Deleted invitation ${invitationId} for ${userEmailLower}.`);
-          } catch (deleteError: any) {
-              logger.error(`firestoreUtils: Failed to delete invitation ${invitationId} for ${userEmailLower}: ${deleteError.message}`);
-              // Log error but continue login process
-          }
+    if (!querySnapshot.empty) {
+      // Assuming only one active invitation per email, take the first one
+      const doc = querySnapshot.docs[0];
+      const data = doc.data();
+      logger.info(`getInvitation: Found invitation for ${emailLower}: ${doc.id}`);
+      return {
+        id: doc.id,
+        landlordId: data.landlordId,
+        role: data.role,
+        name: data.name // Include name if it exists
+      };
+    }
+    logger.info(`getInvitation: No invitation found for ${emailLower}`);
+    return null;
+  } catch (error: any) {
+    logger.error(`getInvitation: Error fetching invitation for ${emailLower}: ${error.message}`);
+    throw error; // Re-throw to be caught by handleAuthFlow
+  }
+};
 
-          return { landlordId: invitedLandlordId, isNewUser: true }; // Considered new user in the context of this landlord
-      } else {
-          logger.info(`firestoreUtils: No invitation found for ${userEmailLower}.`);
-      }
+/**
+ * Deletes an invitation document by its ID.
+ * @param {string} invitationId - The ID of the invitation document to delete.
+ * @returns {Promise<void>}
+ */
+const deleteInvitation = async (invitationId: string): Promise<void> => {
+  if (!invitationId) return;
+  try {
+    logger.info(`deleteInvitation: Deleting invitation ${invitationId}`);
+    await deleteDoc(doc(db, 'invitations', invitationId));
+    logger.info(`deleteInvitation: Successfully deleted invitation ${invitationId}`);
+  } catch (error: any) {
+    logger.error(`deleteInvitation: Error deleting invitation ${invitationId}: ${error.message}`);
+    // Don't throw here, allow auth flow to continue if deletion fails
+  }
+};
 
+/**
+ * Retrieves the user document from the 'users' collection by UID.
+ * @param {string} uid - The Firebase Auth UID of the user.
+ * @returns {Promise<UserProfile | null>} The user profile data, or null if not found.
+ * @throws {Error} If there is an error retrieving the user document.
+ */
+export const getUserDoc = async (uid: string): Promise<UserProfile | null> => {
+  if (!uid) return null;
+  try {
+    const userDocRef = doc(db, 'users', uid);
+    const docSnap = await getDoc(userDocRef);
 
-      // Step 1: Check if the user is an approved landlord
-      // Pass user.email (original case) as isApprovedLandlord expects it
-      const isApproved = await isApprovedLandlord(user.email);
-      logger.info(`firestoreUtils: Approval status for ${userEmailLower}: ${isApproved}`);
-
-      if (isApproved) {
-        // Check if user already exists in users collection
-        const userDocRef = doc(db, 'users', user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (userDocSnap.exists()) {
-          // User exists, return their landlordId
-          const userData = userDocSnap.data();
-          logger.info(`firestoreUtils: Approved landlord found in users collection. LandlordId: ${userData.landlordId}`);
-
-          // Always update the allUsers collection
-          // Pass user.email (original case)
-          await updateAllUsersCollection(user.uid, user.email, userData.landlordId, userData.role || 'admin');
-
-          return {
-            landlordId: userData.landlordId,
-            isNewUser: false
-          };
-        } else {
-          // Create new landlord and user documents
-          // Pass user.email (original case)
-          const landlordId = await createLandlord(user.email, user.displayName || user.email || 'New Landlord');
-          // Pass user.email (original case)
-          await createUserDocument(user.uid, user.email, landlordId, 'admin');
-
-          logger.info(`firestoreUtils: New approved landlord created. LandlordId: ${landlordId}`);
-          return {
-            landlordId,
-            isNewUser: true
-          };
-        }
-      }
-
-      // Step 2: If not an approved landlord, check if they exist in allUsers collection
-      // Pass user.email (original case)
-      const allUserData = await checkAllUsersCollection(user.email);
-      if (allUserData) {
-        logger.info(`firestoreUtils: User found in allUsers collection. LandlordId: ${allUserData.landlordId}`);
-
-        // Check if user exists in users collection
-        const userDocRef = doc(db, 'users', user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (!userDocSnap.exists()) {
-          // Create user document if it doesn't exist (synchronization)
-          // Pass user.email (original case)
-          await createUserDocument(user.uid, user.email, allUserData.landlordId, allUserData.role as 'admin' | 'user' | 'tenant');
-        }
-
-        return {
-          landlordId: allUserData.landlordId,
-          isNewUser: false
-        };
-      }
-
-      // Step 3: If not in allUsers, check if they exist in users collection (legacy check)
-      const userDocRef = doc(db, 'users', user.uid);
-      const userDocSnap = await getDoc(userDocRef);
-
-      if (userDocSnap.exists()) {
-        // User exists in users collection, return their landlordId
-        const userData = userDocSnap.data();
-        logger.info(`firestoreUtils: User found in users collection. LandlordId: ${userData.landlordId}`);
-
-        // Update allUsers collection for consistency
-        // Pass user.email (original case)
-        await updateAllUsersCollection(user.uid, user.email, userData.landlordId, userData.role || 'user');
-
-        return {
-          landlordId: userData.landlordId,
-          isNewUser: false
-        };
-      }
-
-      // User not found in any collection, deny access with specific message
-      logger.warn(`firestoreUtils: Access denied - ${userEmailLower} not found in approvedLandlords, invitations, allUsers, or users collections`);
-      throw new AuthError(
-        'You do not have permission to access this application. Please contact your administrator if you believe this is a mistake.',
-        'auth/unauthorized'
-      );
-    } catch (error) {
-      if (error instanceof AuthError) {
-        logger.error(`firestoreUtils: AuthError in auth flow for ${userEmailLower}:`, {
-          errorType: 'AuthError',
-          code: error.code,
-          message: error.message
-        });
-        throw error; // Re-throw AuthError
-      }
-      const err = error as Error;
-      logger.error(`firestoreUtils: Unexpected error in auth flow for ${userEmailLower}:`, {
-        errorType: 'UnexpectedError',
-        name: err.name,
-        message: err.message
-      });
-      throw new AuthError(
-        'An error occurred while checking your authorization. Please try again later.',
-        'auth/check-failed'
-      );
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        email: data.email,
+        landlordId: data.landlordId,
+        role: data.role,
+        name: data.name, // Include name if it exists
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt),
+      } as UserProfile;
+    } else {
+      return null;
     }
   } catch (error: any) {
-    const userEmailLower = user?.email?.toLowerCase() || '[email missing]';
-    const err = error as Error;
-    logger.error(`firestoreUtils: Fatal error in auth flow for ${userEmailLower}:`, {
-      errorType: error instanceof AuthError ? 'AuthError' : 'UnknownError',
-      name: err.name,
-      message: err.message,
-      stack: err.stack
-    });
-    if (error instanceof AuthError) {
-      throw error; // Re-throw AuthError with specific message
+    logger.error(`firestoreUtils: Error getting user document for UID ${uid}: ${error.message}`);
+    throw new Error(error.message || 'Failed to retrieve user document.');
+  }
+};
+
+/**
+ * Retrieves the user data from the 'allUsers' collection by UID.
+ * @param {string} uid - The Firebase Auth UID of the user.
+ * @returns {Promise<AllUser | null>} The allUsers data, or null if not found.
+ * @throws {Error} If there is an error retrieving the allUsers document.
+ */
+export const getAllUserDoc = async (uid: string): Promise<AllUser | null> => {
+  if (!uid) return null;
+  try {
+    const userDocRef = doc(db, 'allUsers', uid);
+    const docSnap = await getDoc(userDocRef);
+
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      return {
+        uid: docSnap.id,
+        email: data.email,
+        landlordId: data.landlordId,
+        role: data.role,
+        name: data.name, // Include name if it exists
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt),
+      } as AllUser;
+    } else {
+      return null;
     }
-    throw new AuthError(
-      'Failed to complete authentication. Please try again later.',
-      'auth/unknown'
-    );
+  } catch (error: any) {
+    logger.error(`firestoreUtils: Error getting allUsers document for UID ${uid}: ${error.message}`);
+    throw new Error(error.message || 'Failed to retrieve allUsers document.');
   }
 };

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
 import { useLandlordId } from "../../../lib/hooks/useLandlordId";
 import Navigation from "../../../components/Navigation";
-import { Users, Trash2, UserPlus, Send } from "lucide-react";
+import { Users, Trash2, UserPlus, Send, Loader2 } from "lucide-react";
 import logger from "../../../lib/logger";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
@@ -17,25 +17,28 @@ import { UserProfile } from "@/types";
 import { collection, query, where, getDocs } from 'firebase/firestore';
 
 export default function ManageUsersPage() {
-  const { user, loading } = useAuth();
-  const { landlordId } = useLandlordId();
+  const { user, loading: authLoading } = useAuth();
+  const { landlordId, loading: landlordIdLoading, error: landlordIdError } = useLandlordId();
   const router = useRouter();
   const [authorizedUsers, setAuthorizedUsers] = useState<UserProfile[]>([]);
   const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserName, setNewUserName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [isFetchingUsers, setIsFetchingUsers] = useState(true);
+  const [isInvitingUser, setIsInvitingUser] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       router.push("/");
     }
-  }, [user, loading, router]);
+  }, [user, authLoading, router]);
 
   const fetchAuthorizedUsers = useCallback(async () => {
     if (!user || !landlordId) return;
     setIsFetchingUsers(true);
     setAuthorizedUsers([]);
+    setFormError(null);
     try {
       logger.info(`ManageUsersPage: Fetching users for landlord ${landlordId}...`);
       const usersCollectionRef = collection(db, 'users');
@@ -49,49 +52,89 @@ export default function ManageUsersPage() {
 
       logger.info(`ManageUsersPage: Found ${usersList.length} users.`);
       setAuthorizedUsers(usersList);
-    } catch (error) {
+    } catch (error: any) {
+      console.error('ManageUsersPage: Full error fetching authorized users:', error);
       logger.error('ManageUsersPage: Failed to fetch authorized users', {
         component: 'ManageUsersPage',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        errorCode: error?.code,
+        errorMessage: error?.message,
+        errorStack: error?.stack,
+        fullError: JSON.stringify(error)
       });
-      setFormError("Failed to load current users. Please refresh the page.");
+      setFormError(`Failed to load authorized users. Please check console for details or try again. (Code: ${error?.code || 'UNKNOWN'})`);
     } finally {
       setIsFetchingUsers(false);
     }
   }, [user, landlordId]);
 
   useEffect(() => {
-    if (user && landlordId) {
+    if (user && landlordId && !landlordIdLoading) {
       fetchAuthorizedUsers();
+    } else if (landlordIdError) {
+      setFormError(`Failed to load landlord details: ${landlordIdError}`);
+      setIsFetchingUsers(false);
     }
-  }, [user, landlordId, fetchAuthorizedUsers]);
+  }, [user, landlordId, landlordIdLoading, landlordIdError, fetchAuthorizedUsers]);
 
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
     setFormSuccess(null);
+    setIsInvitingUser(true);
 
-    if (!newUserEmail.trim()) {
-      setFormError('Please fill in the email address');
+    if (!landlordId) {
+       setFormError('Cannot invite user: Landlord ID missing. Please refresh.');
+       setIsInvitingUser(false);
+       return;
+    }
+
+    const email = newUserEmail.trim();
+    const name = newUserName.trim();
+
+    if (!name) {
+      setFormError('Please enter the user\'s name');
+      setIsInvitingUser(false);
       return;
     }
-    if (!/\S+@\S+\.\S+/.test(newUserEmail)) {
+    if (!email) {
+      setFormError('Please fill in the email address');
+      setIsInvitingUser(false);
+      return;
+    }
+    if (!/\S+@\S+\.\S+/.test(email)) {
        setFormError('Please enter a valid email address');
+       setIsInvitingUser(false);
        return;
     }
 
     try {
-      logger.info(`ManageUsersPage: Attempting to invite user ${newUserEmail} for landlord ${landlordId}`);
-      await inviteUser(landlordId, newUserEmail, 'user');
+      logger.info(`ManageUsersPage: Checking for existing user with email ${email} for landlord ${landlordId}`);
+      const usersCollectionRef = collection(db, 'users');
+      const q = query(usersCollectionRef, where('email', '==', email), where('landlordId', '==', landlordId));
+      const querySnapshot = await getDocs(q);
 
-      setFormSuccess(`Invitation sent successfully to ${newUserEmail}.`);
+      if (!querySnapshot.empty) {
+        logger.warn(`ManageUsersPage: User with email ${email} already exists for this landlord.`);
+        setFormError(`A user with the email address ${email} already has access to this account.`);
+        setIsInvitingUser(false);
+        return;
+      }
+
+      logger.info(`ManageUsersPage: Attempting to invite user ${email} (Name: ${name}) for landlord ${landlordId}`);
+      await inviteUser(landlordId, email, 'user', name);
+
+      setFormSuccess(`User ${name} (${email}) added successfully. They can now sign in.`);
       setNewUserEmail('');
-    } catch (error) {
+      setNewUserName('');
+    } catch (error: any) {
        logger.error('ManageUsersPage: Failed to invite user', {
          component: 'ManageUsersPage',
-         error: error instanceof Error ? error.message : 'Unknown error'
+         error: error instanceof Error ? error.message : 'Unknown error',
+         fullError: JSON.stringify(error)
        });
-       setFormError(error instanceof Error ? error.message : 'Failed to send invitation. Please try again.');
+       setFormError(error.message || 'Failed to add user. Please try again.');
+    } finally {
+      setIsInvitingUser(false);
     }
   };
 
@@ -120,15 +163,15 @@ export default function ManageUsersPage() {
     }
   };
 
-  if (loading || !landlordId) {
+  if (authLoading || landlordIdLoading || isFetchingUsers) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
       </div>
     );
   }
 
-  if (!user) {
+  if (!user || !landlordId) {
     return null;
   }
 
@@ -159,7 +202,7 @@ export default function ManageUsersPage() {
                <CardDescription>Enter the email address of the user you want to grant access to.</CardDescription>
             </CardHeader>
             <CardContent>
-              {formError && (
+              {formError && !formSuccess && (
                 <AlertMessage
                   variant="error"
                   message={formError}
@@ -175,6 +218,20 @@ export default function ManageUsersPage() {
                )}
 
               <form onSubmit={handleInviteUser} className="space-y-4">
+                <div className="space-y-2">
+                   <label htmlFor="newUserName" className="block text-sm font-medium text-gray-700">
+                     User Name
+                   </label>
+                   <Input
+                     type="text"
+                     id="newUserName"
+                     value={newUserName}
+                     onChange={(e) => setNewUserName(e.target.value)}
+                     placeholder="Enter user's full name"
+                     className="w-full"
+                     required
+                   />
+                 </div>
                 <div className="space-y-2">
                    <label htmlFor="newUserEmail" className="block text-sm font-medium text-gray-700">
                      Email Address
@@ -194,10 +251,18 @@ export default function ManageUsersPage() {
                   variant="default"
                   size="default"
                   className="w-full bg-[#1F2937] hover:bg-[#111827] text-white transition-colors"
+                  disabled={isInvitingUser}
                 >
-                  <Send className="h-4 w-4 mr-2" />
-                  Send Invitation
+                  {isInvitingUser ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <UserPlus className="h-4 w-4 mr-2" />
+                  )}
+                  {isInvitingUser ? 'Adding User...' : 'Add User'}
                 </Button>
+                <p className="text-xs text-center text-gray-500 px-4">
+                  This user will need to sign in using the exact email address provided above to gain access.
+                </p>
               </form>
             </CardContent>
           </Card>
@@ -222,7 +287,8 @@ export default function ManageUsersPage() {
                        className="py-4 flex justify-between items-center hover:bg-gray-50 px-4 -mx-4 first:hover:rounded-t-lg last:hover:rounded-b-lg"
                      >
                        <div>
-                         <p className="text-sm font-medium text-gray-900">{authUser.email}</p>
+                         {authUser.name && <p className="text-sm font-medium text-gray-900">{authUser.name}</p>}
+                         <p className={`text-sm ${authUser.name ? 'text-gray-500' : 'font-medium text-gray-900'}`}>{authUser.email}</p>
                          <p className="text-sm text-gray-500 capitalize">Role: {authUser.role || 'User'}</p>
                        </div>
                        {user.email?.toLowerCase() !== authUser.email.toLowerCase() ? (

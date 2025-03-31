@@ -7,7 +7,7 @@ import { useLandlordId } from "../../../lib/hooks/useLandlordId";
 import Navigation from "../../../components/Navigation";
 import { collection, getDocs, query, orderBy, where, addDoc, doc, getDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase/firebase";
-import { DollarSign, Search, Plus, Calendar, Check, X, ArrowUp, ArrowDown, Filter, Trash2 } from "lucide-react";
+import { DollarSign, Search, Plus, Calendar, Check, X, ArrowUp, ArrowDown, Filter, Trash2, Loader2 } from "lucide-react";
 import { format, subMonths, addMonths } from "date-fns";
 import { getActiveLeaseForUnit, getRentalInventoryDetails } from "../../../lib/firebase/firestoreUtils";
 import logger from "../../../lib/logger";
@@ -64,8 +64,8 @@ type SortColumn = 'unitNumber' | 'tenantName' | 'paymentType' | 'rentalPeriod' |
 type SortDirection = 'asc' | 'desc';
 
 export default function RentPage() {
-  const { user, loading } = useAuth();
-  const { landlordId } = useLandlordId();
+  const { user, loading: authLoading } = useAuth();
+  const { landlordId, loading: landlordIdLoading, error: landlordIdError } = useLandlordId();
   const router = useRouter();
   const [activeLeases, setActiveLeases] = useState<Lease[]>([]);
   const [rentPayments, setRentPayments] = useState<RentPayment[]>([]);
@@ -132,13 +132,14 @@ export default function RentPage() {
   }, [filterRef]);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       router.push("/");
     }
-  }, [user, loading, router]);
+  }, [user, authLoading, router]);
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!landlordId) return;
       try {
         setIsLoading(true);
         logger.info("RentPage: Fetching data...");
@@ -216,18 +217,22 @@ export default function RentPage() {
         setRentPayments(paymentsData);
         logger.info(`RentPage: Found ${paymentsData.length} rent payments.`);
         
-        setIsLoading(false);
       } catch (error) {
         console.error("Error fetching data:", error);
         logger.error(`RentPage: Error fetching data: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        setAlertMessage({ type: 'error', message: 'Failed to load payment data.' });
+      } finally {
         setIsLoading(false);
       }
     };
 
-    if (user && landlordId) {
+    if (user && landlordId && !landlordIdLoading) {
       fetchData();
+    } else if (landlordIdError) {
+      setAlertMessage({ type: 'error', message: `Failed to load landlord details: ${landlordIdError}` });
+      setIsLoading(false);
     }
-  }, [user, landlordId]);
+  }, [user, landlordId, landlordIdLoading, landlordIdError]);
 
   const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -258,6 +263,11 @@ export default function RentPage() {
 
           // Fetch additional details from rental inventory
           try {
+            if (!landlordId) {
+              logger.error("RentPage: Landlord ID missing, cannot fetch inventory details.");
+              setFormError("Could not fetch unit details. Landlord ID missing.");
+              return;
+            }
             const inventoryDetails = await getRentalInventoryDetails(landlordId, selectedLease.unitId);
             
             if (inventoryDetails) {
@@ -336,6 +346,12 @@ export default function RentPage() {
     setIsSubmitting(true);
     setFormError("");
     setSuccessMessage("");
+
+    if (!landlordId) {
+      setFormError("Cannot save payment: Landlord ID is missing. Please refresh.");
+      setIsSubmitting(false);
+      return;
+    }
     
     try {
       logger.info("RentPage: Submitting rent payment form...");
@@ -460,7 +476,10 @@ export default function RentPage() {
   };
 
   const confirmDelete = async () => {
-    if (!paymentToDelete) {
+    if (!paymentToDelete) return;
+
+    if (!landlordId) {
+      setDeleteError("Cannot delete payment: Landlord ID is missing. Please refresh.");
       return;
     }
     
@@ -673,12 +692,21 @@ export default function RentPage() {
   
   const uniquePaymentTypes = getUniquePaymentTypes(rentPayments);
 
-  if (loading || !user) {
+  // Updated loading check
+  if (authLoading || landlordIdLoading || isLoading) { 
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
       </div>
     );
+  }
+
+  // Ensure user and landlordId are present after loading
+  if (!user || !landlordId) {
+    // Redirect is handled by the first useEffect, or an error message might be shown
+    // If there's a landlordIdError, the alert message will be shown. 
+    // Otherwise, if we reach here without user/landlordId, it implies a redirect is happening or an edge case.
+    return null; 
   }
 
   return (
