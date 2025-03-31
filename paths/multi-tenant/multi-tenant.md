@@ -435,19 +435,41 @@ users (collection)
     * Modify the security rules to ensure that users can only access data within their respective landlord's subcollections.
     * **Example Rules:**
 
-        ```rules
-        rules_version = '2';
-        service cloud.firestore {
-          match /databases/{database}/documents {
-            match /landlords/{landlordId}/{document=**} {
-              allow read, write: if request.auth != null && request.auth.uid == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.landlordId && request.params.landlordId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.landlordId;
-            }
-            match /users/{userId} {
-              allow read, write: if request.auth != null && request.auth.uid == userId;
-            }
-          }
-        }
-        ```
+    rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow reading approvedLandlords collection for authentication
+    match /approvedLandlords/{document} {
+      allow read: if request.auth != null;
+    }
+    
+    // Allow reading allUsers collection for authentication
+    match /allUsers/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Allow users to read their own user document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Secure access to landlord-specific data
+    match /landlords/{landlordId}/{document=**} {
+      allow read, write: if request.auth != null && 
+        (
+          // User's landlordId in allUsers matches the requested landlordId path
+          exists(/databases/$(database)/documents/allUsers/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/allUsers/$(request.auth.uid)).data.landlordId == landlordId
+        ) ||
+        (
+          // Legacy path: User's landlordId in users collection matches the requested landlordId path
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.landlordId == landlordId
+        );
+    }
+  }
+}
+
 * **Testing Milestone 2.4:**
     * Test the application with multiple user accounts from different landlords to ensure that data access is restricted correctly.
 

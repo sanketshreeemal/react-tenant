@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
 import Navigation from "../../../components/Navigation";
@@ -76,7 +76,13 @@ export default function WhatsAppPage() {
     }
   }, [user, loading, router]);
 
-  const fetchData = useCallback(async () => {
+  useEffect(() => {
+    if (user) {
+      fetchData();
+    }
+  }, [user]);
+
+  const fetchData = async () => {
     try {
       setIsLoading(true);
       
@@ -130,13 +136,7 @@ export default function WhatsAppPage() {
       console.error("Error fetching data:", error);
       setIsLoading(false);
     }
-  }, [user]);
-
-  useEffect(() => {
-    if (user) {
-      fetchData();
-    }
-  }, [user, fetchData]);
+  };
 
   const handleSelectAllLeases = () => {
     if (selectedLeases.length === activeLeases.length) {
