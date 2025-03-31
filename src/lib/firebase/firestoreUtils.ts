@@ -568,6 +568,63 @@ export const getAllLeases = async (
 };
 
 /**
+ * Retrieves a specific lease by its ID.
+ * @param {string} landlordId - The ID of the landlord.
+ * @param {string} leaseId - The ID of the lease to retrieve.
+ * @returns {Promise<Lease | null>} The lease data or null if not found.
+ * @throws {Error} If landlordId or leaseId is missing, or if there is a Firestore error.
+ */
+export const getLeaseById = async (
+  landlordId: string | undefined | null,
+  leaseId: string
+): Promise<Lease | null> => {
+  try {
+    const validLandlordId = validateLandlordId(landlordId);
+    if (!leaseId) {
+      throw new Error('Lease ID is required to retrieve a lease.');
+    }
+    logger.info(`firestoreUtils: Retrieving lease with ID: ${leaseId} for landlord ${validLandlordId}`);
+
+    const leaseDocRef = doc(db, `landlords/${validLandlordId}/leases`, leaseId);
+    const docSnap = await getDoc(leaseDocRef);
+
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      logger.info(`firestoreUtils: Lease ${leaseId} retrieved successfully.`);
+      // Convert Firestore Timestamps to JavaScript Date objects
+      const lease: Lease = {
+        id: docSnap.id,
+        landlordId: validLandlordId,
+        ...data,
+        leaseStartDate: data.leaseStartDate instanceof Timestamp 
+          ? data.leaseStartDate.toDate() 
+          : new Date(data.leaseStartDate || Date.now()),
+        leaseEndDate: data.leaseEndDate instanceof Timestamp 
+          ? data.leaseEndDate.toDate() 
+          : new Date(data.leaseEndDate || Date.now()),
+        rentAmount: Number(data.rentAmount) || 0,
+        securityDeposit: Number(data.securityDeposit) || 0,
+        depositMethod: data.depositMethod || 'Unknown',
+        isActive: Boolean(data.isActive),
+        createdAt: data.createdAt instanceof Timestamp 
+          ? data.createdAt.toDate() 
+          : new Date(data.createdAt || Date.now()),
+        updatedAt: data.updatedAt instanceof Timestamp 
+          ? data.updatedAt.toDate() 
+          : new Date(data.updatedAt || Date.now())
+      } as Lease; // Type assertion might be needed depending on strictness
+      return lease;
+    } else {
+      logger.warn(`firestoreUtils: Lease ${leaseId} not found for landlord ${validLandlordId}.`);
+      return null;
+    }
+  } catch (error: any) {
+    logger.error(`firestoreUtils: Error retrieving lease ${leaseId}: ${error.message}`);
+    throw new Error(error.message || 'Failed to retrieve lease.');
+  }
+};
+
+/**
  * Updates a lease in the 'leases' collection.
  * @param {string} landlordId - The ID of the landlord from authentication context.
  * @param {string} leaseId - The ID of the lease to update.

@@ -319,7 +319,7 @@ export default function Dashboard() {
                 value={`${Math.round(metrics.occupancyRate)}%`}
                 icon={Key}
                 subtitle={`${metrics.occupiedUnits}/${properties.length} units occupied`}
-                href="/dashboard/properties/new"
+                href="/dashboard/tenants"
               />
 
               <StatCard 
@@ -327,7 +327,7 @@ export default function Dashboard() {
                 value={metrics.totalProperties.toString()}
                 icon={Building}
                 subtitle={`${propertyTypeSplit.residential} Residential • ${propertyTypeSplit.commercial} Commercial`}
-                href="/dashboard/rental-inventory"
+                href="/dashboard/property-mgmt"
               />
             </div>
             

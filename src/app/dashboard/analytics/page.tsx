@@ -119,37 +119,6 @@ export default function AnalyticsPage() {
     }
   }, [user, authLoading, router]);
 
-  const fetchData = useCallback(async () => {
-    if (landlordId) {
-      try {
-        // Use firestoreUtils to fetch data
-        const inventoryData = await getAllRentalInventory(landlordId);
-        const allLeases = await getAllLeases(landlordId);
-        const currentActiveLeases = await getAllActiveLeases(landlordId);
-        const allRentPayments = await getAllPayments(landlordId);
-
-        setRentalInventory(inventoryData);
-        setLeases(allLeases);
-        setActiveLeases(currentActiveLeases);
-        setRentPayments(allRentPayments);
-
-        // Calculate analytics
-        calculateAnalytics(inventoryData, currentActiveLeases, allRentPayments);
-      } catch (error: any) {
-        console.error('Error fetching data:', error);
-        setError(error.message || 'An error occurred while fetching data');
-      } finally {
-        setIsLoading(false);
-      }
-    }
-  }, [landlordId]);
-
-  useEffect(() => {
-    if (!isLoading) {
-      fetchData();
-    }
-  }, [isLoading, fetchData]);
-
   const calculateAnalytics = useCallback((
     inventory: RentalInventory[],
     active: Lease[],
@@ -249,11 +218,6 @@ export default function AnalyticsPage() {
       );
       monthCollectedRent = monthPayments.reduce((sum, payment) => sum + payment.actualRentPaid, 0);
 
-      // Calculate collection rate
-      const monthCollectionRate = monthExpectedRent > 0
-        ? (monthCollectedRent / monthExpectedRent) * 100
-        : 0;
-
       // Add data to arrays
       monthlyData.push({
         month: monthStr,
@@ -262,7 +226,7 @@ export default function AnalyticsPage() {
         occupancyRate: `${monthOccupancyRate.toFixed(1)}%`,
         expectedRent: monthExpectedRent,
         rentCollected: monthCollectedRent,
-        collectionRate: `${monthCollectionRate.toFixed(1)}%`
+        collectionRate: `${((monthCollectedRent / monthExpectedRent) * 100).toFixed(1)}%`
       });
 
       occupancyData.push({
@@ -282,17 +246,42 @@ export default function AnalyticsPage() {
       startDate = addMonths(startDate, 1);
     }
 
-    // Update state with the generated data
-    setMonthlyData(monthlyData.reverse()); // Most recent first
+    // Update state with calculated data
+    setMonthlyTableData(monthlyData);
     setOccupancyChartData(occupancyData);
     setRentCollectionChartData(rentCollectionData);
-  }, [timeRange, rentalInventory, leases, rentPayments]);
+  }, [timeRange, leases, rentPayments]);
+
+  const fetchData = useCallback(async () => {
+    if (landlordId) {
+      try {
+        // Use firestoreUtils to fetch data
+        const inventoryData = await getAllRentalInventory(landlordId);
+        const allLeases = await getAllLeases(landlordId);
+        const currentActiveLeases = await getAllActiveLeases(landlordId);
+        const allRentPayments = await getAllPayments(landlordId);
+
+        setRentalInventory(inventoryData);
+        setLeases(allLeases);
+        setActiveLeases(currentActiveLeases);
+        setRentPayments(allRentPayments);
+
+        // Calculate analytics
+        calculateAnalytics(inventoryData, currentActiveLeases, allRentPayments);
+      } catch (error: any) {
+        console.error('Error fetching data:', error);
+        setError(error.message || 'An error occurred while fetching data');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  }, [landlordId, calculateAnalytics]);
 
   useEffect(() => {
     if (!isLoading) {
-      calculateAnalytics(rentalInventory, activeLeases, rentPayments);
+      fetchData();
     }
-  }, [isLoading, calculateAnalytics, rentalInventory, activeLeases, rentPayments]);
+  }, [isLoading, fetchData]);
 
   if (authLoading || !user) {
     return (
@@ -547,7 +536,7 @@ export default function AnalyticsPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {monthlyData.map((data, index) => (
+                      {monthlyTableData.map((data, index) => (
                         <tr key={index} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
