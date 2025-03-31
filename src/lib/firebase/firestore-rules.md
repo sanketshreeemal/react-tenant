@@ -12,7 +12,6 @@ service cloud.firestore {
     match /invitations/{invitationId} {
        allow create: if request.auth != null &&
                       exists(/databases/$(database)/documents/allUsers/$(request.auth.uid)) &&
-                      get(/databases/$(database)/documents/allUsers/$(request.auth.uid)).data.role == 'admin' &&
                       request.resource.data.landlordId == get(/databases/$(database)/documents/allUsers/$(request.auth.uid)).data.landlordId;
        allow read, delete: if request.auth != null; // Read/Delete allowed for backend logic triggered by auth user
        allow update: if false;

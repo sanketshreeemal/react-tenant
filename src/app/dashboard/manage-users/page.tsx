@@ -186,7 +186,7 @@ export default function ManageUsersPage() {
               <Users className="h-8 w-8 text-blue-500" />
               <div>
                 <CardTitle className="text-2xl">Manage Users</CardTitle>
-                <CardDescription>Invite new users and manage access for your account.</CardDescription>
+                <CardDescription>Invite new users and manage access.</CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -199,7 +199,6 @@ export default function ManageUsersPage() {
                 <UserPlus className="h-6 w-6 text-blue-500" />
                 <CardTitle>Invite New User</CardTitle>
               </div>
-               <CardDescription>Enter the email address of the user you want to grant access to.</CardDescription>
             </CardHeader>
             <CardContent>
               {formError && !formSuccess && (
@@ -261,7 +260,7 @@ export default function ManageUsersPage() {
                   {isInvitingUser ? 'Adding User...' : 'Add User'}
                 </Button>
                 <p className="text-xs text-center text-gray-500 px-4">
-                  This user will need to sign in using the exact email address provided above to gain access.
+                  This user will need to sign in using the exact email address provided to gain access.
                 </p>
               </form>
             </CardContent>
@@ -269,9 +268,9 @@ export default function ManageUsersPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Authorized Users</CardTitle>
+              <CardTitle>Manage Access</CardTitle>
               <CardDescription>
-                Users who currently have access to this landlord account.
+                Users who currently have access to this account.
               </CardDescription>
             </CardHeader>
             <CardContent>
