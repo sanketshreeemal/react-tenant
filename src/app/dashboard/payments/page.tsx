@@ -1471,6 +1471,12 @@ export default function RentPage() {
                           </th>
                           <th 
                             scope="col" 
+                            className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            Payment ID
+                          </th>
+                          <th 
+                            scope="col" 
                             className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                             onClick={() => handleSort('createdAt')}
                           >
@@ -1502,8 +1508,10 @@ export default function RentPage() {
                               <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">
                                 {payment.unitNumber}
                               </td>
-                              <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">
-                                {payment.tenantName}
+                              <td className="px-2 sm:px-6 py-4 text-center text-sm text-gray-900">
+                                <div className="max-w-[120px] sm:max-w-[150px] mx-auto whitespace-pre-wrap break-words">
+                                  {payment.tenantName}
+                                </div>
                               </td>
                               <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">
                                 {payment.paymentType || "Rent Payment"}
@@ -1522,6 +1530,11 @@ export default function RentPage() {
                                       Short by ₹{(payment.officialRent - payment.actualRent).toLocaleString()}
                                     </span>
                                   )}
+                                </div>
+                              </td>
+                              <td className="px-2 sm:px-6 py-4">
+                                <div className="text-sm text-gray-900 max-w-[150px] sm:max-w-[200px] mx-auto whitespace-pre-wrap break-words">
+                                  {payment.comments || "-"}
                                 </div>
                               </td>
                               <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">

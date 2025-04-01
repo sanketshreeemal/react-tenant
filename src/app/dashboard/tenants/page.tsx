@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, ChangeEvent, useCallback } from "react";
+import React, { useState, useEffect, useRef, ChangeEvent, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
 import { useLandlordId } from "@/lib/hooks/useLandlordId";
@@ -11,7 +11,8 @@ import {
   updateLease, 
   deleteLease,
   getAllRentalInventory,
-  getAllPropertyGroups
+  getAllPropertyGroups,
+  groupLeasesByProperty
 } from "@/lib/firebase/firestoreUtils";
 import { format, formatDistance, formatRelative, formatDuration, intervalToDuration } from 'date-fns';
 import { Search, Filter, CalendarIcon, CheckCircle, XCircle, FileUp, FileDown, Loader2, AlertTriangle, X, Plus, Pencil, Building } from "lucide-react";
@@ -240,23 +241,21 @@ export default function TenantsManagement() {
       return "Unknown";
     }
     
-    console.log(`Looking up unit number for unitId: ${unitId}`);
-    console.log("Available inventory:", rentalInventory);
+    if (!rentalInventory || rentalInventory.length === 0) {
+      return unitId; // Return unitId as fallback if inventory not loaded
+    }
     
     const unitById = rentalInventory.find(item => item.id === unitId);
     if (unitById) {
-      console.log(`Found unit by ID match: ${unitById.unitNumber}`);
       return unitById.unitNumber;
     }
     
     const unitByNumber = rentalInventory.find(item => item.unitNumber === unitId);
     if (unitByNumber) {
-      console.log(`Found unit by unit number match: ${unitByNumber.unitNumber}`);
       return unitByNumber.unitNumber;
     }
     
-    console.log(`No matching unit found for ${unitId}, using as fallback`);
-    return unitId;
+    return unitId; // Fallback to unitId if no match found
   };
   
   const handleDownloadTemplate = async () => {
@@ -321,6 +320,14 @@ export default function TenantsManagement() {
     setExpandedPanelId(expandedPanelId === panelId ? null : panelId);
   };
   
+  const groupedLeaseData = useMemo(() => {
+    if (!leases || !rentalInventory || !propertyGroups) {
+      return [];
+    }
+    
+    return groupLeasesByProperty(leases, rentalInventory, propertyGroups);
+  }, [leases, rentalInventory, propertyGroups]);
+  
   if (authLoading || landlordLoading || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -332,117 +339,6 @@ export default function TenantsManagement() {
   if (!user || !landlordId) {
     return null;
   }
-  
-  const groupLeasesByProperty = () => {
-    const groups: Record<string, { 
-      groupName: string; 
-      units: { id: string; unitNumber: string; rent?: number; daysVacant?: number; isActive: boolean; lastUpdated: Date }[]; 
-      totalUnits: number; 
-    }> = {};
-  
-    const unitIdToGroupName: Record<string, string> = {};
-    rentalInventory.forEach(inv => {
-      if (inv.id) {
-        unitIdToGroupName[inv.id] = inv.groupName || 'Default';
-      }
-    });
-
-    propertyGroups.forEach(pg => {
-      if (!groups[pg.groupName]) {
-        groups[pg.groupName] = { groupName: pg.groupName, units: [], totalUnits: 0 };
-      }
-    });
-    rentalInventory.forEach(inv => {
-      const groupName = inv.groupName || 'Default';
-      if (!groups[groupName]) {
-        groups[groupName] = { groupName: groupName, units: [], totalUnits: 0 };
-      }
-      if(inv.id) groups[groupName].totalUnits++; 
-    });
-    if (rentalInventory.some(inv => !inv.groupName) && !groups['Default']) {
-       groups['Default'] = { groupName: 'Default', units: [], totalUnits: rentalInventory.filter(inv => !inv.groupName).length };
-    }
-    
-    leases.forEach(lease => {
-      const groupName = unitIdToGroupName[lease.unitId] || 'Default';
-      
-      if (!groups[groupName]) {
-        console.warn(`Lease ${lease.id} belongs to unit ${lease.unitId} which has no groupName or inventory item. Assigning to 'Default'.`);
-        if (!groups['Default']) {
-           groups['Default'] = { groupName: 'Default', units: [], totalUnits: 0 };
-        }
-      } else {
-         if (!groups[groupName].totalUnits) {
-            groups[groupName].totalUnits = rentalInventory.filter(inv => (inv.groupName || 'Default') === groupName).length;
-         }
-      }
-
-      let daysVacant: number | undefined = undefined;
-      if (!lease.isActive && lease.updatedAt) {
-        const today = new Date();
-        const lastUpdated = new Date(lease.updatedAt);
-        const diffTime = Math.abs(today.getTime() - lastUpdated.getTime());
-        daysVacant = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      }
-      
-      groups[groupName].units.push({
-        id: lease.id || `lease-${lease.unitId}`,
-        unitNumber: lease.unitNumber || getUnitNumber(lease.unitId),
-        rent: lease.isActive ? lease.rentAmount : undefined,
-        daysVacant: daysVacant,
-        isActive: lease.isActive,
-        lastUpdated: new Date(lease.updatedAt)
-      });
-    });
-
-    rentalInventory.forEach(inv => {
-       if(!inv.id) return;
-
-       const groupName = inv.groupName || 'Default';
-       if(!groups[groupName]) {
-         groups[groupName] = { groupName: groupName, units: [], totalUnits: 1 }; 
-       } 
-
-       const hasActiveLease = leases.some(l => l.unitId === inv.id && l.isActive);
-       const hasAnyLease = leases.some(l => l.unitId === inv.id);
-
-       if (!hasActiveLease) { 
-           const unitAlreadyInGroup = groups[groupName].units.some(u => u.unitNumber === inv.unitNumber);
-
-           if (!unitAlreadyInGroup) {
-               const inactiveLeasesForUnit = leases
-                   .filter(l => l.unitId === inv.id && !l.isActive)
-                   .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-               
-               let daysVacant: number | undefined = undefined;
-               let lastUpdatedDate = new Date();
-
-               if(inactiveLeasesForUnit.length > 0) {
-                   lastUpdatedDate = new Date(inactiveLeasesForUnit[0].updatedAt);
-                   const today = new Date();
-                   const diffTime = Math.abs(today.getTime() - lastUpdatedDate.getTime());
-                   daysVacant = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-               }
-               
-               groups[groupName].units.push({
-                   id: `inv-${inv.id}`,
-                   unitNumber: inv.unitNumber,
-                   isActive: false,
-                   daysVacant: daysVacant,
-                   lastUpdated: lastUpdatedDate
-               });
-           }
-       }
-    });
-
-    return Object.values(groups).sort((a, b) => {
-        if (a.groupName === 'Default') return 1;
-        if (b.groupName === 'Default') return -1;
-        return a.groupName.localeCompare(b.groupName);
-    });
-  };
-
-  const groupedLeaseData = groupLeasesByProperty();
   
   return (
     <div className="min-h-screen bg-gray-50">

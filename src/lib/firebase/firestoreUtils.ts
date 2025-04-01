@@ -1631,3 +1631,235 @@ export const getAllUserDoc = async (uid: string): Promise<AllUser | null> => {
     throw new Error(error.message || 'Failed to retrieve allUsers document.');
   }
 };
+
+/**
+ * Helper function to parse and compare unit numbers that may contain both letters and numbers.
+ * Examples of unit numbers it can handle:
+ * - Pure numbers: "101", "1002"
+ * - Letters with numbers: "A101", "B202", "1A", "2B"
+ * - Pure letters: "A", "B"
+ * - Complex combinations: "A-101", "B-202", "1-A", "2-B"
+ */
+const compareUnitNumbers = (a: string, b: string): number => {
+  // Helper function to split unit number into parts
+  const parseUnitNumber = (unit: string) => {
+    // Convert to uppercase for case-insensitive comparison
+    unit = unit.toUpperCase();
+    
+    // Split the unit number into parts (letters and numbers)
+    const parts: (string | number)[] = [];
+    let currentPart = '';
+    
+    for (let i = 0; i < unit.length; i++) {
+      const char = unit[i];
+      if (char === '-' || char === ' ') {
+        if (currentPart) {
+          // Try to convert to number if possible
+          const num = parseFloat(currentPart);
+          parts.push(isNaN(num) ? currentPart : num);
+          currentPart = '';
+        }
+        continue;
+      }
+      
+      const isCurrentPartNumber = !isNaN(parseFloat(currentPart));
+      const isCharNumber = !isNaN(parseFloat(char));
+      
+      if (currentPart && isCurrentPartNumber !== isCharNumber) {
+        // Type transition (letter to number or vice versa)
+        const num = parseFloat(currentPart);
+        parts.push(isNaN(num) ? currentPart : num);
+        currentPart = char;
+      } else {
+        currentPart += char;
+      }
+    }
+    
+    if (currentPart) {
+      const num = parseFloat(currentPart);
+      parts.push(isNaN(num) ? currentPart : num);
+    }
+    
+    return parts;
+  };
+  
+  const partsA = parseUnitNumber(a);
+  const partsB = parseUnitNumber(b);
+  
+  // Compare each part
+  for (let i = 0; i < Math.min(partsA.length, partsB.length); i++) {
+    if (partsA[i] !== partsB[i]) {
+      // If both parts are numbers or both are strings, compare directly
+      if (typeof partsA[i] === typeof partsB[i]) {
+        return partsA[i] < partsB[i] ? -1 : 1;
+      }
+      // If types are different, numbers come before letters
+      return typeof partsA[i] === 'number' ? -1 : 1;
+    }
+  }
+  
+  // If all parts match up to the shortest length, shorter comes first
+  return partsA.length - partsB.length;
+};
+
+export const groupLeasesByProperty = (
+  leases: Lease[],
+  rentalInventory: RentalInventory[],
+  propertyGroups: PropertyGroup[]
+): Array<{
+  groupName: string;
+  units: Array<{
+    id: string;
+    unitNumber: string;
+    rent?: number;
+    daysVacant?: number;
+    isActive: boolean;
+    lastUpdated: Date;
+  }>;
+  totalUnits: number;
+}> => {
+  logger.info("firestoreUtils: Grouping leases by property and identifying vacant vs occupied units");
+  
+  const groups: Record<string, {
+    groupName: string;
+    units: Array<{
+      id: string;
+      unitNumber: string;
+      rent?: number;
+      daysVacant?: number;
+      isActive: boolean;
+      lastUpdated: Date;
+    }>;
+    totalUnits: number;
+  }> = {};
+
+  // 1. Initialize groups based on PropertyGroups and ensure a 'Default' group exists if needed
+  propertyGroups.forEach(pg => {
+    if (!groups[pg.groupName]) {
+      groups[pg.groupName] = { groupName: pg.groupName, units: [], totalUnits: 0 };
+    }
+  });
+  
+  if (rentalInventory.some(inv => !inv.groupName) && !groups['Default']) {
+    groups['Default'] = { groupName: 'Default', units: [], totalUnits: 0 };
+  }
+
+  // 2. Create a map of rental inventory for easy lookup and initialize totalUnits
+  const inventoryMap = new Map<string, RentalInventory>();
+  rentalInventory.forEach(inv => {
+    if (inv.id) {
+      inventoryMap.set(inv.id, inv);
+      const groupName = inv.groupName || 'Default';
+      if (!groups[groupName]) { // Ensure group exists if inventory item belongs to a group not in PropertyGroups
+        groups[groupName] = { groupName: groupName, units: [], totalUnits: 0 };
+      }
+      groups[groupName].totalUnits++;
+    } else {
+      logger.warn("firestoreUtils: Inventory item missing ID:", inv);
+    }
+  });
+
+  // 3. Identify units with active leases
+  const activeLeaseUnits = new Map<string, Lease>();
+  leases.forEach(lease => {
+    if (lease.isActive && lease.unitId) {
+      // If multiple active leases exist for the same unit, prioritize the one updated most recently
+      const existingActive = activeLeaseUnits.get(lease.unitId);
+      if (!existingActive || new Date(lease.updatedAt) > new Date(existingActive.updatedAt)) {
+        activeLeaseUnits.set(lease.unitId, lease);
+      }
+    }
+  });
+  
+  // 4. Process each unit from the inventory map
+  inventoryMap.forEach((inv, unitId) => {
+    const groupName = inv.groupName || 'Default';
+    const group = groups[groupName];
+    
+    if (!group) {
+      logger.warn(`firestoreUtils: Inventory unit ${unitId} belongs to group "${groupName}" which was not initialized. Skipping.`);
+      return; // Should not happen if initialization is correct, but safety check
+    }
+
+    const activeLease = activeLeaseUnits.get(unitId);
+
+    if (activeLease) {
+      // Unit is OCCUPIED
+      logger.debug(`firestoreUtils: Unit ${unitId} (${inv.unitNumber}) is OCCUPIED by active lease ${activeLease.id}`);
+      group.units.push({
+        id: activeLease.id || `lease-${unitId}`, // Use lease ID if available
+        unitNumber: inv.unitNumber, // Get unit number from inventory
+        rent: activeLease.rentAmount,
+        isActive: true,
+        lastUpdated: new Date(activeLease.updatedAt),
+        daysVacant: undefined // Occupied units don't have daysVacant
+      });
+    } else {
+      // Unit is VACANT
+      logger.debug(`firestoreUtils: Unit ${unitId} (${inv.unitNumber}) is VACANT.`);
+      
+      // Find the most recently updated inactive lease for this unit
+      const inactiveLeases = leases
+        .filter(l => l.unitId === unitId && !l.isActive)
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+      let daysVacant: number | undefined = undefined;
+      let lastUpdatedDate: Date | null = null;
+
+      if (inactiveLeases.length > 0) {
+        // Use the updatedAt date of the most recently updated inactive lease
+        lastUpdatedDate = new Date(inactiveLeases[0].updatedAt);
+        const diffTime = Math.abs(new Date().getTime() - lastUpdatedDate.getTime());
+        daysVacant = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      } else {
+        // If no lease history found at all, consider vacancy from inventory creation if available
+        lastUpdatedDate = inv.createdAt ? new Date(inv.createdAt) : new Date();
+        const diffTime = Math.abs(new Date().getTime() - lastUpdatedDate.getTime());
+        daysVacant = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      }
+      
+      // Ensure daysVacant is not negative
+      daysVacant = Math.max(0, daysVacant ?? 0);
+
+      logger.debug(`firestoreUtils: Unit ${unitId} vacancy details: daysVacant=${daysVacant}, lastUpdated=${lastUpdatedDate}`);
+
+      group.units.push({
+        id: `inv-${unitId}`, // Create a unique ID based on inventory
+        unitNumber: inv.unitNumber,
+        rent: undefined, // Vacant units don't have current rent
+        isActive: false,
+        lastUpdated: lastUpdatedDate || new Date(), // Use calculated date or now
+        daysVacant: daysVacant
+      });
+    }
+  });
+    
+  // 5. Sort units within each group (by unit number using the new compareUnitNumbers function)
+  Object.values(groups).forEach(group => {
+    // First split units into occupied and vacant
+    const occupiedUnits = group.units.filter(u => u.isActive);
+    const vacantUnits = group.units.filter(u => !u.isActive);
+    
+    // Sort each array separately
+    occupiedUnits.sort((a, b) => compareUnitNumbers(a.unitNumber, b.unitNumber));
+    vacantUnits.sort((a, b) => compareUnitNumbers(a.unitNumber, b.unitNumber));
+    
+    // Combine the sorted arrays back
+    group.units = [...occupiedUnits, ...vacantUnits];
+  });
+
+  // 6. Sort the groups themselves (keep existing group sorting logic)
+  const sortedGroups = Object.values(groups).sort((a, b) => {
+    if (a.groupName === 'Default') return 1;
+    if (b.groupName === 'Default') return -1;
+    // Sort primarily by number of units descending
+    if (a.totalUnits !== b.totalUnits) {
+      return b.totalUnits - a.totalUnits;
+    }
+    // Then by group name alphabetically
+    return a.groupName.localeCompare(b.groupName);
+  });
+    
+  logger.info(`firestoreUtils: Grouped ${sortedGroups.length} property groups with units.`);
+  return sortedGroups;
+};
