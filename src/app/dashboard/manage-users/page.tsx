@@ -13,14 +13,14 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../..
 import { AlertMessage } from "../../../components/ui/alert-message";
 import { db } from '../../../lib/firebase/firebase';
 import { inviteUser, removeUserAccess } from '../../../lib/firebase/firestoreUtils';
-import { UserProfile } from "@/types";
+import { UserProfile, AllUser } from "@/types";
 import { collection, query, where, getDocs } from 'firebase/firestore';
 
 export default function ManageUsersPage() {
   const { user, loading: authLoading } = useAuth();
   const { landlordId, loading: landlordIdLoading, error: landlordIdError } = useLandlordId();
   const router = useRouter();
-  const [authorizedUsers, setAuthorizedUsers] = useState<UserProfile[]>([]);
+  const [authorizedUsers, setAuthorizedUsers] = useState<AllUser[]>([]);
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -41,14 +41,15 @@ export default function ManageUsersPage() {
     setFormError(null);
     try {
       logger.info(`ManageUsersPage: Fetching users for landlord ${landlordId}...`);
-      const usersCollectionRef = collection(db, 'users');
-      const q = query(usersCollectionRef, where('landlordId', '==', landlordId));
+      const allUsersCollectionRef = collection(db, 'allUsers');
+      const q = query(allUsersCollectionRef, where('landlordId', '==', landlordId));
       const querySnapshot = await getDocs(q);
 
       const usersList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as UserProfile[];
+        uid: doc.id,
+        ...doc.data(),
+        updatedAt: doc.data().updatedAt?.toDate() // Convert Firestore Timestamp to Date
+      })) as AllUser[];
 
       logger.info(`ManageUsersPage: Found ${usersList.length} users.`);
       setAuthorizedUsers(usersList);
@@ -141,15 +142,15 @@ export default function ManageUsersPage() {
   const handleRemoveUser = async (emailToRemove: string) => {
     if (!emailToRemove) return;
 
-     if (!confirm(`Are you sure you want to remove access for ${emailToRemove}? This action cannot be undone.`)) {
-       return;
-     }
+    if (!confirm(`Are you sure you want to remove access for ${emailToRemove}? This action cannot be undone.`)) {
+      return;
+    }
 
     try {
-       logger.info(`ManageUsersPage: Attempting to remove user ${emailToRemove}`);
+      logger.info(`ManageUsersPage: Attempting to remove user ${emailToRemove}`);
       await removeUserAccess(emailToRemove);
-
-      setAuthorizedUsers(prevUsers => prevUsers.filter(u => u.email.toLowerCase() !== emailToRemove.toLowerCase()));
+      
+      await fetchAuthorizedUsers();
       setFormSuccess(`Successfully removed access for ${emailToRemove}.`);
       setFormError(null);
     } catch (error) {
@@ -160,6 +161,8 @@ export default function ManageUsersPage() {
       });
       setFormError(error instanceof Error ? error.message : 'Failed to remove user. Please try again.');
       setFormSuccess(null);
+      
+      await fetchAuthorizedUsers();
     }
   };
 
@@ -282,7 +285,7 @@ export default function ManageUsersPage() {
                  <div className="divide-y divide-gray-200">
                    {authorizedUsers.map((authUser) => (
                      <div
-                       key={authUser.id}
+                       key={authUser.uid}
                        className="py-4 flex justify-between items-center hover:bg-gray-50 px-4 -mx-4 first:hover:rounded-t-lg last:hover:rounded-b-lg"
                      >
                        <div>

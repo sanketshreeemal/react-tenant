@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { theme } from "@/theme/theme"; // Adjusted import path
+import { normalizeDate, formatDisplayDate } from '@/lib/utils/dateUtils';
 
 // Create a FormContent component to wrap the form logic
 function FormContent() {
@@ -86,8 +87,8 @@ function FormContent() {
           setPanNumber(leaseToEdit.panNumber || "");
           setEmployerName(leaseToEdit.employerName || "");
           setPermanentAddress(leaseToEdit.permanentAddress || "");
-          setLeaseStartDate(format(new Date(leaseToEdit.leaseStartDate), 'yyyy-MM-dd'));
-          setLeaseEndDate(format(new Date(leaseToEdit.leaseEndDate), 'yyyy-MM-dd'));
+          setLeaseStartDate(format(normalizeDate(leaseToEdit.leaseStartDate), 'yyyy-MM-dd'));
+          setLeaseEndDate(format(normalizeDate(leaseToEdit.leaseEndDate), 'yyyy-MM-dd'));
           setRentAmount(leaseToEdit.rentAmount);
           setSecurityDeposit(leaseToEdit.securityDeposit);
           setDepositMethod(leaseToEdit.depositMethod);
@@ -204,7 +205,7 @@ function FormContent() {
       setIsSubmitting(false);
       return;
     }
-    if (new Date(leaseStartDate) >= new Date(leaseEndDate)) {
+    if (new Date(normalizeDate(leaseStartDate)) >= new Date(normalizeDate(leaseEndDate))) {
       setFormError("Lease end date must be after start date");
       setIsSubmitting(false);
       return;
@@ -239,8 +240,8 @@ function FormContent() {
         panNumber: panNumber.trim() || "",
         employerName: employerName.trim() || "",
         permanentAddress: permanentAddress.trim() || "",
-        leaseStartDate: new Date(leaseStartDate),
-        leaseEndDate: new Date(leaseEndDate),
+        leaseStartDate: normalizeDate(leaseStartDate),
+        leaseEndDate: normalizeDate(leaseEndDate),
         rentAmount,
         securityDeposit,
         depositMethod,

@@ -5,6 +5,7 @@ import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, addDoc, getDocs,
 import { User } from 'firebase/auth';
 import { Tenant, Lease, RentPayment, RentalInventory, PropertyGroup, UserProfile, AllUser } from '@/types'; // Import our TypeScript interfaces
 import logger from '@/lib/logger'; // Assuming you have a logger utility
+import { normalizeDate, dateToTimestamp } from '../utils/dateUtils';
 
 // Add this at the top of the file after imports
 class AuthError extends Error {
@@ -375,12 +376,16 @@ export const addLease = async (
       ...leaseData,
       landlordId: validLandlordId, // Add landlordId to the document for additional security
       unitNumber: leaseData.unitNumber || "Unknown",
-      leaseStartDate: leaseData.leaseStartDate instanceof Date 
-        ? leaseData.leaseStartDate 
-        : new Date(leaseData.leaseStartDate),
-      leaseEndDate: leaseData.leaseEndDate instanceof Date 
-        ? leaseData.leaseEndDate 
-        : new Date(leaseData.leaseEndDate),
+      leaseStartDate: dateToTimestamp(
+        leaseData.leaseStartDate instanceof Date
+          ? leaseData.leaseStartDate
+          : normalizeDate(leaseData.leaseStartDate)
+      ),
+      leaseEndDate: dateToTimestamp(
+        leaseData.leaseEndDate instanceof Date
+          ? leaseData.leaseEndDate
+          : normalizeDate(leaseData.leaseEndDate)
+      ),
       rentAmount: Number(leaseData.rentAmount),
       securityDeposit: Number(leaseData.securityDeposit),
       createdAt: serverTimestamp(),

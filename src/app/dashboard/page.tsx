@@ -24,6 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input";
 import { Timestamp } from 'firebase/firestore';
+import logger from '@/lib/logger';
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -42,26 +43,46 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState<string>("");
 
   useEffect(() => {
+    if (user && landlordId) {
+      logger.info(`Dashboard Context: User UID = ${user.uid}, Landlord ID = ${landlordId}`);
+    } else if (user && !landlordId && !loading) {
+       logger.warn(`Dashboard Context: User UID = ${user.uid}, Landlord ID MISSING`);
+    } else if (!user && !loading) {
+       logger.info(`Dashboard Context: No user logged in.`);
+    }
+  }, [user, landlordId, loading]);
+
+  useEffect(() => {
     if (!loading && !user) {
       router.push("/");
     }
   }, [user, loading, router]);
 
   useEffect(() => {
-    // Set current month and month name on component mount
     const now = new Date();
-    // Set to previous month
-    const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1);
-    setCurrentMonth(previousMonth.toISOString().slice(0, 7)); // Format: "YYYY-MM"
-    setCurrentMonthName(previousMonth.toLocaleString('default', { month: 'long', year: 'numeric' }));
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    const previousMonthIndex = month === 0 ? 11 : month - 1;
+    const previousMonthYear = month === 0 ? year - 1 : year;
+
+    const previousMonthString = `${previousMonthYear}-${String(previousMonthIndex + 1).padStart(2, '0')}`;
+    const previousMonthName = new Date(previousMonthYear, previousMonthIndex).toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    logger.info(`Dashboard Date Calc: Device Time = ${now.toString()}, Calculated Prev Month String = ${previousMonthString}, Calculated Prev Month Name = ${previousMonthName}`);
+
+    setCurrentMonth(previousMonthString);
+    setCurrentMonthName(previousMonthName);
   }, []);
 
   useEffect(() => {
     if (user && landlordId) {
       const fetchDashboardData = async () => {
         setDataLoading(true);
-        setError(null); // Clear previous errors on new fetch
+        setError(null);
         try {
+          logger.info(`Dashboard Fetch: Starting fetch with Landlord ID = ${landlordId}`);
+
           const [propertiesData, activeLeaseData, allLeasesData, paymentsData] = await Promise.all([
             getAllRentalInventory(landlordId),
             getAllActiveLeases(landlordId),
@@ -69,12 +90,17 @@ export default function Dashboard() {
             getAllPayments(landlordId)
           ]);
 
+          logger.info(`Dashboard Fetch: Raw payments received count = ${paymentsData.length}`);
+          if (paymentsData.length > 0) {
+             logger.debug(`Dashboard Fetch: Sample raw payment rentalPeriod = ${paymentsData[0].rentalPeriod}`);
+          }
+
           setProperties(propertiesData);
           setActiveLeases(activeLeaseData);
           setAllLeases(allLeasesData);
           setRentPayments(paymentsData);
-        } catch (err) {
-          console.error("Error fetching dashboard data:", err);
+        } catch (err: any) {
+          logger.error(`Dashboard Fetch Error: ${err.message}`, err);
           if (err instanceof Error && err.message.includes("permission")) {
              setError("Permission denied fetching data. Please check Firestore rules or contact support.");
           } else {
@@ -87,7 +113,7 @@ export default function Dashboard() {
 
       fetchDashboardData();
     } else if (!loading && user && !landlordId) {
-       setDataLoading(true); // Keep showing loading until landlordId arrives
+       setDataLoading(true);
        setError(null);
     } else if (!loading && !user) {
        setDataLoading(false);
@@ -99,39 +125,40 @@ export default function Dashboard() {
     }
   }, [user, landlordId, loading]);
 
-  // Calculate dashboard metrics
   const calculateDashboardMetrics = () => {
-    // Total properties
     const totalProperties = properties.length;
 
-    // Occupancy rate
     const occupiedUnits = activeLeases.length;
     const occupancyRate = totalProperties > 0 
       ? Math.round((occupiedUnits / totalProperties) * 100) 
       : 0;
 
-    // Current month rent collection - only count "Rent Payment" type
+    logger.info(`Dashboard Calc: Calculating metrics. Payments in state = ${rentPayments.length}, Filtering month = ${currentMonth}`);
+
     const currentMonthPayments = rentPayments.filter(
-      payment => payment.rentalPeriod === currentMonth && 
-      (payment.paymentType === "Rent Payment" || !payment.paymentType) // Include payments without type for backward compatibility
+      payment => {
+         const isMatch = payment.rentalPeriod === currentMonth &&
+                       (payment.paymentType === "Rent Payment" || !payment.paymentType);
+         return isMatch;
+      }
     );
-    
-    // Sum up actual rent paid for current month
+
+    logger.info(`Dashboard Calc: Filtered payments count for ${currentMonth} = ${currentMonthPayments.length}`);
+
     const totalRentCollected = currentMonthPayments.reduce(
       (sum, payment) => sum + payment.actualRentPaid, 0
     );
-    
-    // Expected rent from active leases
+
+    logger.info(`Dashboard Calc: Final totalRentCollected = ${totalRentCollected}`);
+
     const totalExpectedRent = activeLeases.reduce(
       (sum, lease) => sum + lease.rentAmount, 0
     );
-    
-    // Collection rate
+
     const collectionRate = totalExpectedRent > 0 
       ? Math.round((totalRentCollected / totalExpectedRent) * 100) 
       : 0;
     
-    // Upcoming lease expirations (next 30 days)
     const today = new Date();
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(today.getDate() + 30);
@@ -152,22 +179,18 @@ export default function Dashboard() {
     };
   };
 
-  // Get rent collection status
   const getRentCollectionStatus = () => {
-    // Get units with paid rent for previous month
     const paidUnitIds = rentPayments
       .filter(payment => 
         payment.rentalPeriod === currentMonth && 
-        (payment.paymentType === "Rent Payment" || !payment.paymentType) // Include payments without type for backward compatibility
+        (payment.paymentType === "Rent Payment" || !payment.paymentType)
       )
       .map(payment => payment.unitId);
     
-    // Units with active leases that haven't paid
     const unpaidLeases = activeLeases.filter(
       lease => !paidUnitIds.includes(lease.unitId)
     );
     
-    // Calculate total pending amount
     const totalPendingAmount = unpaidLeases.reduce(
       (sum, lease) => sum + lease.rentAmount, 0
     );
@@ -175,12 +198,11 @@ export default function Dashboard() {
     return {
       paid: paidUnitIds.length,
       unpaid: unpaidLeases.length,
-      unpaidLeases: unpaidLeases.sort((a, b) => b.rentAmount - a.rentAmount), // Sort by rent amount in descending order
+      unpaidLeases: unpaidLeases.sort((a, b) => b.rentAmount - a.rentAmount),
       totalPendingAmount
     };
   };
 
-  // Get lease expirations for active leases
   const getUpcomingLeaseExpirations = () => {
     const today = new Date();
     const thirtyDaysFromNow = new Date();
@@ -194,10 +216,9 @@ export default function Dashboard() {
         );
         return { ...lease, daysLeft };
       })
-      .filter(lease => lease.daysLeft <= 30) // Only include expired leases and those expiring within 30 days
+      .filter(lease => lease.daysLeft <= 30)
       .sort((a, b) => a.daysLeft - b.daysLeft);
 
-    // Calculate total value of expiring leases
     const totalLeaseValue = expiringLeases.reduce(
       (sum, lease) => sum + lease.rentAmount, 0
     );
@@ -209,7 +230,6 @@ export default function Dashboard() {
     };
   };
 
-  // Add new function to calculate property type split
   const calculatePropertyTypeSplit = (properties: RentalInventory[]) => {
     const commercial = properties.filter(p => p.propertyType === 'Commercial').length;
     const residential = properties.filter(p => p.propertyType === 'Residential').length;
@@ -218,10 +238,8 @@ export default function Dashboard() {
 
   const handleSort = (column: string) => {
     if (sortColumn === column) {
-      // If clicking the same column, toggle direction
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
-      // If clicking a different column, set it with desc direction
       setSortColumn(column);
       setSortDirection('desc');
     }
@@ -259,13 +277,11 @@ export default function Dashboard() {
     }
   });
 
-  // Function to render sort arrow
   const renderSortArrow = (column: string) => {
     if (sortColumn !== column) return null;
     return sortDirection === 'asc' ? <ArrowUp className="h-4 w-4 text-blue-500" /> : <ArrowDown className="h-4 w-4 text-blue-500" />;
   };
 
-  // Update the filteredPayments logic to search across all fields
   const filteredPayments = rentPayments.filter((payment) => {
     if (!searchTerm) return true;
     
@@ -325,7 +341,6 @@ export default function Dashboard() {
               <h1 className="text-xl md:text-2xl font-bold">Dashboard</h1>
             </div>
             
-            {/* Summary Cards - Mobile First Layout */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <StatCard 
                 title={`Rent Collected (${currentMonthName})`}
@@ -352,9 +367,7 @@ export default function Dashboard() {
               />
             </div>
             
-            {/* Desktop Layout - Side by Side Cards */}
             <div className="hidden lg:grid lg:grid-cols-2 gap-4">
-              {/* Rent Collection Status */}
               <Card>
                 <CardHeader>
                   <CardTitle>{currentMonthName} Rent Collection Status</CardTitle>
@@ -417,7 +430,6 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
 
-              {/* Lease Expirations */}
               <Card>
                 <CardHeader>
                   <CardTitle>Upcoming Lease Expirations</CardTitle>
@@ -477,7 +489,6 @@ export default function Dashboard() {
               </Card>
             </div>
 
-            {/* Mobile Layout - Tabbed Interface */}
             <div className="lg:hidden mt-4">
               <Tabs defaultValue="rent" className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
