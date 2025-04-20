@@ -16,7 +16,7 @@ import {
   deletePropertyGroup,
 } from "@/lib/firebase/firestoreUtils";
 import { downloadInventoryTemplate, uploadInventoryExcel } from "@/lib/excelUtils";
-import { FileUp, FileDown, Loader2, AlertTriangle, CheckCircle, X, Plus, Pencil, Trash2, Home, Building, ChevronRight, Users } from "lucide-react";
+import { FileUp, FileDown, Loader2, AlertTriangle, CheckCircle, X, Plus, Pencil, Trash2, Home, Building, ChevronRight, Users, Search, Filter, CalendarIcon, XCircle, ArrowUp, ArrowDown } from "lucide-react";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,10 @@ import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { theme } from "@/theme/theme";
 import { PanelContainer } from "@/components/ui/panel";
+
+// Add type definitions for sorting
+type SortColumn = 'unitNumber' | 'propertyType' | 'ownerDetails' | 'bankDetails' | 'numberOfBedrooms' | 'squareFeetArea';
+type SortDirection = 'asc' | 'desc';
 
 export default function RentalInventoryManagement() {
   const { user, loading: authLoading } = useAuth();
@@ -58,6 +62,10 @@ export default function RentalInventoryManagement() {
   // Property Group state
   const [propertyGroups, setPropertyGroups] = useState<PropertyGroup[]>([]);
   
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortColumn, setSortColumn] = useState<SortColumn>('unitNumber');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
   const loadInventoryData = useCallback(async () => {
     if (!landlordId) return;
 
@@ -419,6 +427,65 @@ export default function RentalInventoryManagement() {
     }
   };
 
+  // Add filtered properties logic
+  const filteredInventory = inventoryItems.filter((item) => {
+    if (!searchTerm.trim()) return true;
+    
+    const searchLower = searchTerm.toLowerCase();
+    
+    return (
+      item.unitNumber.toLowerCase().includes(searchLower) ||
+      item.propertyType.toLowerCase().includes(searchLower) ||
+      item.ownerDetails.toLowerCase().includes(searchLower) ||
+      (item.bankDetails || "").toLowerCase().includes(searchLower) ||
+      (item.numberOfBedrooms?.toString() || "").includes(searchLower) ||
+      (item.squareFeetArea?.toString() || "").includes(searchLower)
+    );
+  });
+
+  // Add sorting logic
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('desc');
+    }
+  };
+
+  const sortedInventory = [...filteredInventory].sort((a, b) => {
+    const direction = sortDirection === 'asc' ? 1 : -1;
+    
+    switch (sortColumn) {
+      case 'unitNumber':
+        return direction * a.unitNumber.localeCompare(b.unitNumber);
+      
+      case 'propertyType':
+        return direction * a.propertyType.localeCompare(b.propertyType);
+      
+      case 'ownerDetails':
+        return direction * a.ownerDetails.localeCompare(b.ownerDetails);
+      
+      case 'bankDetails':
+        const bankA = a.bankDetails || "";
+        const bankB = b.bankDetails || "";
+        return direction * bankA.localeCompare(bankB);
+      
+      case 'numberOfBedrooms':
+        const bedroomsA = a.numberOfBedrooms || 0;
+        const bedroomsB = b.numberOfBedrooms || 0;
+        return direction * (bedroomsA - bedroomsB);
+      
+      case 'squareFeetArea':
+        const areaA = a.squareFeetArea || 0;
+        const areaB = b.squareFeetArea || 0;
+        return direction * (areaA - areaB);
+      
+      default:
+        return 0;
+    }
+  });
+
   if (authLoading || landlordIdLoading || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -654,28 +721,130 @@ export default function RentalInventoryManagement() {
             <AccordionContent>
               {/* Inventory Table */}
               <div className="bg-white shadow rounded-lg overflow-hidden">
+                <div className="p-4 border-b flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
+                  <div className="relative w-full md:flex-1 md:max-w-md">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Search className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      className="block w-full pl-10 pr-8 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      placeholder="Search properties..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    {searchTerm && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchTerm("")}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        <X className="h-4 w-4 text-gray-400 hover:text-gray-500" aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <div className="overflow-x-auto">
                   <div className="min-w-full inline-block align-middle">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th 
+                            scope="col" 
+                            className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                            onClick={() => handleSort('unitNumber')}
+                          >
                             Unit
+                            {sortColumn === 'unitNumber' && (
+                              <span className="inline-block ml-1">
+                                {sortDirection === 'asc' ? (
+                                  <ArrowUp className="h-4 w-4 text-blue-500 inline" />
+                                ) : (
+                                  <ArrowDown className="h-4 w-4 text-blue-500 inline" />
+                                )}
+                              </span>
+                            )}
                           </th>
-                          <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th 
+                            scope="col" 
+                            className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                            onClick={() => handleSort('propertyType')}
+                          >
                             Type
+                            {sortColumn === 'propertyType' && (
+                              <span className="inline-block ml-1">
+                                {sortDirection === 'asc' ? (
+                                  <ArrowUp className="h-4 w-4 text-blue-500 inline" />
+                                ) : (
+                                  <ArrowDown className="h-4 w-4 text-blue-500 inline" />
+                                )}
+                              </span>
+                            )}
                           </th>
-                          <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th 
+                            scope="col" 
+                            className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                            onClick={() => handleSort('ownerDetails')}
+                          >
                             Owner
+                            {sortColumn === 'ownerDetails' && (
+                              <span className="inline-block ml-1">
+                                {sortDirection === 'asc' ? (
+                                  <ArrowUp className="h-4 w-4 text-blue-500 inline" />
+                                ) : (
+                                  <ArrowDown className="h-4 w-4 text-blue-500 inline" />
+                                )}
+                              </span>
+                            )}
                           </th>
-                          <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th 
+                            scope="col" 
+                            className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                            onClick={() => handleSort('bankDetails')}
+                          >
                             Bank
+                            {sortColumn === 'bankDetails' && (
+                              <span className="inline-block ml-1">
+                                {sortDirection === 'asc' ? (
+                                  <ArrowUp className="h-4 w-4 text-blue-500 inline" />
+                                ) : (
+                                  <ArrowDown className="h-4 w-4 text-blue-500 inline" />
+                                )}
+                              </span>
+                            )}
                           </th>
-                          <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th 
+                            scope="col" 
+                            className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                            onClick={() => handleSort('numberOfBedrooms')}
+                          >
                             BHK
+                            {sortColumn === 'numberOfBedrooms' && (
+                              <span className="inline-block ml-1">
+                                {sortDirection === 'asc' ? (
+                                  <ArrowUp className="h-4 w-4 text-blue-500 inline" />
+                                ) : (
+                                  <ArrowDown className="h-4 w-4 text-blue-500 inline" />
+                                )}
+                              </span>
+                            )}
                           </th>
-                          <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th 
+                            scope="col" 
+                            className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                            onClick={() => handleSort('squareFeetArea')}
+                          >
                             Area (sq.ft)
+                            {sortColumn === 'squareFeetArea' && (
+                              <span className="inline-block ml-1">
+                                {sortDirection === 'asc' ? (
+                                  <ArrowUp className="h-4 w-4 text-blue-500 inline" />
+                                ) : (
+                                  <ArrowDown className="h-4 w-4 text-blue-500 inline" />
+                                )}
+                              </span>
+                            )}
                           </th>
                           <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Actions
@@ -683,13 +852,23 @@ export default function RentalInventoryManagement() {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {inventoryItems.length > 0 ? (
-                          inventoryItems.map((item) => {
+                        {sortedInventory.length > 0 ? (
+                          sortedInventory.map((item) => {
                             const typeInfo = getPropertyTypeColor(item.propertyType);
                             const bhkColor = item.numberOfBedrooms ? getBHKColor(item.numberOfBedrooms) : null;
                             
                             return (
-                              <tr key={item.id} className="hover:bg-gray-50">
+                              <tr 
+                                key={item.id} 
+                                className="hover:bg-gray-50 cursor-pointer"
+                                onClick={(e) => {
+                                  // Prevent row click if clicking on action buttons
+                                  const target = e.target as HTMLElement;
+                                  if (!target.closest('button')) {
+                                    router.push(`/dashboard/property-mgmt/forms?type=property&view=${item.id}`);
+                                  }
+                                }}
+                              >
                                 <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">
                                   {item.unitNumber}
                                 </td>
@@ -754,7 +933,10 @@ export default function RentalInventoryManagement() {
                                 <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                                   <div className="flex items-center justify-center gap-2">
                                     <button
-                                      onClick={() => router.push(`/dashboard/property-mgmt/forms?type=property&edit=${item.id}`)}
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // Prevent row click
+                                        router.push(`/dashboard/property-mgmt/forms?type=property&edit=${item.id}`);
+                                      }}
                                       className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
                                       title="Edit property"
                                     >
@@ -762,7 +944,10 @@ export default function RentalInventoryManagement() {
                                       <span className="sr-only">Edit</span>
                                     </button>
                                     <button
-                                      onClick={() => item.id && handleDelete(item.id)}
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // Prevent row click
+                                        item.id && handleDelete(item.id);
+                                      }}
                                       className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
                                       title="Delete property"
                                     >
@@ -777,7 +962,7 @@ export default function RentalInventoryManagement() {
                         ) : (
                           <tr>
                             <td colSpan={7} className="px-2 sm:px-6 py-10 text-center text-sm text-gray-500">
-                              No rental inventory items found. Click &quot;+ Manual Add&quot; to create one or use the Excel upload feature.
+                              {searchTerm ? "No properties found matching your search." : "No rental inventory items found. Click &quot;+ Manual Add&quot; to create one or use the Excel upload feature."}
                             </td>
                           </tr>
                         )}

@@ -1868,3 +1868,34 @@ export const groupLeasesByProperty = (
   logger.info(`firestoreUtils: Grouped ${sortedGroups.length} property groups with units.`);
   return sortedGroups;
 };
+
+/** Number of days after which a payment record becomes uneditable (2 months + 5 days) */
+const EDITABLE_PERIOD_DAYS = 65;
+
+/**
+ * Determines if a payment record is still editable based on its rental period
+ * A payment is editable if the current date is within EDITABLE_PERIOD_DAYS of the rental period
+ * 
+ * @param rentalPeriod - The rental period in format "YYYY-MM"
+ * @returns boolean indicating if the payment record is still editable
+ */
+export const isPaymentEditable = (rentalPeriod: string): boolean => {
+  try {
+    // Parse the rental period (format: "YYYY-MM")
+    const [year, month] = rentalPeriod.split('-').map(Number);
+    if (!year || !month) return false;
+
+    // Create date object for the first day of the rental period
+    const rentalDate = new Date(year, month - 1); // month is 0-based in Date constructor
+
+    // Calculate deadline by adding EDITABLE_PERIOD_DAYS
+    const deadline = new Date(rentalDate);
+    deadline.setDate(deadline.getDate() + EDITABLE_PERIOD_DAYS);
+
+    // Compare with current date
+    return new Date() <= deadline;
+  } catch (error) {
+    console.error('Error checking payment editability:', error);
+    return false;
+  }
+};

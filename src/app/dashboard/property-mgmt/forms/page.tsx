@@ -15,7 +15,7 @@ import {
   getAllRentalInventory,
 } from "@/lib/firebase/firestoreUtils";
 import { AlertMessage } from "@/components/ui/alert-message";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +30,7 @@ function PropertyFormsContent() {
   const searchParams = useSearchParams();
   const formType = searchParams.get("type"); // 'property' or 'group'
   const editId = searchParams.get("edit"); // For editing existing properties
+  const viewId = searchParams.get("view"); // For viewing existing properties
   
   // Form refs
   const formRef = useRef<HTMLDivElement>(null);
@@ -89,21 +90,21 @@ function PropertyFormsContent() {
     }
   }, [user, authLoading, landlordId, landlordLoading, loadPropertyGroups, loadInventoryData]);
 
-  // Add effect to handle pre-populating form data when editing
+  // Add effect to handle pre-populating form data when editing or viewing
   useEffect(() => {
-    if (editId && inventoryItems.length > 0) {
-      const propertyToEdit = inventoryItems.find((item: RentalInventory) => item.id === editId);
-      if (propertyToEdit) {
-        setUnitNumber(propertyToEdit.unitNumber);
-        setPropertyType(propertyToEdit.propertyType);
-        setOwnerDetails(propertyToEdit.ownerDetails);
-        setBankDetails(propertyToEdit.bankDetails || "");
-        setSelectedPropertyGroup(propertyToEdit.groupName || "Default");
-        setNumberOfBedrooms(propertyToEdit.numberOfBedrooms || null);
-        setSquareFeetArea(propertyToEdit.squareFeetArea || null);
+    if ((editId || viewId) && inventoryItems.length > 0) {
+      const propertyToLoad = inventoryItems.find((item: RentalInventory) => item.id === (editId || viewId));
+      if (propertyToLoad) {
+        setUnitNumber(propertyToLoad.unitNumber);
+        setPropertyType(propertyToLoad.propertyType);
+        setOwnerDetails(propertyToLoad.ownerDetails);
+        setBankDetails(propertyToLoad.bankDetails || "");
+        setSelectedPropertyGroup(propertyToLoad.groupName || "Default");
+        setNumberOfBedrooms(propertyToLoad.numberOfBedrooms || null);
+        setSquareFeetArea(propertyToLoad.squareFeetArea || null);
       }
     }
-  }, [editId, inventoryItems]);
+  }, [editId, viewId, inventoryItems]);
 
   const handlePropertySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,26 +244,36 @@ function PropertyFormsContent() {
       
       <div className="md:ml-64 p-4">
         <div className="max-w-3xl mx-auto">
-          <Button
-            onClick={() => router.push("/dashboard/property-mgmt")}
-            variant="outline"
-            className="mb-6"
-            style={{
-              backgroundColor: theme.colors.button.secondary,
-              color: theme.colors.button.secondaryText,
-              borderColor: theme.colors.button.secondaryBorder,
-            }}
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Properties
-          </Button>
+          {/* Header Card */}
+          <Card className="mb-6">
+            <CardHeader className="py-4 px-4 sm:px-6 lg:px-8">
+              <div className="w-full flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center">
+                  <CardTitle className="text-2xl font-semibold text-gray-900 text-center sm:text-left">
+                    {editId ? "Edit Property" : viewId ? "View Property" : formType === "group" ? "Add Property Group" : "Add New Property"}
+                  </CardTitle>
+                </div>
+                <Button
+                  onClick={() => router.push("/dashboard/property-mgmt")}
+                  size="sm"
+                  style={{
+                    backgroundColor: theme.colors.button.primary,
+                    color: theme.colors.background,
+                  }}
+                  className="hover:bg-primary/90"
+                >
+                  Back to Properties
+                </Button>
+              </div>
+            </CardHeader>
+          </Card>
 
           {formType === "property" ? (
             <Card ref={formRef}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Home className="h-5 w-5" />
-                  {editId ? "Edit Property" : "Add New Property"}
+                  {editId ? "Edit Property Details" : viewId ? "View Property Details" : "Add New Property"}
                 </CardTitle>
               </CardHeader>
               
@@ -288,6 +299,7 @@ function PropertyFormsContent() {
                         onChange={(e) => setUnitNumber(e.target.value)}
                         placeholder="e.g., 101 or HSR2"
                         required
+                        readOnly={!!viewId}
                       />
                     </div>
                     
@@ -303,6 +315,7 @@ function PropertyFormsContent() {
                             setNumberOfBedrooms(null);
                           }
                         }}
+                        disabled={!!viewId}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select property type" />
@@ -322,6 +335,7 @@ function PropertyFormsContent() {
                         <Select 
                           value={numberOfBedrooms?.toString() || ""} 
                           onValueChange={(value) => setNumberOfBedrooms(parseInt(value))}
+                          disabled={!!viewId}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Select BHK" />
@@ -353,6 +367,7 @@ function PropertyFormsContent() {
                         }}
                         min="1"
                         placeholder="Enter area in square feet"
+                        readOnly={!!viewId}
                       />
                     </div>
 
@@ -363,6 +378,7 @@ function PropertyFormsContent() {
                       <Select 
                         value={selectedPropertyGroup} 
                         onValueChange={(value) => setSelectedPropertyGroup(value)}
+                        disabled={!!viewId}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select property group" />
@@ -389,6 +405,7 @@ function PropertyFormsContent() {
                         rows={3}
                         placeholder="Enter owner name, contact info, etc."
                         required
+                        readOnly={!!viewId}
                       />
                     </div>
                     
@@ -402,28 +419,52 @@ function PropertyFormsContent() {
                         onChange={(e) => setBankDetails(e.target.value)}
                         rows={3}
                         placeholder="Enter bank account info, IFSC code, etc."
+                        readOnly={!!viewId}
                       />
                     </div>
                   </div>
                   
-                  <div className="flex justify-end space-x-3 mt-6">
-                    <Button
-                      type="button"
-                      onClick={() => router.push("/dashboard/property-mgmt")}
-                      variant="outline"
-                      style={{
-                        backgroundColor: theme.colors.button.secondary,
-                        color: theme.colors.button.secondaryText,
-                        borderColor: theme.colors.button.secondaryBorder,
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    
-                    <Button type="submit">
-                      {editId ? "Update Property" : "Add Property"}
-                    </Button>
-                  </div>
+                  <CardFooter className="flex justify-end space-x-3 px-0 pt-6">
+                    {viewId ? (
+                      <Button
+                        type="button"
+                        onClick={() => router.push("/dashboard/property-mgmt")}
+                        style={{
+                          backgroundColor: theme.colors.button.primary,
+                          color: theme.colors.background,
+                        }}
+                        className="hover:bg-primary/90"
+                      >
+                        Back to Properties
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          type="button"
+                          onClick={() => router.push("/dashboard/property-mgmt")}
+                          variant="outline"
+                          style={{
+                            backgroundColor: theme.colors.button.secondary,
+                            color: theme.colors.button.secondaryText,
+                            borderColor: theme.colors.button.secondaryBorder,
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        
+                        <Button 
+                          type="submit"
+                          style={{
+                            backgroundColor: theme.colors.button.primary,
+                            color: theme.colors.background,
+                          }}
+                          className="hover:bg-primary/90"
+                        >
+                          {editId ? "Update Property" : "Add Property"}
+                        </Button>
+                      </>
+                    )}
+                  </CardFooter>
                 </form>
               </CardContent>
             </Card>
@@ -460,7 +501,7 @@ function PropertyFormsContent() {
                     />
                   </div>
                   
-                  <div className="flex justify-end space-x-3 mt-6">
+                  <CardFooter className="flex justify-end space-x-3 px-0 pt-6">
                     <Button
                       type="button"
                       onClick={() => router.push("/dashboard/property-mgmt")}
@@ -474,10 +515,17 @@ function PropertyFormsContent() {
                       Cancel
                     </Button>
                     
-                    <Button type="submit">
+                    <Button 
+                      type="submit"
+                      style={{
+                        backgroundColor: theme.colors.button.primary,
+                        color: theme.colors.background,
+                      }}
+                      className="hover:bg-primary/90"
+                    >
                       Add Group
                     </Button>
-                  </div>
+                  </CardFooter>
                 </form>
 
                 {/* Saved Property Groups Card */}
@@ -527,6 +575,10 @@ function PropertyFormsContent() {
                 <Button
                   onClick={() => router.push("/dashboard/property-mgmt")}
                   className="mt-4"
+                  style={{
+                    backgroundColor: theme.colors.button.primary,
+                    color: theme.colors.background,
+                  }}
                 >
                   Return to Properties
                 </Button>

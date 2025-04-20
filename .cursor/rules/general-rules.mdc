@@ -37,6 +37,7 @@ This document outlines the coding standards and best practices that must be foll
     * Adhere to the existing coding style and conventions used in the project.
     * Use a code formatter (e.g., Prettier) to ensure consistent formatting.
     * Use a linter (e.g., ESLint) to catch potential errors and enforce coding standards.
+    * Create all functions within the FirestoreUtils file such that they are centralized and can be resused across the application if required. 
 7.  **Thorough Testing:**
     * Write unit tests and integration tests to verify the correctness of your code.
     * Test all edge cases and error scenarios.

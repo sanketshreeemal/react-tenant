@@ -19,7 +19,7 @@ const theme = {
 
     // Background colors for the overall page and surfaces (cards, panels)
     background: "#FFFFFF",       // Clean white background for the page
-    surface: "#FAFBFC",          // Very light gray for card backgrounds or elevated surfaces
+    surface: "#FCFCFD",          // Very subtle off-white for card backgrounds
 
     // Text colors for primary and secondary content
     textPrimary: "#1F2937",      // Dark gray for primary text for strong contrast

@@ -15,7 +15,7 @@ import {
   groupLeasesByProperty
 } from "@/lib/firebase/firestoreUtils";
 import { format, formatDistance, formatRelative, formatDuration, intervalToDuration } from 'date-fns';
-import { Search, Filter, CalendarIcon, CheckCircle, XCircle, FileUp, FileDown, Loader2, AlertTriangle, X, Plus, Pencil, Building } from "lucide-react";
+import { Search, Filter, CalendarIcon, CheckCircle, XCircle, FileUp, FileDown, Loader2, AlertTriangle, X, Plus, Pencil, Building, Trash2, Users, ArrowUp, ArrowDown } from "lucide-react";
 import { downloadTenantTemplate, uploadTenantExcel } from "@/lib/excelUtils";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -25,6 +25,10 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { theme } from "@/theme/theme";
 import { PanelContainer } from "@/components/ui/panel";
 import { TenantOccupancyPanel } from "@/components/ui/tab-panel";
+
+// Add type definitions for sorting
+type SortColumn = 'unitNumber' | 'tenantName' | 'email' | 'leasePeriod' | 'rentAmount';
+type SortDirection = 'asc' | 'desc';
 
 export default function TenantsManagement() {
   const { user, loading: authLoading } = useAuth();
@@ -52,6 +56,9 @@ export default function TenantsManagement() {
   const [showUploadResults, setShowUploadResults] = useState(false);
   const [isInstructionsExpanded, setIsInstructionsExpanded] = useState(false);
   const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error' | 'info' | 'warning', message: string } | null>(null);
+  
+  const [sortColumn, setSortColumn] = useState<SortColumn>('unitNumber');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   
   useEffect(() => {
     if (showUploadResults) {
@@ -235,7 +242,7 @@ export default function TenantsManagement() {
     );
   };
   
-  const getUnitNumber = (unitId: string) => {
+  const getUnitNumber = useCallback((unitId: string) => {
     if (!unitId) {
       console.warn("Empty unitId passed to getUnitNumber");
       return "Unknown";
@@ -256,7 +263,7 @@ export default function TenantsManagement() {
     }
     
     return unitId; // Fallback to unitId if no match found
-  };
+  }, [rentalInventory]);
   
   const handleDownloadTemplate = async () => {
     const result = await downloadTenantTemplate();
@@ -327,6 +334,44 @@ export default function TenantsManagement() {
     
     return groupLeasesByProperty(leases, rentalInventory, propertyGroups);
   }, [leases, rentalInventory, propertyGroups]);
+
+  // Add sorting logic
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('desc');
+    }
+  };
+
+  const sortedLeases = useMemo(() => {
+    return [...filteredLeases].sort((a, b) => {
+      const direction = sortDirection === 'asc' ? 1 : -1;
+      
+      switch (sortColumn) {
+        case 'unitNumber':
+          const unitA = a.unitNumber || getUnitNumber(a.unitId);
+          const unitB = b.unitNumber || getUnitNumber(b.unitId);
+          return direction * unitA.localeCompare(unitB);
+        
+        case 'tenantName':
+          return direction * a.tenantName.localeCompare(b.tenantName);
+        
+        case 'email':
+          return direction * a.email.localeCompare(b.email);
+        
+        case 'leasePeriod':
+          return direction * (new Date(a.leaseStartDate).getTime() - new Date(b.leaseStartDate).getTime());
+        
+        case 'rentAmount':
+          return direction * (a.rentAmount - b.rentAmount);
+        
+        default:
+          return 0;
+      }
+    });
+  }, [filteredLeases, sortColumn, sortDirection, getUnitNumber]);
   
   if (authLoading || landlordLoading || isLoading) {
     return (
@@ -344,7 +389,7 @@ export default function TenantsManagement() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       
-      <div className="md:ml-64 p-4 overflow-x-hidden">
+      <main className="md:ml-64 p-4 overflow-x-hidden">
         {alertMessage && (
           <div className="max-w-7xl mx-auto mb-6">
             <AlertMessage
@@ -525,12 +570,12 @@ export default function TenantsManagement() {
                   isExpanded={expandedPanelId === `group-${group.groupName}`}
                   onClick={() => togglePanelExpansion(`group-${group.groupName}`)}
                 />
-                            ))
-                          ) : (
+              ))
+            ) : (
               <div className="col-span-full text-center py-6 text-gray-500">
                 <Building className="h-10 w-10 mx-auto mb-2 text-gray-300" />
                 No property groups or tenant data found to display panels.
-                      </div>
+              </div>
             )}
           </PanelContainer>
 
@@ -586,127 +631,225 @@ export default function TenantsManagement() {
             </div>
           )}
           
-          <div className="bg-white shadow rounded-lg p-4 mb-6">
-            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 w-full">
-              <div className="relative flex-grow">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search by tenant, unit, or email..."
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <div className="flex-shrink-0">
-                <button className="flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filter
-                </button>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Unit
-                    </th>
-                    <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Tenant
-                    </th>
-                    <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Contact
-                    </th>
-                    <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Lease
-                    </th>
-                    <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Rent
-                    </th>
-                    <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredLeases.length > 0 ? (
-                    filteredLeases.map((lease) => (
-                      <tr key={lease.id} className={`hover:bg-gray-50 ${!lease.isActive ? 'bg-gray-50 opacity-70' : ''}`}>
-                        <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">
-                          {lease.unitNumber || getUnitNumber(lease.unitId)}
-                        </td>
-                        <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">
-                          {lease.tenantName}
-                        </td>
-                        <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                          <div className="flex flex-col items-center">
-                            <div>{lease.email}</div>
-                            <div className="text-xs">{lease.countryCode} {lease.phoneNumber}</div>
-                          </div>
-                        </td>
-                        <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                          {formatLeasePeriod(lease.leaseStartDate, lease.leaseEndDate)}
-                        </td>
-                        <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                          ₹{lease.rentAmount.toLocaleString()}
-                        </td>
-                        <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                          <div className="flex items-center justify-center gap-3">
-                            <button
-                              onClick={() => router.push(`/dashboard/tenants/forms?edit=${lease.id}`)}
-                              className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors -mt-4"
-                              title="Edit lease"
-                            >
-                              <Pencil className="h-4 w-4" />
-                              <span className="sr-only">Edit</span>
-                            </button>
+          <div className="max-w-7xl mx-auto">
+            <Accordion 
+              type="single" 
+              collapsible 
+              className="mb-8"
+              defaultValue="tenants-table"
+            >
+              <AccordionItem value="tenants-table" className="bg-white rounded-lg shadow">
+                <AccordionTrigger className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-gray-500" />
+                    <span className="font-medium">Tenants & Leases Table</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="p-4 border-b">
+                    <div className="relative w-full">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Search className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Search by tenant, unit, or email..."
+                        className="block w-full pl-10 pr-8 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                      {searchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchTerm("")}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        >
+                          <X className="h-4 w-4 text-gray-400 hover:text-gray-500" aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
-                            <button
-                              onClick={() => initiateDeleteLease(lease.id as string)}
-                              className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors -mb-1"
-                              title="Delete lease"
-                            >
-                              <X className="h-4 w-4" />
-                              <span className="sr-only">Delete</span>
-                            </button>
-
-                            <div className="flex flex-col items-center">
-                              <label className="inline-flex relative items-center cursor-pointer mt-1">
-                                <input
-                                  type="checkbox"
-                                  className="sr-only peer"
-                                  checked={lease.isActive}
-                                  onChange={() => handleToggleLeaseStatus(lease.id as string, lease.isActive)}
-                                />
-                                <div className="w-11 h-6 bg-[rgb(209,209,214)] rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all after:duration-300 peer-checked:bg-[rgb(48,209,88)] transition-colors duration-300"></div>
-                              </label>
-                              <span className="text-xs text-gray-500 mt-1 transition-all duration-300 text-center w-full">
-                                {lease.isActive ? 'Active' : 'Inactive'}
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th 
+                            scope="col" 
+                            className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                            onClick={() => handleSort('unitNumber')}
+                          >
+                            Unit
+                            {sortColumn === 'unitNumber' && (
+                              <span className="inline-block ml-1">
+                                {sortDirection === 'asc' ? (
+                                  <ArrowUp className="h-4 w-4 text-blue-500 inline" />
+                                ) : (
+                                  <ArrowDown className="h-4 w-4 text-blue-500 inline" />
+                                )}
                               </span>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="px-2 sm:px-6 py-10 text-center text-sm text-gray-500">
-                        {isLoading ? 'Loading leases...' : 'No lease records found. Click "Manual Add" to create one.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                            )}
+                          </th>
+                          <th 
+                            scope="col" 
+                            className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                            onClick={() => handleSort('tenantName')}
+                          >
+                            Tenant
+                            {sortColumn === 'tenantName' && (
+                              <span className="inline-block ml-1">
+                                {sortDirection === 'asc' ? (
+                                  <ArrowUp className="h-4 w-4 text-blue-500 inline" />
+                                ) : (
+                                  <ArrowDown className="h-4 w-4 text-blue-500 inline" />
+                                )}
+                              </span>
+                            )}
+                          </th>
+                          <th 
+                            scope="col" 
+                            className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                            onClick={() => handleSort('email')}
+                          >
+                            Contact
+                            {sortColumn === 'email' && (
+                              <span className="inline-block ml-1">
+                                {sortDirection === 'asc' ? (
+                                  <ArrowUp className="h-4 w-4 text-blue-500 inline" />
+                                ) : (
+                                  <ArrowDown className="h-4 w-4 text-blue-500 inline" />
+                                )}
+                              </span>
+                            )}
+                          </th>
+                          <th 
+                            scope="col" 
+                            className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                            onClick={() => handleSort('leasePeriod')}
+                          >
+                            Lease
+                            {sortColumn === 'leasePeriod' && (
+                              <span className="inline-block ml-1">
+                                {sortDirection === 'asc' ? (
+                                  <ArrowUp className="h-4 w-4 text-blue-500 inline" />
+                                ) : (
+                                  <ArrowDown className="h-4 w-4 text-blue-500 inline" />
+                                )}
+                              </span>
+                            )}
+                          </th>
+                          <th 
+                            scope="col" 
+                            className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                            onClick={() => handleSort('rentAmount')}
+                          >
+                            Rent
+                            {sortColumn === 'rentAmount' && (
+                              <span className="inline-block ml-1">
+                                {sortDirection === 'asc' ? (
+                                  <ArrowUp className="h-4 w-4 text-blue-500 inline" />
+                                ) : (
+                                  <ArrowDown className="h-4 w-4 text-blue-500 inline" />
+                                )}
+                              </span>
+                            )}
+                          </th>
+                          <th scope="col" className="px-2 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {sortedLeases.length > 0 ? (
+                          sortedLeases.map((lease) => (
+                            <tr 
+                              key={lease.id} 
+                              className={`hover:bg-gray-50 cursor-pointer ${!lease.isActive ? 'bg-gray-50 opacity-70' : ''}`}
+                              onClick={(e) => {
+                                const target = e.target as HTMLElement;
+                                if (!target.closest('button')) {
+                                  router.push(`/dashboard/tenants/forms?view=${lease.id}`);
+                                }
+                              }}
+                            >
+                              <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">
+                                {lease.unitNumber || getUnitNumber(lease.unitId)}
+                              </td>
+                              <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">
+                                {lease.tenantName}
+                              </td>
+                              <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                                <div className="flex flex-col items-center">
+                                  <div>{lease.email}</div>
+                                  <div className="text-xs">{lease.countryCode} {lease.phoneNumber}</div>
+                                </div>
+                              </td>
+                              <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                                {formatLeasePeriod(lease.leaseStartDate, lease.leaseEndDate)}
+                              </td>
+                              <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                                ₹{lease.rentAmount.toLocaleString()}
+                              </td>
+                              <td className="px-2 sm:px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                <div className="flex items-center justify-center gap-3">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      router.push(`/dashboard/tenants/forms?edit=${lease.id}`);
+                                    }}
+                                    className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                                    title="Edit lease"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                    <span className="sr-only">Edit</span>
+                                  </button>
+
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      initiateDeleteLease(lease.id as string);
+                                    }}
+                                    className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                                    title="Delete lease"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    <span className="sr-only">Delete</span>
+                                  </button>
+
+                                  <div className="flex flex-col items-center">
+                                    <label className="inline-flex relative items-center cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        className="sr-only peer"
+                                        checked={lease.isActive}
+                                        onChange={() => handleToggleLeaseStatus(lease.id as string, lease.isActive)}
+                                      />
+                                      <div className="w-11 h-6 bg-[rgb(209,209,214)] rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all after:duration-300 peer-checked:bg-[rgb(48,209,88)] transition-colors duration-300"></div>
+                                    </label>
+                                    <span className="text-xs text-gray-500 mt-1 transition-all duration-300 text-center w-full">
+                                      {lease.isActive ? 'Active' : 'Inactive'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={6} className="px-2 sm:px-6 py-10 text-center text-sm text-gray-500">
+                              {searchTerm ? "No leases found matching your search." : "No lease records found. Click 'Manual Add' to create one."}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </div>
         </main>
-      </div>
+      </main>
     </div>
   );
 } 
