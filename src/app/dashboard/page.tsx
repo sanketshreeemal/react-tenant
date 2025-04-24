@@ -10,14 +10,16 @@ import {
   getAllRentalInventory, 
   getAllActiveLeases, 
   getAllLeases,
-  getAllPayments
+  getAllPayments,
+  getRentCollectionStatus,
+  getLeaseExpirations
 } from "../../lib/firebase/firestoreUtils";
 import { RentalInventory, Lease, RentPayment } from "../../types";
 import { formatCurrency, formatDate } from "../../lib/utils/formatters";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { theme } from "@/theme/theme";
 import { StatCard } from "@/components/ui/statcard";
-import { Building, DollarSign, FileText, Key, ArrowUp, ArrowDown, Search, AlertCircle } from "lucide-react";
+import { Building, DollarSign, FileText, Key, ArrowUp, ArrowDown, Search, AlertCircle, Send } from "lucide-react";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,6 +27,7 @@ import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input";
 import { Timestamp } from 'firebase/firestore';
 import logger from '@/lib/logger';
+import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -179,56 +182,9 @@ export default function Dashboard() {
     };
   };
 
-  const getRentCollectionStatus = () => {
-    const paidUnitIds = rentPayments
-      .filter(payment => 
-        payment.rentalPeriod === currentMonth && 
-        (payment.paymentType === "Rent Payment" || !payment.paymentType)
-      )
-      .map(payment => payment.unitId);
-    
-    const unpaidLeases = activeLeases.filter(
-      lease => !paidUnitIds.includes(lease.unitId)
-    );
-    
-    const totalPendingAmount = unpaidLeases.reduce(
-      (sum, lease) => sum + lease.rentAmount, 0
-    );
-    
-    return {
-      paid: paidUnitIds.length,
-      unpaid: unpaidLeases.length,
-      unpaidLeases: unpaidLeases.sort((a, b) => b.rentAmount - a.rentAmount),
-      totalPendingAmount
-    };
-  };
+  const rentStatus = getRentCollectionStatus(activeLeases, rentPayments, currentMonth);
 
-  const getUpcomingLeaseExpirations = () => {
-    const today = new Date();
-    const thirtyDaysFromNow = new Date();
-    thirtyDaysFromNow.setDate(today.getDate() + 30);
-    
-    const expiringLeases = activeLeases
-      .map(lease => {
-        const endDate = new Date(lease.leaseEndDate);
-        const daysLeft = Math.ceil(
-          (endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-        );
-        return { ...lease, daysLeft };
-      })
-      .filter(lease => lease.daysLeft <= 30)
-      .sort((a, b) => a.daysLeft - b.daysLeft);
-
-    const totalLeaseValue = expiringLeases.reduce(
-      (sum, lease) => sum + lease.rentAmount, 0
-    );
-
-    return {
-      leases: expiringLeases,
-      totalLeaseValue,
-      count: expiringLeases.length
-    };
-  };
+  const upcomingExpirations = getLeaseExpirations(activeLeases);
 
   const calculatePropertyTypeSplit = (properties: RentalInventory[]) => {
     const commercial = properties.filter(p => p.propertyType === 'Commercial').length;
@@ -327,8 +283,6 @@ export default function Dashboard() {
   }
 
   const metrics = calculateDashboardMetrics();
-  const upcomingExpirations = getUpcomingLeaseExpirations();
-  const rentStatus = getRentCollectionStatus();
   const propertyTypeSplit = calculatePropertyTypeSplit(properties);
 
   return (
@@ -370,7 +324,23 @@ export default function Dashboard() {
             <div className="hidden lg:grid lg:grid-cols-2 gap-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>{currentMonthName} Rent Collection Status</CardTitle>
+                  <div className="flex justify-between items-center">
+                    <CardTitle>{currentMonthName} Rent Collection Status</CardTitle>
+                    <Button
+                      onClick={() => router.push("/dashboard/comms?tab=late-rent")}
+                      style={{
+                        backgroundColor: theme.colors.button.secondary,
+                        color: theme.colors.button.secondaryText,
+                        borderColor: theme.colors.button.secondaryBorder,
+                      }}
+                      className="hover:bg-secondary/10"
+                      size="sm"
+                      variant="outline"
+                    >
+                      <Send className="h-4 w-4 mr-2" />
+                      Email
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="h-[400px]">
@@ -432,7 +402,23 @@ export default function Dashboard() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Upcoming Lease Expirations</CardTitle>
+                  <div className="flex justify-between items-center">
+                    <CardTitle>Upcoming Lease Expirations</CardTitle>
+                    <Button
+                      onClick={() => router.push("/dashboard/comms?tab=expired-lease")}
+                      style={{
+                        backgroundColor: theme.colors.button.secondary,
+                        color: theme.colors.button.secondaryText,
+                        borderColor: theme.colors.button.secondaryBorder,
+                      }}
+                      className="hover:bg-secondary/10"
+                      size="sm"
+                      variant="outline"
+                    >
+                      <Send className="h-4 w-4 mr-2" />
+                      Email
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="h-[400px]">

@@ -1,39 +1,27 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
 import Navigation from "../../../components/Navigation";
 import { collection, addDoc, query, orderBy, getDocs, Timestamp, doc, updateDoc, where } from "firebase/firestore";
 import { db } from "../../../lib/firebase/firebase";
 import { Mail, Send, Check, AlertTriangle, Users } from "lucide-react";
-import { getAllActiveLeases } from "../../../lib/firebase/firestoreUtils";
-import { Lease as FirebaseLease } from "../../../types";
+import { getAllActiveLeases, getRentCollectionStatus, getLeaseExpirations, getAllPayments } from "../../../lib/firebase/firestoreUtils";
+import { Lease as FirebaseLease, RentPayment } from "../../../types";
 import { AlertMessage } from "@/components/ui/alert-message";
+import type { AlertMessageVariant } from "@/components/ui/alert-message";
 import { useLandlordId } from '../../../lib/hooks/useLandlordId';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-
-// Define a local Lease interface that matches our component needs
-interface Lease {
-  id: string;
-  unitId: string;
-  unitNumber: string;
-  tenantName: string;
-  email: string;
-  rentAmount: number;
-  isActive: boolean;
-  leaseStartDate: Date;
-  leaseEndDate: Date;
-}
-
-interface AllUser {
-  uid: string;
-  name?: string;
-  email: string;
-  landlordId: string;
-  role: 'admin' | 'user' | 'tenant';
-  updatedAt: Date;
-}
+import { DataTable } from "./data-table"
+import { tenantColumns, userColumns, AllUser } from "./columns"
+import { NestedTabs } from "@/components/ui/nested-tabs";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Progress } from "@/components/ui/progress"
+import { theme } from "@/theme/theme";
 
 interface EmailMessage {
   id: string;
@@ -50,11 +38,14 @@ interface EmailResponse {
   error?: string;
 }
 
-export default function CommunicationPage() {
+function CommsPageContent() {
   const { user, loading: authLoading } = useAuth();
   const { landlordId, loading: landlordLoading } = useLandlordId();
   const router = useRouter();
-  const [activeLeases, setActiveLeases] = useState<Lease[]>([]);
+  const searchParams = useSearchParams();
+  const tabFromUrl = searchParams.get("tab");
+  
+  const [activeLeases, setActiveLeases] = useState<FirebaseLease[]>([]);
   const [authorizedUsers, setAuthorizedUsers] = useState<AllUser[]>([]);
   const [messages, setMessages] = useState<EmailMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -62,10 +53,20 @@ export default function CommunicationPage() {
   const [subject, setSubject] = useState("");
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
   const [isSending, setIsSending] = useState(false);
-  const [statusMessage, setStatusMessage] = useState({ type: "", message: "" });
+  const [statusMessage, setStatusMessage] = useState<{ type: AlertMessageVariant | ""; message: string }>({ type: "", message: "" });
   const [currentPage, setCurrentPage] = useState(1);
   const [activeTab, setActiveTab] = useState("tenants");
+  const [tenantTabValue, setTenantTabValue] = useState(() => {
+    // Set initial tenant tab value based on URL parameter
+    if (tabFromUrl === "late-rent" || tabFromUrl === "expired-lease") {
+      return tabFromUrl;
+    }
+    return "all";
+  });
   const itemsPerPage = 10;
+  const [currentMonth, setCurrentMonth] = useState<string>("");
+  const [currentMonthName, setCurrentMonthName] = useState<string>("");
+  const [rentPayments, setRentPayments] = useState<RentPayment[]>([]);
 
   // Email templates
   const messageTemplates = [
@@ -93,8 +94,33 @@ export default function CommunicationPage() {
     }
   }, [user, authLoading, router]);
 
+  // Add useEffect for current month calculation
+  useEffect(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    // Calculate previous month for rent in arrears
+    const previousMonthIndex = month === 0 ? 11 : month - 1;
+    const previousMonthYear = month === 0 ? year - 1 : year;
+    const previousMonthString = `${previousMonthYear}-${String(previousMonthIndex + 1).padStart(2, '0')}`;
+    const previousMonthName = new Date(previousMonthYear, previousMonthIndex).toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    setCurrentMonth(previousMonthString);
+    setCurrentMonthName(previousMonthName);
+  }, []);
+
+  // Add useEffect to handle URL parameters
+  useEffect(() => {
+    if (tabFromUrl === "late-rent" || tabFromUrl === "expired-lease") {
+      setActiveTab("tenants");
+      setTenantTabValue(tabFromUrl);
+    }
+  }, [tabFromUrl]);
+
   // Separate useEffect for data fetching
   useEffect(() => {
+    if (user && landlordId) {
     const initializeData = async () => {
       if (!landlordLoading && landlordId && !isLoading && activeLeases.length === 0 && authorizedUsers.length === 0) {
         try {
@@ -103,25 +129,14 @@ export default function CommunicationPage() {
 
           // Fetch active leases
           const firebaseLeases = await getAllActiveLeases(landlordId);
-          const leases: Lease[] = firebaseLeases
+            const leases: FirebaseLease[] = firebaseLeases
             .filter(lease => {
               if (!lease.id || !lease.unitId || !lease.unitNumber || !lease.tenantName || !lease.email) {
                 console.warn('Incomplete lease data:', lease);
                 return false;
               }
               return true;
-            })
-            .map(lease => ({
-              id: lease.id || '',
-              unitId: lease.unitId,
-              unitNumber: lease.unitNumber,
-              tenantName: lease.tenantName,
-              email: lease.email,
-              rentAmount: lease.rentAmount || 0,
-              isActive: lease.isActive,
-              leaseStartDate: lease.leaseStartDate || new Date(),
-              leaseEndDate: lease.leaseEndDate || new Date()
-            }));
+              });
 
           setActiveLeases(leases);
 
@@ -135,6 +150,30 @@ export default function CommunicationPage() {
             updatedAt: doc.data().updatedAt?.toDate() || new Date()
           })) as AllUser[];
           setAuthorizedUsers(usersList);
+            
+            // Fetch rent payments
+            const paymentsCollection = collection(db, `landlords/${landlordId}/rent-collection`);
+            const paymentsQuery = query(paymentsCollection, orderBy('createdAt', 'desc'));
+            const paymentsSnapshot = await getDocs(paymentsQuery);
+            const paymentsData: RentPayment[] = paymentsSnapshot.docs.map(doc => {
+              const data = doc.data();
+              return {
+                id: doc.id,
+                leaseId: data.leaseId,
+                unitId: data.unitId,
+                tenantName: data.tenantName,
+                officialRent: data.officialRent,
+                actualRentPaid: data.actualRentPaid,
+                paymentType: data.paymentType,
+                collectionMethod: data.collectionMethod,
+                rentalPeriod: data.rentalPeriod,
+                paymentDate: data.paymentDate?.toDate() || new Date(),
+                landlordComments: data.landlordComments,
+                createdAt: data.createdAt?.toDate() || new Date(),
+                updatedAt: data.updatedAt?.toDate() || new Date()
+              };
+            });
+            setRentPayments(paymentsData);
           
           // Fetch messages
           const messagesCollection = collection(db, `landlords/${landlordId}/emails`);
@@ -178,9 +217,10 @@ export default function CommunicationPage() {
     };
 
     initializeData();
+    }
   }, [landlordId, landlordLoading, isLoading]);
 
-  const getRecipientId = (item: Lease | AllUser): string => {
+  const getRecipientId = (item: FirebaseLease | AllUser): string => {
     if ('uid' in item) {
       return item.uid || '';
     }
@@ -211,25 +251,11 @@ export default function CommunicationPage() {
     return authorizedUsers.slice(startIdx, endIdx);
   };
 
-  const handleSelectAll = () => {
-    const currentData = getCurrentPageData();
-    const currentIds = currentData.map(item => 
-      activeTab === "tenants" ? (item as Lease).id : (item as AllUser).uid
-    );
-    
-    if (selectedRecipients.length === currentIds.length) {
-      setSelectedRecipients([]);
-    } else {
-      setSelectedRecipients(currentIds);
-    }
-  };
-
-  const handleSelectRecipient = (recipientId: string) => {
-    if (selectedRecipients.includes(recipientId)) {
-      setSelectedRecipients(selectedRecipients.filter(id => id !== recipientId));
-    } else {
-      setSelectedRecipients([...selectedRecipients, recipientId]);
-    }
+  const handleRowSelection = (selectedRows: any[], type: 'tenant' | 'user') => {
+    const validIds = selectedRows
+      .map(row => type === 'tenant' ? (row as FirebaseLease).id : (row as AllUser).uid)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+    setSelectedRecipients(validIds);
   };
 
   const handleTemplateSelect = (template: typeof messageTemplates[0]) => {
@@ -261,21 +287,27 @@ export default function CommunicationPage() {
       return;
     }
 
+    if (!landlordId) {
+      setStatusMessage({ type: "error", message: "Landlord ID is required" });
+      return;
+    }
+
     setIsSending(true);
     setStatusMessage({ type: "", message: "" });
 
     try {
-      // Get email addresses of selected recipients
+      // Get email addresses of selected recipients, ensuring no undefined values
       const selectedEmails = activeTab === "tenants"
         ? activeLeases
-            .filter(lease => selectedRecipients.includes(lease.id))
-            .map(lease => lease.email)
+            .filter(lease => lease.id && selectedRecipients.includes(lease.id) && lease.email)
+            .map(lease => lease.email!)
         : authorizedUsers
             .filter(user => selectedRecipients.includes(user.uid))
             .map(user => user.email);
       
       // Record email in Firebase for history
-      const emailData: Partial<EmailMessage> = {
+      const emailData: EmailMessage = {
+        id: '', // This will be set by Firebase
         recipients: selectedEmails,
         subject: subject,
         content: messageContent,
@@ -312,7 +344,7 @@ export default function CommunicationPage() {
       // Add the new email to our state
       setMessages([
         { 
-          ...emailData as EmailMessage,
+          ...emailData,
           id: docRef.id
         },
         ...messages
@@ -328,18 +360,19 @@ export default function CommunicationPage() {
       
       // Add failed email to history
       if (landlordId) {
-        const failedEmailData = {
+        const failedEmailData: EmailMessage = {
+          id: '', // This will be set by Firebase
           recipients: activeTab === "tenants"
             ? activeLeases
-                .filter(lease => selectedRecipients.includes(lease.id))
-                .map(lease => lease.email)
+                .filter(lease => lease.id && selectedRecipients.includes(lease.id) && lease.email)
+                .map(lease => lease.email!)
             : authorizedUsers
                 .filter(user => selectedRecipients.includes(user.uid))
                 .map(user => user.email),
           subject: subject,
           content: messageContent,
           sentAt: new Date(),
-          status: "failed" as const,
+          status: "failed",
           landlordId: landlordId
         };
         
@@ -363,6 +396,24 @@ export default function CommunicationPage() {
     (activeTab === "tenants" ? activeLeases.length : authorizedUsers.length) / itemsPerPage
   );
 
+  // Function to get filtered tenants based on tab
+  const getFilteredTenants = () => {
+    if (!activeLeases || !rentPayments) return [];
+
+    switch (tenantTabValue) {
+      case "late-rent": {
+        const rentStatus = getRentCollectionStatus(activeLeases, rentPayments, currentMonth);
+        return rentStatus.unpaidLeases;
+      }
+      case "expired-lease": {
+        const expirations = getLeaseExpirations(activeLeases);
+        return expirations.leases;
+      }
+      default:
+        return activeLeases;
+    }
+  };
+
   if (authLoading || landlordLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -376,14 +427,16 @@ export default function CommunicationPage() {
       <Navigation />
       
       <div className="md:ml-64 p-4">
-        <header className="bg-white shadow rounded-lg mb-6">
-          <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+        <Card className="mb-6">
+          <CardHeader className="py-4 px-4 sm:px-6 lg:px-8">
             <div className="flex items-center">
               <Mail className="h-8 w-8 text-blue-500 mr-3" />
-              <h1 className="text-3xl font-bold text-gray-900">Email Communications</h1>
+              <CardTitle className="text-2xl font-semibold text-gray-900">
+                Communication
+              </CardTitle>
             </div>
-          </div>
-        </header>
+          </CardHeader>
+        </Card>
         
         <main className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 gap-6">
@@ -396,195 +449,73 @@ export default function CommunicationPage() {
                     <TabsTrigger value="users">Users</TabsTrigger>
                   </TabsList>
                   <TabsContent value="tenants" className="mt-4">
-                    <div className="flex justify-between items-center mb-4">
-                      <h2 className="text-lg font-medium text-gray-900">Select Tenants</h2>
-                      <button
-                        onClick={handleSelectAll}
-                        className="text-sm text-blue-600 hover:text-blue-800"
-                      >
-                        {selectedRecipients.length === getCurrentPageData().length ? "Deselect All" : "Select All"}
-                      </button>
-                    </div>
-                    {isLoading ? (
-                      <div className="flex justify-center items-center h-64">
-                        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-                      </div>
-                    ) : activeLeases.length > 0 ? (
-                      <>
-                        <div className="overflow-x-auto">
-                          <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Select
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Unit Number
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Tenant Name
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Email
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Expected Rent
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                              {getCurrentPageTenants().map((lease) => (
-                                <tr key={lease.id} className="hover:bg-gray-50">
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <input
-                                      type="checkbox"
-                                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                      checked={selectedRecipients.includes(lease.id)}
-                                      onChange={() => handleSelectRecipient(lease.id)}
-                                    />
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm font-medium text-gray-900">{lease.unitNumber}</div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm font-medium text-gray-900">{lease.tenantName}</div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm text-gray-500">{lease.email}</div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm text-gray-500">₹{lease.rentAmount.toLocaleString()}</div>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        <div className="flex justify-between items-center px-6 py-3 bg-gray-50">
-                          <button
-                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                            disabled={currentPage === 1}
-                            className={`px-3 py-1 rounded-md ${
-                              currentPage === 1
-                                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                : "bg-white text-gray-700 hover:bg-gray-50"
-                            }`}
-                          >
-                            Previous
-                          </button>
-                          <span className="text-sm text-gray-700">
-                            Page {currentPage} of {totalPages}
-                          </span>
-                          <button
-                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                            disabled={currentPage === totalPages}
-                            className={`px-3 py-1 rounded-md ${
-                              currentPage === totalPages
-                                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                : "bg-white text-gray-700 hover:bg-gray-50"
-                            }`}
-                          >
-                            Next
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center h-64">
-                        <Users className="h-12 w-12 text-gray-400 mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-1">No active leases</h3>
-                        <p className="text-gray-500">
-                          Add tenants with active leases to send emails
-                        </p>
-                      </div>
-                    )}
+                    <NestedTabs
+                      mainTab={activeTab}
+                      mainTabValue="tenants"
+                      nestedValue={tenantTabValue}
+                      onNestedValueChange={setTenantTabValue}
+                      className="nested-tabs w-full"
+                    >
+                      <TabsList className="grid w-full grid-cols-3">
+                        <TabsTrigger value="all">All</TabsTrigger>
+                        <TabsTrigger value="late-rent">Rent</TabsTrigger>
+                        <TabsTrigger value="expired-lease">Leases</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="all">
+                        <p className="text-sm text-gray-500 mb-4">All occupied units</p>
+                        {isLoading ? (
+                          <div className="flex justify-center items-center h-64">
+                            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+                          </div>
+                        ) : activeLeases.length > 0 ? (
+                          <DataTable
+                            columns={tenantColumns}
+                            data={getFilteredTenants()}
+                            defaultSorting={[{ id: "unitNumber", desc: false }]}
+                            onRowSelectionChange={(selectedRows) => handleRowSelection(selectedRows, 'tenant')}
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center h-64">
+                            <Users className="h-12 w-12 text-gray-400 mb-4" />
+                            <h3 className="text-lg font-medium text-gray-900 mb-1">No active leases</h3>
+                            <p className="text-gray-500">
+                              Add tenants with active leases to send emails
+                            </p>
+                          </div>
+                        )}
+                      </TabsContent>
+                      <TabsContent value="late-rent">
+                        <p className="text-sm text-gray-500 mb-4">Units with pending rent for {currentMonthName}</p>
+                        <DataTable
+                          columns={tenantColumns}
+                          data={getRentCollectionStatus(activeLeases, rentPayments, currentMonth).unpaidLeases}
+                          defaultSorting={[{ id: "unitNumber", desc: false }]}
+                          onRowSelectionChange={(selectedRows) => handleRowSelection(selectedRows, 'tenant')}
+                        />
+                      </TabsContent>
+                      <TabsContent value="expired-lease">
+                        <p className="text-sm text-gray-500 mb-4">Occupied units with expired leases</p>
+                        <DataTable
+                          columns={tenantColumns}
+                          data={getFilteredTenants()}
+                          defaultSorting={[{ id: "unitNumber", desc: false }]}
+                          onRowSelectionChange={(selectedRows) => handleRowSelection(selectedRows, 'tenant')}
+                        />
+                      </TabsContent>
+                    </NestedTabs>
                   </TabsContent>
                   <TabsContent value="users" className="mt-4">
-                    <div className="flex justify-between items-center mb-4">
-                      <h2 className="text-lg font-medium text-gray-900">Select Users</h2>
-                      <button
-                        onClick={handleSelectAll}
-                        className="text-sm text-blue-600 hover:text-blue-800"
-                      >
-                        {selectedRecipients.length === getCurrentPageData().length ? "Deselect All" : "Select All"}
-                      </button>
-                    </div>
                     {isLoading ? (
                       <div className="flex justify-center items-center h-64">
                         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
                       </div>
                     ) : authorizedUsers.length > 0 ? (
-                      <>
-                        <div className="overflow-x-auto">
-                          <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Select
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Name
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Email
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Role
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                              {getCurrentPageUsers().map((user) => (
-                                <tr key={user.uid} className="hover:bg-gray-50">
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <input
-                                      type="checkbox"
-                                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                      checked={selectedRecipients.includes(user.uid)}
-                                      onChange={() => handleSelectRecipient(user.uid)}
-                                    />
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm font-medium text-gray-900">{user.name || 'N/A'}</div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm text-gray-500">{user.email}</div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm text-gray-500 capitalize">{user.role}</div>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        <div className="flex justify-between items-center px-6 py-3 bg-gray-50">
-                          <button
-                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                            disabled={currentPage === 1}
-                            className={`px-3 py-1 rounded-md ${
-                              currentPage === 1
-                                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                : "bg-white text-gray-700 hover:bg-gray-50"
-                            }`}
-                          >
-                            Previous
-                          </button>
-                          <span className="text-sm text-gray-700">
-                            Page {currentPage} of {totalPages}
-                          </span>
-                          <button
-                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                            disabled={currentPage === totalPages}
-                            className={`px-3 py-1 rounded-md ${
-                              currentPage === totalPages
-                                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                : "bg-white text-gray-700 hover:bg-gray-50"
-                            }`}
-                          >
-                            Next
-                          </button>
-                        </div>
-                      </>
+                      <DataTable
+                        columns={userColumns}
+                        data={authorizedUsers}
+                        defaultSorting={[{ id: "name", desc: false }]}
+                        onRowSelectionChange={(selectedRows) => handleRowSelection(selectedRows, 'user')}
+                      />
                     ) : (
                       <div className="flex flex-col items-center justify-center h-64">
                         <Users className="h-12 w-12 text-gray-400 mb-4" />
@@ -602,98 +533,100 @@ export default function CommunicationPage() {
             {/* Bottom Half: Message Composer and Templates */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Left Side: Message Templates */}
-              <div className="bg-white shadow rounded-lg overflow-hidden">
-                <div className="p-4 border-b">
-                  <h2 className="text-lg font-medium text-gray-900">Email Templates</h2>
-                </div>
-                <div className="p-4">
-                  <ul className="space-y-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Email Templates</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
                     {messageTemplates.map((template, index) => (
-                      <li key={index}>
-                        <button
-                          onClick={() => handleTemplateSelect(template)}
-                          className="w-full text-left p-3 border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <p className="font-medium text-gray-900">{template.name}</p>
-                          <p className="text-sm text-gray-500 truncate">{template.content.substring(0, 60)}...</p>
-                        </button>
-                      </li>
+                      <Card key={index} className="hover:bg-accent transition-colors cursor-pointer" onClick={() => handleTemplateSelect(template)}>
+                        <CardContent className="p-4">
+                          <h3 className="font-medium text-gray-900 mb-1">{template.name}</h3>
+                          <p className="text-sm text-muted-foreground truncate">{template.content.substring(0, 60)}...</p>
+                        </CardContent>
+                      </Card>
                     ))}
-                  </ul>
-                </div>
-              </div>
+                  </div>
+                </CardContent>
+              </Card>
               
               {/* Right Side: Email Composer */}
-              <div className="bg-white shadow rounded-lg overflow-hidden">
-                <div className="p-4 border-b">
-                  <h2 className="text-lg font-medium text-gray-900">Compose Email</h2>
-                </div>
-                <div className="p-4">
-                  <div className="mb-4">
-                    <label htmlFor="subject" className="block text-sm font-medium text-gray-700">
-                      Subject
-                    </label>
-                    <input
-                      type="text"
-                      id="subject"
-                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      placeholder="Enter email subject..."
-                      value={subject}
-                      onChange={(e) => setSubject(e.target.value)}
-                    />
-                  </div>
-                  
-                  <div className="mb-4">
-                    <label htmlFor="content" className="block text-sm font-medium text-gray-700">
-                      Message
-                    </label>
-                    <textarea
-                      id="content"
-                      rows={6}
-                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      placeholder="Type your message here..."
-                      value={messageContent}
-                      onChange={(e) => setMessageContent(e.target.value)}
-                    ></textarea>
-                  </div>
-                  
-                  <div className="mt-4 flex justify-between items-center">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Compose Email</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
                     <div>
-                      <span className="text-sm text-gray-500">
-                        {selectedRecipients.length} recipient{selectedRecipients.length !== 1 ? 's' : ''} selected
-                      </span>
+                      <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-1">
+                        Subject
+                      </label>
+                      <Input
+                        type="text"
+                        id="subject"
+                        placeholder="Enter email subject..."
+                        value={subject}
+                        onChange={(e) => setSubject(e.target.value)}
+                      />
                     </div>
-                    <button
-                      onClick={handleSendEmail}
-                      disabled={isSending || selectedRecipients.length === 0 || messageContent.trim() === "" || subject.trim() === ""}
-                      className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
-                        isSending || selectedRecipients.length === 0 || messageContent.trim() === "" || subject.trim() === ""
-                          ? "bg-gray-400 cursor-not-allowed"
-                          : "bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                      }`}
-                    >
-                      {isSending ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
-                          Sending...
-                        </>
-                      ) : (
-                        <>
-                          <Send className="h-4 w-4 mr-2" />
-                          Send Email
-                        </>
-                      )}
-                    </button>
+                    
+                    <div>
+                      <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-1">
+                        Message
+                      </label>
+                      <Textarea
+                        id="content"
+                        value={messageContent}
+                        onChange={(e) => setMessageContent(e.target.value)}
+                        placeholder="Type your message here..."
+                        rows={3}
+                        className="min-h-[150px]"
+                      />
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <span className="text-sm text-gray-500">
+                          {selectedRecipients.length} recipient{selectedRecipients.length !== 1 ? 's' : ''} selected
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleSendEmail}
+                        disabled={isSending || selectedRecipients.length === 0 || messageContent.trim() === "" || subject.trim() === ""}
+                        className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
+                          isSending || selectedRecipients.length === 0 || messageContent.trim() === "" || subject.trim() === ""
+                            ? "bg-gray-400 cursor-not-allowed"
+                            : "bg-black hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                        }`}
+                        style={{
+                          backgroundColor: theme.colors.button.primary,
+                          color: theme.colors.background,
+                        }}
+                      >
+                        {isSending ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+                            Sending...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="h-4 w-4 mr-2" />
+                            Send Email
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    
+                    {statusMessage.message && (
+                      <AlertMessage
+                        variant={statusMessage.type === "error" ? "error" : "success"}
+                        message={statusMessage.message}
+                      />
+                    )}
                   </div>
-                  
-                  {statusMessage.message && (
-                    <AlertMessage
-                      variant={statusMessage.type === "error" ? "error" : "success"}
-                      message={statusMessage.message}
-                    />
-                  )}
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             </div>
             
             {/* Email History */}
@@ -766,5 +699,17 @@ export default function CommunicationPage() {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function CommunicationPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    }>
+      <CommsPageContent />
+    </Suspense>
   );
 }

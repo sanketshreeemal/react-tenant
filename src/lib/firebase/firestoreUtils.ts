@@ -1899,3 +1899,102 @@ export const isPaymentEditable = (rentalPeriod: string): boolean => {
     return false;
   }
 };
+
+/**
+ * Gets the rent collection status for a specific month
+ * @param {string} landlordId - The ID of the landlord from authentication context.
+ * @param {string} currentMonth - The month to check in YYYY-MM format
+ * @param {Lease[]} activeLeases - Array of active leases
+ * @param {RentPayment[]} rentPayments - Array of rent payments
+ * @returns {Promise<{paid: number, unpaid: number, unpaidLeases: Lease[], totalPendingAmount: number}>}
+ */
+export const getRentCollectionStatus = (
+  activeLeases: Lease[],
+  rentPayments: RentPayment[],
+  currentMonth: string
+): {
+  paid: number;
+  unpaid: number;
+  unpaidLeases: Lease[];
+  totalPendingAmount: number;
+} => {
+  try {
+    logger.info(`firestoreUtils: Getting rent collection status for ${currentMonth}`);
+    
+    const paidUnitIds = rentPayments
+      .filter(payment => 
+        payment.rentalPeriod === currentMonth && 
+        (payment.paymentType === "Rent Payment" || !payment.paymentType)
+      )
+      .map(payment => payment.unitId);
+    
+    const unpaidLeases = activeLeases.filter(
+      lease => !paidUnitIds.includes(lease.unitId)
+    );
+    
+    const totalPendingAmount = unpaidLeases.reduce(
+      (sum, lease) => sum + lease.rentAmount, 0
+    );
+
+    logger.info(`firestoreUtils: Found ${paidUnitIds.length} paid units and ${unpaidLeases.length} unpaid units`);
+    
+    return {
+      paid: paidUnitIds.length,
+      unpaid: unpaidLeases.length,
+      unpaidLeases: unpaidLeases.sort((a, b) => b.rentAmount - a.rentAmount),
+      totalPendingAmount
+    };
+  } catch (error: any) {
+    logger.error(`firestoreUtils: Error getting rent collection status: ${error.message}`);
+    throw new Error(error.message || 'Failed to get rent collection status.');
+  }
+};
+
+/**
+ * Gets upcoming and expired lease information
+ * @param {Lease[]} activeLeases - Array of active leases
+ * @param {number} daysThreshold - Number of days to look ahead for upcoming expirations (default 30)
+ * @returns {{ leases: Array<Lease & { daysLeft: number }>, totalLeaseValue: number, count: number }}
+ */
+export const getLeaseExpirations = (
+  activeLeases: Lease[],
+  daysThreshold: number = 30
+): {
+  leases: Array<Lease & { daysLeft: number }>;
+  totalLeaseValue: number;
+  count: number;
+} => {
+  try {
+    logger.info(`firestoreUtils: Getting lease expirations with ${daysThreshold} days threshold`);
+    
+    const today = new Date();
+    const thresholdDate = new Date();
+    thresholdDate.setDate(today.getDate() + daysThreshold);
+    
+    const expiringLeases = activeLeases
+      .map(lease => {
+        const endDate = new Date(lease.leaseEndDate);
+        const daysLeft = Math.ceil(
+          (endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        return { ...lease, daysLeft };
+      })
+      .filter(lease => lease.daysLeft <= daysThreshold)
+      .sort((a, b) => a.daysLeft - b.daysLeft);
+
+    const totalLeaseValue = expiringLeases.reduce(
+      (sum, lease) => sum + lease.rentAmount, 0
+    );
+
+    logger.info(`firestoreUtils: Found ${expiringLeases.length} expiring leases worth ${totalLeaseValue}`);
+
+    return {
+      leases: expiringLeases,
+      totalLeaseValue,
+      count: expiringLeases.length
+    };
+  } catch (error: any) {
+    logger.error(`firestoreUtils: Error getting lease expirations: ${error.message}`);
+    throw new Error(error.message || 'Failed to get lease expirations.');
+  }
+};
