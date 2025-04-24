@@ -43,7 +43,7 @@ export default function Navigation() {
     { name: "Manage Users", href: "/dashboard/manage-users", icon: UserCog },
     // Development Phase Features
     // { name: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
-    // { name: "WhatsApp Messaging", href: "/dashboard/whatsapp", icon: MessageSquare },
+    { name: "Communication", href: "/dashboard/comms", icon: Mail },
     // { name: "Documents", href: "/dashboard/documents", icon: FileImage },
   ];
 
