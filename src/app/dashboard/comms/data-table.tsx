@@ -26,18 +26,37 @@ import { Button } from "@/components/ui/button"
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
-  onRowSelectionChange?: (selectedRows: TData[]) => void
+  onRowSelectionChange?: (selectedRows: TData[], selectedIds: string[]) => void
   defaultSorting?: SortingState
+  tableRef?: (table: any) => void
+  selectedRowIds?: string[]
 }
 
-export function DataTable<TData, TValue>({
+export function DataTable<TData extends { id?: string; uid?: string }, TValue>({
   columns,
   data,
   onRowSelectionChange,
   defaultSorting = [],
+  tableRef,
+  selectedRowIds = [],
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>(defaultSorting)
-  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
+  const buildRowSelection = React.useCallback(() => {
+    const selection: Record<number, boolean> = {};
+    data.forEach((row, idx) => {
+      const id = (row.id || row.uid) as string | undefined;
+      if (id && selectedRowIds.includes(id)) {
+        selection[idx] = true;
+      }
+    });
+    return selection;
+  }, [data, selectedRowIds]);
+
+  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>(buildRowSelection());
+
+  React.useEffect(() => {
+    setRowSelection(buildRowSelection());
+  }, [buildRowSelection]);
 
   const table = useReactTable({
     data,
@@ -56,10 +75,32 @@ export function DataTable<TData, TValue>({
       setRowSelection(newState);
       if (onRowSelectionChange) {
         const selectedRows = data.filter((_, index) => newState[index]);
-        onRowSelectionChange(selectedRows);
+        const selectedIds = selectedRows.map(row => (row.id || row.uid) as string).filter(Boolean);
+        onRowSelectionChange(selectedRows, selectedIds);
       }
     },
   })
+
+  React.useEffect(() => {
+    if (tableRef) {
+      tableRef({
+        resetRowSelection: () => {
+          table.resetRowSelection();
+          setRowSelection({});
+        },
+        deselectRowById: (id: string) => {
+          const idx = data.findIndex((row: any) => row.id === id || row.uid === id);
+          if (idx !== -1) {
+            setRowSelection(prev => {
+              const newSel = { ...prev };
+              delete newSel[idx];
+              return newSel;
+            });
+          }
+        }
+      });
+    }
+  }, [table, tableRef, data]);
 
   return (
     <div>

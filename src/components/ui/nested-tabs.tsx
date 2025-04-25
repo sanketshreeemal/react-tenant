@@ -33,8 +33,8 @@ export const NestedTabs = React.forwardRef<
             initial={{ 
               height: 0,
               opacity: 0,
-              y: -20,
-              scale: 0.95,
+              y: -30,
+              scale: 0.5,
               transformOrigin: "top"
             }}
             animate={{ 
@@ -44,20 +44,21 @@ export const NestedTabs = React.forwardRef<
               scale: 1,
               transition: {
                 type: "spring",
-                stiffness: 500,
-                damping: 30,
-                mass: 1
+                stiffness: 400,
+                damping: 20,
+                mass: 1.4,
+                duration: 0.6
               }
             }}
             exit={{ 
               height: 0,
               opacity: 0,
-              y: -10,
+              y: -30,
               scale: 0.95,
               transition: {
                 type: "tween",
-                duration: 0.3,
-                ease: "easeOut"
+                duration: 0.6,
+                ease: "easeInOut"
               }
             }}
             className="overflow-hidden"

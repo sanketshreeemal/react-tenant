@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
 import Navigation from "../../../components/Navigation";
@@ -14,7 +14,7 @@ import type { AlertMessageVariant } from "@/components/ui/alert-message";
 import { useLandlordId } from '../../../lib/hooks/useLandlordId';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DataTable } from "./data-table"
-import { tenantColumns, userColumns, AllUser } from "./columns"
+import { tenantColumns, userColumns, leaseTabColumns, AllUser } from "./columns"
 import { NestedTabs } from "@/components/ui/nested-tabs";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress"
 import { theme } from "@/theme/theme";
+import { AnimatePresence, motion } from "framer-motion";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 interface EmailMessage {
   id: string;
@@ -49,9 +51,10 @@ function CommsPageContent() {
   const [authorizedUsers, setAuthorizedUsers] = useState<AllUser[]>([]);
   const [messages, setMessages] = useState<EmailMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [messageContent, setMessageContent] = useState("");
   const [subject, setSubject] = useState("");
-  const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
+  const [selectedRecipients, setSelectedRecipients] = useState<{ id: string, type: 'tenant' | 'user' }[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: AlertMessageVariant | ""; message: string }>({ type: "", message: "" });
   const [currentPage, setCurrentPage] = useState(1);
@@ -67,6 +70,12 @@ function CommsPageContent() {
   const [currentMonth, setCurrentMonth] = useState<string>("");
   const [currentMonthName, setCurrentMonthName] = useState<string>("");
   const [rentPayments, setRentPayments] = useState<RentPayment[]>([]);
+  const [tenantsTableRef, setTenantsTableRef] = useState<any>(null);
+  const [usersTableRef, setUsersTableRef] = useState<any>(null);
+  const [emailSearch, setEmailSearch] = useState("");
+  const [emailStatusFilter, setEmailStatusFilter] = useState<string>("all");
+  const [expandedEmailIds, setExpandedEmailIds] = useState<string[]>([]);
+  const [expandedRecipients, setExpandedRecipients] = useState<string[]>([]);
 
   // Email templates
   const messageTemplates = [
@@ -118,7 +127,7 @@ function CommsPageContent() {
     }
   }, [tabFromUrl]);
 
-  // Separate useEffect for data fetching
+  // Modify the useEffect for data fetching
   useEffect(() => {
     if (user && landlordId) {
     const initializeData = async () => {
@@ -129,14 +138,14 @@ function CommsPageContent() {
 
           // Fetch active leases
           const firebaseLeases = await getAllActiveLeases(landlordId);
-            const leases: FirebaseLease[] = firebaseLeases
+          const leases: FirebaseLease[] = firebaseLeases
             .filter(lease => {
               if (!lease.id || !lease.unitId || !lease.unitNumber || !lease.tenantName || !lease.email) {
                 console.warn('Incomplete lease data:', lease);
                 return false;
               }
               return true;
-              });
+            });
 
           setActiveLeases(leases);
 
@@ -204,6 +213,7 @@ function CommsPageContent() {
           });
           
           setMessages(messagesData);
+          setInitialLoading(false); // Set initialLoading to false after first data fetch
         } catch (error) {
           console.error("Error fetching data:", error);
           setStatusMessage({ 
@@ -220,42 +230,67 @@ function CommsPageContent() {
     }
   }, [landlordId, landlordLoading, isLoading]);
 
-  const getRecipientId = (item: FirebaseLease | AllUser): string => {
-    if ('uid' in item) {
-      return item.uid || '';
+  // Helper to get selectedRowIds for a given table type and data
+  const getSelectedRowIds = (type: 'tenant' | 'user', data: any[]) => {
+    return selectedRecipients
+      .filter(r => r.type === type)
+      .map(r => r.id)
+      .filter(id => data.some(row => (row.id || row.uid) === id));
+  };
+
+  // Memoize filtered data for late-rent and expired-lease tables
+  const lateRentLeases = React.useMemo(
+    () => getRentCollectionStatus(activeLeases, rentPayments, currentMonth).unpaidLeases,
+    [activeLeases, rentPayments, currentMonth]
+  );
+  const expiredLeases = React.useMemo(
+    () => getLeaseExpirations(activeLeases).leases,
+    [activeLeases]
+  );
+
+  // Handle row selection change from any table
+  const handleRowSelection = (
+    selectedRows: any[],
+    selectedIds: string[],
+    type: 'tenant' | 'user',
+    tableData?: any[]
+  ) => {
+    setSelectedRecipients(prev => {
+      if (type === 'tenant' && tableData) {
+        // IDs present in this table
+        const tableIds = tableData.map(row => row.id || row.uid);
+        // Remove only those tenant IDs from prev that are present in this table
+        const filtered = prev.filter(r => r.type !== 'tenant' || !tableIds.includes(r.id));
+        // Add back the selected ones from this table
+        const newRecipients = [
+          ...filtered,
+          ...selectedIds.map(id => ({ id, type }))
+        ];
+        return newRecipients;
+      } else {
+        // For users, keep previous logic
+        const filtered = prev.filter(r => r.type !== type);
+        const newRecipients = [
+          ...filtered,
+          ...selectedIds.map(id => ({ id, type }))
+        ];
+        if (JSON.stringify(newRecipients) !== JSON.stringify(prev)) {
+          return newRecipients;
+        }
+        return prev;
+      }
+    });
+  };
+
+  // Remove recipient from pills and table
+  const handleRemoveRecipient = (id: string, type: 'tenant' | 'user') => {
+    setSelectedRecipients(prev => prev.filter(r => !(r.id === id && r.type === type)));
+    // Deselect in the correct table if visible
+    if (type === 'tenant' && tenantsTableRef && tenantsTableRef.deselectRowById) {
+      tenantsTableRef.deselectRowById(id);
+    } else if (type === 'user' && usersTableRef && usersTableRef.deselectRowById) {
+      usersTableRef.deselectRowById(id);
     }
-    if ('id' in item) {
-      return item.id || '';
-    }
-    return '';
-  };
-
-  const getCurrentPageData = () => {
-    const data = activeTab === "tenants" ? activeLeases : authorizedUsers;
-    const startIdx = (currentPage - 1) * itemsPerPage;
-    const endIdx = startIdx + itemsPerPage;
-    return data.slice(startIdx, endIdx);
-  };
-
-  const getCurrentPageTenants = () => {
-    if (activeTab !== "tenants") return [];
-    const startIdx = (currentPage - 1) * itemsPerPage;
-    const endIdx = startIdx + itemsPerPage;
-    return activeLeases.slice(startIdx, endIdx);
-  };
-
-  const getCurrentPageUsers = () => {
-    if (activeTab !== "users") return [];
-    const startIdx = (currentPage - 1) * itemsPerPage;
-    const endIdx = startIdx + itemsPerPage;
-    return authorizedUsers.slice(startIdx, endIdx);
-  };
-
-  const handleRowSelection = (selectedRows: any[], type: 'tenant' | 'user') => {
-    const validIds = selectedRows
-      .map(row => type === 'tenant' ? (row as FirebaseLease).id : (row as AllUser).uid)
-      .filter((id): id is string => typeof id === 'string' && id.length > 0);
-    setSelectedRecipients(validIds);
   };
 
   const handleTemplateSelect = (template: typeof messageTemplates[0]) => {
@@ -263,7 +298,7 @@ function CommsPageContent() {
     let processedSubject = template.subject;
     
     if (selectedRecipients.length > 0 && activeTab === "tenants") {
-      const selectedLease = activeLeases.find(lease => lease.id === selectedRecipients[0]);
+      const selectedLease = activeLeases.find(lease => lease.id === selectedRecipients[0].id);
       if (selectedLease) {
         processedContent = processedContent
           .replace("{unitNumber}", selectedLease.unitNumber)
@@ -297,18 +332,20 @@ function CommsPageContent() {
 
     try {
       // Get email addresses of selected recipients, ensuring no undefined values
-      const selectedEmails = activeTab === "tenants"
-        ? activeLeases
-            .filter(lease => lease.id && selectedRecipients.includes(lease.id) && lease.email)
-            .map(lease => lease.email!)
-        : authorizedUsers
-            .filter(user => selectedRecipients.includes(user.uid))
-            .map(user => user.email);
+      const selectedTenantEmails = selectedRecipients.filter(r => r.type === 'tenant').map(r => {
+        const lease = activeLeases.find(l => l.id === r.id);
+        return lease?.email;
+      }).filter((email): email is string => Boolean(email));
+      const selectedUserEmails = selectedRecipients.filter(r => r.type === 'user').map(r => {
+        const user = authorizedUsers.find(u => u.uid === r.id);
+        return user?.email;
+      }).filter((email): email is string => Boolean(email));
+      const allSelectedEmails: string[] = [...selectedTenantEmails, ...selectedUserEmails];
       
       // Record email in Firebase for history
       const emailData: EmailMessage = {
         id: '', // This will be set by Firebase
-        recipients: selectedEmails,
+        recipients: allSelectedEmails,
         subject: subject,
         content: messageContent,
         sentAt: new Date(),
@@ -323,7 +360,7 @@ function CommsPageContent() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          to: selectedEmails,
+          to: allSelectedEmails,
           subject: subject,
           html: messageContent
         })
@@ -350,25 +387,37 @@ function CommsPageContent() {
         ...messages
       ]);
 
+      // Reset selections in the appropriate table
+      if (activeTab === "tenants" && tenantsTableRef) {
+        tenantsTableRef.resetRowSelection();
+      } else if (activeTab === "users" && usersTableRef) {
+        usersTableRef.resetRowSelection();
+      }
+      
+      // Reset selected recipients
+      setSelectedRecipients([]);
+
       setStatusMessage({ type: "success", message: "Email sent successfully!" });
       setMessageContent("");
       setSubject("");
-      setSelectedRecipients([]);
     } catch (error: any) {
       console.error("Error sending email:", error);
       setStatusMessage({ type: "error", message: error.message || "Failed to send email. Please try again." });
       
       // Add failed email to history
       if (landlordId) {
+        const selectedTenantEmails = selectedRecipients.filter(r => r.type === 'tenant').map(r => {
+          const lease = activeLeases.find(l => l.id === r.id);
+          return lease?.email;
+        }).filter((email): email is string => Boolean(email));
+        const selectedUserEmails = selectedRecipients.filter(r => r.type === 'user').map(r => {
+          const user = authorizedUsers.find(u => u.uid === r.id);
+          return user?.email;
+        }).filter((email): email is string => Boolean(email));
+        const allSelectedEmails: string[] = [...selectedTenantEmails, ...selectedUserEmails];
         const failedEmailData: EmailMessage = {
           id: '', // This will be set by Firebase
-          recipients: activeTab === "tenants"
-            ? activeLeases
-                .filter(lease => lease.id && selectedRecipients.includes(lease.id) && lease.email)
-                .map(lease => lease.email!)
-            : authorizedUsers
-                .filter(user => selectedRecipients.includes(user.uid))
-                .map(user => user.email),
+          recipients: allSelectedEmails,
           subject: subject,
           content: messageContent,
           sentAt: new Date(),
@@ -414,6 +463,184 @@ function CommsPageContent() {
     }
   };
 
+  // RecipientPills component (now inside CommsPageContent)
+  const RecipientPills = ({
+    recipients,
+    activeLeases,
+    authorizedUsers,
+    onRemove
+  }: {
+    recipients: { id: string, type: 'tenant' | 'user' }[],
+    activeLeases: FirebaseLease[],
+    authorizedUsers: AllUser[],
+    onRemove: (id: string, type: 'tenant' | 'user') => void
+  }) => (
+    <div className="flex flex-wrap gap-2 my-2">
+      <AnimatePresence>
+        {recipients.map(({ id, type }) => {
+          const label = type === 'tenant'
+            ? activeLeases.find(l => l.id === id)?.unitNumber || "Unknown"
+            : authorizedUsers.find(u => u.uid === id)?.name || "Unknown";
+          return (
+            <motion.div
+              key={id}
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="flex items-center bg-gray-200 rounded-full px-3 py-1 text-sm font-medium"
+            >
+              {label}
+              <button
+                className="ml-2 text-gray-500 hover:text-red-500"
+                onClick={() => onRemove(id, type)}
+                aria-label="Remove recipient"
+                type="button"
+              >
+                ×
+              </button>
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
+    </div>
+  );
+
+  // Helper: Filter and search emails
+  const filteredMessages = messages.filter((msg) => {
+    // Status filter
+    if (emailStatusFilter !== "all" && msg.status !== emailStatusFilter) return false;
+    // Search filter (subject, content, recipient email)
+    const search = emailSearch.toLowerCase();
+    if (!search) return true;
+    return (
+      msg.subject.toLowerCase().includes(search) ||
+      msg.content.toLowerCase().includes(search) ||
+      msg.recipients.some((r) => r.toLowerCase().includes(search))
+    );
+  });
+
+  // Helper: Format date as YYYY-MM-DD (local)
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  // Helper: Get recipient pill label (unit number for tenant, name for user)
+  const getRecipientLabel = (email: string) => {
+    const lease = activeLeases.find(l => l.email === email);
+    if (lease) return lease.unitNumber;
+    const user = authorizedUsers.find(u => u.email === email);
+    if (user) return user.name;
+    return email;
+  };
+
+  // EmailHistory component
+  const EmailHistory = () => (
+    <Card className="mb-6">
+      <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b">
+        <CardTitle className="text-lg font-medium text-gray-900">Email History</CardTitle>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Input
+            type="text"
+            placeholder="Search emails..."
+            value={emailSearch}
+            onChange={e => setEmailSearch(e.target.value)}
+            className="sm:w-64"
+          />
+          <div className="w-full sm:w-40">
+            <Select value={emailStatusFilter} onValueChange={setEmailStatusFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="sent">Sent</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+          </div>
+        ) : filteredMessages.length > 0 ? (
+          <ScrollArea className="max-h-96">
+            <ul className="divide-y divide-gray-200">
+              {filteredMessages.map((message) => {
+                const isExpanded = expandedEmailIds.includes(message.id);
+                const isRecipientsExpanded = expandedRecipients.includes(message.id);
+                // Pills logic: show first, half of second, then "+N more" if more exist
+                const pills = message.recipients.map(getRecipientLabel);
+                const pillCount = pills.length;
+                let pillsToShow = pills.slice(0, 1);
+                let showHalfPill = pillCount > 1;
+                let moreCount = pillCount - 2;
+                return (
+                  <li key={message.id} className="p-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex flex-col gap-1 w-full sm:w-auto">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-gray-500">{formatDate(message.sentAt instanceof Date ? message.sentAt : new Date(message.sentAt?.seconds * 1000))}</span>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            message.status === "sent"
+                              ? "bg-green-100 text-green-800"
+                              : message.status === "pending"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-red-100 text-red-800"
+                          }`}>
+                            {message.status === "sent" && <Check className="h-3 w-3 mr-1" />}
+                            {message.status === "pending" && <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-yellow-800 mr-1"></div>}
+                            {message.status === "failed" && <AlertTriangle className="h-3 w-3 mr-1" />}
+                            {message.status.charAt(0).toUpperCase() + message.status.slice(1)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap mt-1">
+                          <span className="font-medium text-gray-900 text-sm truncate max-w-[180px] sm:max-w-[240px]">{message.subject}</span>
+                          <div className="flex items-center gap-1 ml-2">
+                            {/* Pills: show first, half of second, then +N more */}
+                            <span className="inline-flex items-center bg-gray-200 rounded-full px-2 py-0.5 text-xs font-medium max-w-[80px] truncate">{pillsToShow[0]}</span>
+                            {showHalfPill && (
+                              <span className="inline-flex items-center bg-gray-200 rounded-full px-2 py-0.5 text-xs font-medium max-w-[40px] truncate opacity-60 relative left-[-12px]">{pills[1]?.slice(0, Math.ceil(pills[1].length / 2))}…</span>
+                            )}
+                            {pillCount > 2 && !isRecipientsExpanded && (
+                              <button className="text-xs text-blue-500 ml-1" onClick={() => setExpandedRecipients(prev => [...prev, message.id])}>+{moreCount} more</button>
+                            )}
+                            {isRecipientsExpanded && pills.slice(2).map((pill, idx) => (
+                              <span key={idx} className="inline-flex items-center bg-gray-200 rounded-full px-2 py-0.5 text-xs font-medium max-w-[80px] truncate ml-1">{pill}</span>
+                            ))}
+                            {isRecipientsExpanded && pillCount > 2 && (
+                              <button className="text-xs text-blue-500 ml-1" onClick={() => setExpandedRecipients(prev => prev.filter(id => id !== message.id))}>See less</button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <p className={`text-sm text-gray-500 ${!isExpanded ? 'line-clamp-2' : ''}`}>{message.content}</p>
+                      {message.content.length > 120 && (
+                        <button className="text-xs text-blue-500 mt-1" onClick={() => setExpandedEmailIds(prev => prev.includes(message.id) ? prev.filter(id => id !== message.id) : [...prev, message.id])}>
+                          {isExpanded ? 'See less' : 'See more'}
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </ScrollArea>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-64">
+            <h3 className="text-lg font-medium text-gray-900 mb-1">No emails sent yet</h3>
+            <p className="text-gray-500">Your sent emails will appear here</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
   if (authLoading || landlordLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -456,74 +683,78 @@ function CommsPageContent() {
                       onNestedValueChange={setTenantTabValue}
                       className="nested-tabs w-full"
                     >
-                      <TabsList className="grid w-full grid-cols-3">
+                      <TabsList className="grid w-[85%] mx-auto grid-cols-3">
                         <TabsTrigger value="all">All</TabsTrigger>
                         <TabsTrigger value="late-rent">Rent</TabsTrigger>
                         <TabsTrigger value="expired-lease">Leases</TabsTrigger>
                       </TabsList>
                       <TabsContent value="all">
-                        <p className="text-sm text-gray-500 mb-4">All occupied units</p>
-                        {isLoading ? (
+                        <p className="text-sm text-gray-500 mb-4">All occupied properties</p>
+                        {(isLoading || initialLoading) ? (
                           <div className="flex justify-center items-center h-64">
                             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
                           </div>
-                        ) : activeLeases.length > 0 ? (
+                        ) : (
                           <DataTable
                             columns={tenantColumns}
-                            data={getFilteredTenants()}
+                            data={activeLeases}
                             defaultSorting={[{ id: "unitNumber", desc: false }]}
-                            onRowSelectionChange={(selectedRows) => handleRowSelection(selectedRows, 'tenant')}
+                            onRowSelectionChange={(selectedRows, selectedIds) => handleRowSelection(selectedRows, selectedIds, 'tenant', activeLeases)}
+                            tableRef={setTenantsTableRef}
+                            selectedRowIds={getSelectedRowIds('tenant', activeLeases)}
                           />
-                        ) : (
-                          <div className="flex flex-col items-center justify-center h-64">
-                            <Users className="h-12 w-12 text-gray-400 mb-4" />
-                            <h3 className="text-lg font-medium text-gray-900 mb-1">No active leases</h3>
-                            <p className="text-gray-500">
-                              Add tenants with active leases to send emails
-                            </p>
-                          </div>
                         )}
                       </TabsContent>
                       <TabsContent value="late-rent">
                         <p className="text-sm text-gray-500 mb-4">Units with pending rent for {currentMonthName}</p>
-                        <DataTable
-                          columns={tenantColumns}
-                          data={getRentCollectionStatus(activeLeases, rentPayments, currentMonth).unpaidLeases}
-                          defaultSorting={[{ id: "unitNumber", desc: false }]}
-                          onRowSelectionChange={(selectedRows) => handleRowSelection(selectedRows, 'tenant')}
-                        />
+                        {(isLoading || initialLoading) ? (
+                          <div className="flex justify-center items-center h-64">
+                            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+                          </div>
+                        ) : (
+                          <DataTable
+                            columns={tenantColumns}
+                            data={lateRentLeases}
+                            defaultSorting={[{ id: "unitNumber", desc: false }]}
+                            onRowSelectionChange={(selectedRows, selectedIds) => handleRowSelection(selectedRows, selectedIds, 'tenant', lateRentLeases)}
+                            tableRef={setTenantsTableRef}
+                            selectedRowIds={getSelectedRowIds('tenant', lateRentLeases)}
+                          />
+                        )}
                       </TabsContent>
                       <TabsContent value="expired-lease">
                         <p className="text-sm text-gray-500 mb-4">Occupied units with expired leases</p>
-                        <DataTable
-                          columns={tenantColumns}
-                          data={getFilteredTenants()}
-                          defaultSorting={[{ id: "unitNumber", desc: false }]}
-                          onRowSelectionChange={(selectedRows) => handleRowSelection(selectedRows, 'tenant')}
-                        />
+                        {(isLoading || initialLoading) ? (
+                          <div className="flex justify-center items-center h-64">
+                            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+                          </div>
+                        ) : (
+                          <DataTable
+                            columns={leaseTabColumns}
+                            data={expiredLeases}
+                            defaultSorting={[{ id: "expiryStatus", desc: false }]}
+                            onRowSelectionChange={(selectedRows, selectedIds) => handleRowSelection(selectedRows, selectedIds, 'tenant', expiredLeases)}
+                            tableRef={setTenantsTableRef}
+                            selectedRowIds={getSelectedRowIds('tenant', expiredLeases)}
+                          />
+                        )}
                       </TabsContent>
                     </NestedTabs>
                   </TabsContent>
                   <TabsContent value="users" className="mt-4">
-                    {isLoading ? (
+                    {(isLoading || initialLoading) ? (
                       <div className="flex justify-center items-center h-64">
                         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
                       </div>
-                    ) : authorizedUsers.length > 0 ? (
+                    ) : (
                       <DataTable
                         columns={userColumns}
                         data={authorizedUsers}
                         defaultSorting={[{ id: "name", desc: false }]}
-                        onRowSelectionChange={(selectedRows) => handleRowSelection(selectedRows, 'user')}
+                        onRowSelectionChange={(selectedRows, selectedIds) => handleRowSelection(selectedRows, selectedIds, 'user')}
+                        tableRef={setUsersTableRef}
+                        selectedRowIds={getSelectedRowIds('user', authorizedUsers)}
                       />
-                    ) : (
-                      <div className="flex flex-col items-center justify-center h-64">
-                        <Users className="h-12 w-12 text-gray-400 mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-1">No users found</h3>
-                        <p className="text-gray-500">
-                          Add users from the Manage Users section
-                        </p>
-                      </div>
                     )}
                   </TabsContent>
                 </Tabs>
@@ -554,7 +785,18 @@ function CommsPageContent() {
               {/* Right Side: Email Composer */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Compose Email</CardTitle>
+                  <div className="flex justify-between items-center">
+                    <CardTitle>Compose Email</CardTitle>
+                    <button
+                      onClick={() => {
+                        setSubject("");
+                        setMessageContent("");
+                      }}
+                      className="text-blue-500 hover:text-blue-700 text-sm font-medium transition-colors"
+                    >
+                      Clear
+                    </button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -584,7 +826,12 @@ function CommsPageContent() {
                         className="min-h-[150px]"
                       />
                     </div>
-                    
+                    <RecipientPills
+                      recipients={selectedRecipients}
+                      activeLeases={activeLeases}
+                      authorizedUsers={authorizedUsers}
+                      onRemove={handleRemoveRecipient}
+                    />
                     <div className="flex justify-between items-center">
                       <div>
                         <span className="text-sm text-gray-500">
@@ -630,71 +877,7 @@ function CommsPageContent() {
             </div>
             
             {/* Email History */}
-            <div className="bg-white shadow rounded-lg overflow-hidden">
-              <div className="p-4 border-b">
-                <h2 className="text-lg font-medium text-gray-900">Email History</h2>
-              </div>
-              
-              {isLoading ? (
-                <div className="flex justify-center items-center h-64">
-                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-                </div>
-              ) : messages.length > 0 ? (
-                <div className="overflow-y-auto max-h-96">
-                  <ul className="divide-y divide-gray-200">
-                    {messages.map((message) => (
-                      <li key={message.id} className="p-4 hover:bg-gray-50">
-                        <div className="flex items-start">
-                          <div className="flex-shrink-0 pt-0.5">
-                            <Mail className="h-5 w-5 text-gray-400" />
-                          </div>
-                          <div className="ml-3 flex-1">
-                            <div className="flex items-center justify-between">
-                              <p className="text-sm font-medium text-gray-900">
-                                Sent to {message.recipients.length} recipient{message.recipients.length !== 1 ? 's' : ''}
-                              </p>
-                              <p className="text-sm text-gray-500">
-                                {message.sentAt instanceof Date 
-                                  ? message.sentAt.toLocaleString() 
-                                  : new Date(message.sentAt?.seconds * 1000).toLocaleString()}
-                              </p>
-                            </div>
-                            <p className="text-sm font-medium text-gray-900 mt-1">
-                              {message.subject}
-                            </p>
-                            <p className="text-sm text-gray-500 mt-1">
-                              {message.content}
-                            </p>
-                            <div className="mt-2">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                message.status === "sent" 
-                                  ? "bg-green-100 text-green-800" 
-                                  : message.status === "pending" 
-                                    ? "bg-yellow-100 text-yellow-800" 
-                                    : "bg-red-100 text-red-800"
-                              }`}>
-                                {message.status === "sent" && <Check className="h-3 w-3 mr-1" />}
-                                {message.status === "pending" && <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-yellow-800 mr-1"></div>}
-                                {message.status === "failed" && <AlertTriangle className="h-3 w-3 mr-1" />}
-                                {message.status.charAt(0).toUpperCase() + message.status.slice(1)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-64">
-                  <Mail className="h-12 w-12 text-gray-400 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-1">No emails sent yet</h3>
-                  <p className="text-gray-500">
-                    Your sent emails will appear here
-                  </p>
-                </div>
-              )}
-            </div>
+            <EmailHistory />
           </div>
         </main>
       </div>

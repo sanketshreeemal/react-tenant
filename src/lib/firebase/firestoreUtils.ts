@@ -1235,13 +1235,15 @@ export const checkAllUsersCollection = async (email: string): Promise<{uid: stri
  * @param {string} email - User's original case email.
  * @param {string} landlordId - Associated landlord ID.
  * @param {'admin' | 'user' | 'tenant'} [role='admin'] - User's role.
+ * @param {string} [name] - User's name (optional).
  * @returns {Promise<void>}
  */
 export const updateAllUsersCollection = async (
   uid: string,
   email: string,
   landlordId: string,
-  role: 'admin' | 'user' | 'tenant' = 'admin'
+  role: 'admin' | 'user' | 'tenant' = 'admin',
+  name?: string
 ): Promise<void> => {
   try {
     const validLandlordId = validateLandlordId(landlordId);
@@ -1259,6 +1261,11 @@ export const updateAllUsersCollection = async (
       updatedAt: serverTimestamp() // Use serverTimestamp directly here
     };
 
+    // Add name if provided
+    if (name) {
+      userDataForWrite.name = name.trim();
+    }
+
     // Use setDoc with merge: true to create or update
     await setDoc(allUsersDocRef, userDataForWrite, { merge: true });
 
@@ -1275,13 +1282,15 @@ export const updateAllUsersCollection = async (
  * @param {string} email - User's original case email.
  * @param {string} landlordId - Associated landlord ID.
  * @param {'admin' | 'user' | 'tenant'} [role='admin'] - User's role.
+ * @param {string} [name] - User's name (optional).
  * @returns {Promise<void>}
  */
 export const createUserDocument = async (
   uid: string,
   email: string,
   landlordId: string,
-  role: 'admin' | 'user' | 'tenant' = 'admin'
+  role: 'admin' | 'user' | 'tenant' = 'admin',
+  name?: string
 ): Promise<void> => {
   try {
     const validLandlordId = validateLandlordId(landlordId);
@@ -1299,6 +1308,11 @@ export const createUserDocument = async (
       updatedAt: serverTimestamp() // Use serverTimestamp directly here
     };
 
+    // Add name if provided
+    if (name) {
+      userDataForWrite.name = name.trim();
+    }
+
     // Check if document exists to set createdAt only once
     const docSnap = await getDoc(userDocRef);
     if (!docSnap.exists()) {
@@ -1309,7 +1323,7 @@ export const createUserDocument = async (
     await setDoc(userDocRef, userDataForWrite, { merge: true });
 
     // **Crucially, update the allUsers collection as well**
-    await updateAllUsersCollection(uid, email, landlordId, role);
+    await updateAllUsersCollection(uid, email, landlordId, role, name);
 
     logger.info(`firestoreUtils: Successfully created/updated user document for UID ${uid}`);
   } catch (error: any) {
@@ -1473,7 +1487,7 @@ export const handleAuthFlow = async (user: User): Promise<{
   const invitation = await getInvitation(userEmailLower);
   if (invitation) {
     logger.info(`handleAuthFlow: Found invitation for ${userEmailLower}. Landlord: ${invitation.landlordId}, Role: ${invitation.role}`);
-    await createUserDocument(uid, userEmail, invitation.landlordId, invitation.role);
+    await createUserDocument(uid, userEmail, invitation.landlordId, invitation.role, invitation.name);
     await deleteInvitation(invitation.id); // Consume invitation
     logger.info(`handleAuthFlow: Invitation processed. Returning landlordId: ${invitation.landlordId}`);
     return { landlordId: invitation.landlordId, isNewUser: true };
@@ -1488,13 +1502,13 @@ export const handleAuthFlow = async (user: User): Promise<{
     const existingUserDoc = await getUserDoc(uid);
     if (existingUserDoc) {
       logger.info(`handleAuthFlow: Existing user found in 'users' collection (UID: ${uid}). Updating allUsers.`);
-      await updateAllUsersCollection(uid, userEmail, existingUserDoc.landlordId, existingUserDoc.role || 'admin');
+      await updateAllUsersCollection(uid, userEmail, existingUserDoc.landlordId, existingUserDoc.role || 'admin', existingUserDoc.name);
       return { landlordId: existingUserDoc.landlordId, isNewUser: false };
     } else {
       logger.info(`handleAuthFlow: No existing user found for UID ${uid}. Creating new landlord and user (admin).`);
       const landlordName = user.displayName || userEmail;
       const newLandlordId = await createLandlord(userEmail, landlordName);
-      await createUserDocument(uid, userEmail, newLandlordId, 'admin'); 
+      await createUserDocument(uid, userEmail, newLandlordId, 'admin', user.displayName || undefined); 
       return { landlordId: newLandlordId, isNewUser: true };
     }
   }
