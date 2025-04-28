@@ -14,7 +14,11 @@ import { AlertMessage } from "../../../components/ui/alert-message";
 import { db } from '../../../lib/firebase/firebase';
 import { inviteUser, removeUserAccess } from '../../../lib/firebase/firestoreUtils';
 import { UserProfile, AllUser } from "@/types";
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { Checkbox } from "@/components/ui/checkbox";
+import { emailEventTemplates } from "@/lib/email/templates/indexEvent";
+import { emailReportTemplates } from "@/lib/email/templates/indexReport";
+import { EmailAutomationTable } from "@/components/EmailAutomationTable";
 
 export default function ManageUsersPage() {
   const { user, loading: authLoading } = useAuth();
@@ -319,6 +323,20 @@ export default function ManageUsersPage() {
                    )}
                  </div>
                )}
+            </CardContent>
+          </Card>
+
+          {/* --- Email Automation Card --- */}
+          <hr className="my-8" />
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Email Automation</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                Configure which users receive automated emails for each event or report. Check a box to enable email automation for that user and template. Changes are local for now. (TODO: Wire to backend)
+              </p>
+              <EmailAutomationTable users={authorizedUsers} />
             </CardContent>
           </Card>
         </div>

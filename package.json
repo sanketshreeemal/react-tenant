@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "init-multi-tenant": "node scripts/initialize-multi-tenant.js",
-    "cleanup-migration": "node scripts/cleanup-migration.js"
+    "cleanup-migration": "node scripts/cleanup-migration.js",
+    "deploy": "cd functions && npm run lint && npm run build && npm run deploy"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.3",
@@ -42,7 +43,8 @@
     "sonner": "^2.0.1",
     "tailwind-merge": "^3.0.2",
     "tailwindcss-animate": "^1.0.7",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "^3.24.3"
   },
   "devDependencies": {
     "@types/file-saver": "^2.0.7",

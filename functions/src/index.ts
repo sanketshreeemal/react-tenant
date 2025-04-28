@@ -1,23 +1,36 @@
 /**
- * Import function triggers from their respective submodules:
+ * Main entry point for Firebase Cloud Functions
  *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
+ * This file:
+ * 1. Initializes Firebase Admin
+ * 2. Exports all event-driven and scheduled functions
+ * 3. Sets up error handling and logging
  */
 
-import {onRequest} from "firebase-functions/v2/https";
-import * as logger from "firebase-functions/logger";
-import { onNewLease } from './emailTriggers';
-import { biweeklyReport } from './reportScheduler';
+import * as admin from "firebase-admin";
+import * as functions from "firebase-functions/v1";
+import {onNewLease, onRentPayment} from "./emailTriggers";
+import {summaryReportBiweekly, summaryReportMonthly} from "./reportScheduler";
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+// Initialize Firebase Admin
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+// Validate required configuration
+const requiredConfig = ["gmail.user", "gmail.pass"];
+for (const config of requiredConfig) {
+  if (!functions.config().gmail?.[config.split(".")[1]]) {
+    throw new Error(`Missing required Firebase config: ${config}`);
+  }
+}
 
-export { onNewLease, biweeklyReport };
+// Global error handler for all functions
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  // Log to Firebase Monitoring
+  functions.logger.error("Unhandled Rejection", {reason, promise});
+});
+
+// Export all functions
+export {onNewLease, onRentPayment, summaryReportBiweekly, summaryReportMonthly};

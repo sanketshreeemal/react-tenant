@@ -228,7 +228,7 @@ function CommsPageContent() {
 
     initializeData();
     }
-  }, [landlordId, landlordLoading, isLoading]);
+  }, [landlordId, landlordLoading, isLoading, activeLeases.length, authorizedUsers.length, user]);
 
   // Helper to get selectedRowIds for a given table type and data
   const getSelectedRowIds = (type: 'tenant' | 'user', data: any[]) => {

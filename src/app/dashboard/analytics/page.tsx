@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
+import { useLandlordId } from '../../../lib/hooks/useLandlordId';
 import Navigation from "../../../components/Navigation";
 import {
   BarChart2,
@@ -46,6 +47,8 @@ import { RentalInventory, Lease, RentPayment } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { theme } from '@/theme/theme';
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from '../../../lib/firebase/firebase';
 
 // Define type interfaces that match Firestore document structures
 interface OccupancyChartData {
@@ -118,37 +121,6 @@ export default function AnalyticsPage() {
       router.push("/");
     }
   }, [user, authLoading, router]);
-
-  const fetchData = useCallback(async () => {
-    if (landlordId) {
-      try {
-        // Use firestoreUtils to fetch data
-        const inventoryData = await getAllRentalInventory(landlordId);
-        const allLeases = await getAllLeases(landlordId);
-        const currentActiveLeases = await getAllActiveLeases(landlordId);
-        const allRentPayments = await getAllPayments(landlordId);
-
-        setRentalInventory(inventoryData);
-        setLeases(allLeases);
-        setActiveLeases(currentActiveLeases);
-        setRentPayments(allRentPayments);
-
-        // Calculate analytics
-        calculateAnalytics(inventoryData, currentActiveLeases, allRentPayments);
-      } catch (error: any) {
-        console.error('Error fetching data:', error);
-        setError(error.message || 'An error occurred while fetching data');
-      } finally {
-        setIsLoading(false);
-      }
-    }
-  }, [landlordId]);
-
-  useEffect(() => {
-    if (!isLoading) {
-      fetchData();
-    }
-  }, [isLoading, fetchData]);
 
   const calculateAnalytics = useCallback((
     inventory: RentalInventory[],
@@ -241,7 +213,7 @@ export default function AnalyticsPage() {
       });
 
       // Calculate collected rent
-      const monthPayments = rentPayments.filter(payment =>
+      const monthPayments = payments.filter(payment =>
         isWithinInterval(new Date(payment.paymentDate), {
           start: monthStart,
           end: monthEnd
@@ -286,13 +258,52 @@ export default function AnalyticsPage() {
     setMonthlyData(monthlyData.reverse()); // Most recent first
     setOccupancyChartData(occupancyData);
     setRentCollectionChartData(rentCollectionData);
-  }, [timeRange, rentalInventory, leases, rentPayments]);
+  }, [timeRange, leases, rentPayments]);
+
+  const fetchData = useCallback(async () => {
+    if (!landlordId) return;
+    
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Fetch rental inventory
+      const inventoryQuery = query(collection(db, `landlords/${landlordId}/rentalInventory`));
+      const inventorySnapshot = await getDocs(inventoryQuery);
+      const inventory = inventorySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as RentalInventory[];
+      setRentalInventory(inventory);
+
+      // Fetch active leases
+      const leasesQuery = query(
+        collection(db, `landlords/${landlordId}/leases`),
+        where('status', '==', 'active')
+      );
+      const leasesSnapshot = await getDocs(leasesQuery);
+      const leases = leasesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Lease[];
+      setLeases(leases);
+      setActiveLeases(leases);
+
+      // Fetch rent payments
+      const paymentsQuery = query(collection(db, `landlords/${landlordId}/rentPayments`));
+      const paymentsSnapshot = await getDocs(paymentsQuery);
+      const payments = paymentsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as RentPayment[];
+      setRentPayments(payments);
+
+      // Calculate analytics with the fetched data
+      calculateAnalytics(inventory, leases, payments);
+    } catch (error: any) {
+      console.error('Error fetching data:', error);
+      setError(error.message || 'An error occurred while fetching data');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [landlordId, calculateAnalytics]);
 
   useEffect(() => {
     if (!isLoading) {
-      calculateAnalytics(rentalInventory, activeLeases, rentPayments);
+      fetchData();
     }
-  }, [isLoading, calculateAnalytics, rentalInventory, activeLeases, rentPayments]);
+  }, [isLoading, fetchData]);
 
   if (authLoading || !user) {
     return (
