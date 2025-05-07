@@ -42,7 +42,7 @@ export default function Navigation() {
     { name: "Manage Properties", href: "/dashboard/property-mgmt", icon: Building },
     { name: "Manage Users", href: "/dashboard/manage-users", icon: UserCog },
     // Development Phase Features
-    // { name: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
+     { name: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
     { name: "Communication", href: "/dashboard/comms", icon: Mail },
     // { name: "Documents", href: "/dashboard/documents", icon: FileImage },
   ];

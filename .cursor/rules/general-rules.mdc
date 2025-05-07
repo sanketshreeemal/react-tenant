@@ -3,13 +3,8 @@ description:
 globs: 
 alwaysApply: true
 ---
-# Multi-Tenant Refactoring: Best Practices and Coding Standards
-
-**Document Purpose:** To establish coding standards and best practices for the multi-tenant refactoring project, ensuring consistency, maintainability, and minimizing the introduction of bugs.
-
 **Introduction:**
-
-This document outlines the coding standards and best practices that must be followed during the multi-tenant refactoring project. These guidelines will help ensure that the codebase remains clean, consistent, and maintainable.
+ These guidelines will help ensure that the codebase remains clean, consistent, and maintainable.
 
 ## General Principles
 
@@ -23,10 +18,6 @@ This document outlines the coding standards and best practices that must be foll
     * Avoid duplicating code.
     * Extract common logic into reusable functions or components.
     * Use utility functions and hooks to encapsulate reusable logic.
-3.  **Keep it Simple, Stupid (KISS):**
-    * Aim for simplicity in your code.
-    * Avoid unnecessary complexity.
-    * Choose the simplest solution that meets the requirements.
 4.  **You Ain't Gonna Need It (YAGNI):**
     * Avoid adding features or code that you don't currently need.
     * Focus on implementing the required functionality.
@@ -35,17 +26,8 @@ This document outlines the coding standards and best practices that must be foll
     * Follow consistent naming conventions (e.g., camelCase for variables and functions, PascalCase for components).
 6.  **Code Consistency:**
     * Adhere to the existing coding style and conventions used in the project.
-    * Use a code formatter (e.g., Prettier) to ensure consistent formatting.
-    * Use a linter (e.g., ESLint) to catch potential errors and enforce coding standards.
-    * Create all functions within the FirestoreUtils file such that they are centralized and can be resused across the application if required. 
-7.  **Thorough Testing:**
-    * Write unit tests and integration tests to verify the correctness of your code.
-    * Test all edge cases and error scenarios.
-    * Use a testing framework (e.g., Jest, React Testing Library).
-8.  **Code Reviews:**
-    * Participate in code reviews to ensure code quality and consistency.
-    * Provide constructive feedback to your teammates.
-    * Learn from the feedback you receive.
+    * VERY IMPORTANT -  Create all functions within the FirestoreUtils file such that they are centralized and can be resused across the application if required. 
+    * ANY NEW FUNCTIONS IN FORESTOREUTILS MUST BE UPDATED IN THE [functions-firebase.md](mdc:paths/documentation/functions-firebase.md) file TO KEEP CONSISTENT DOCUMENTATION 
 9.  **Documentation:**
     * Document your code using comments and docstrings.
     * Explain complex logic and provide context for your code.
@@ -60,9 +42,6 @@ This document outlines the coding standards and best practices that must be foll
 2.  **Global Variables:**
     * Avoid using global variables.
     * Use state management libraries (e.g., React Context, Redux) to manage application state.
-3.  **Magic Numbers:**
-    * Avoid using magic numbers in your code.
-    * Use named constants instead.
 4.  **Complex Logic:**
     * Avoid writing overly complex logic.
     * Break down complex logic into smaller, more manageable functions.
