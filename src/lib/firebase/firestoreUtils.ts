@@ -3,7 +3,7 @@
 import { db } from './firebase'; // Assuming you have firebase.ts to initialize Firebase
 import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, addDoc, getDocs, query, where, orderBy, DocumentData, QuerySnapshot, Timestamp, serverTimestamp } from 'firebase/firestore';
 import { User } from 'firebase/auth';
-import { Tenant, Lease, RentPayment, RentalInventory, PropertyGroup, UserProfile, AllUser } from '@/types'; // Import our TypeScript interfaces
+import { Tenant, Lease, RentPayment, RentalInventory, PropertyGroup, UserProfile, AllUser, DelinquentUnitDisplayInfo, DelinquencyDashboardData } from '@/types'; // Import our TypeScript interfaces
 import logger from '@/lib/logger'; // Assuming you have a logger utility
 import { normalizeDate, dateToTimestamp } from '../utils/dateUtils';
 
@@ -2012,3 +2012,183 @@ export const getLeaseExpirations = (
     throw new Error(error.message || 'Failed to get lease expirations.');
   }
 };
+
+// --- Delinquent Units Dashboard Function ---
+
+/**
+ * Calculates and retrieves information about delinquent rental units for the dashboard.
+ * 
+ * This function identifies units with unpaid rent from previous months, considering:
+ * - Active leases only.
+ * - A historical data hard stop: no checks for rental periods prior to March 2025.
+ * - Rent in Arrears: Rent for Month Y is expected in Month Y+1, and considered delinquent
+ *   if not paid by the end of Month Y+1 (i.e., current date is Month Y+2 or later).
+ * - Partial Payments: A unit is delinquent for a month if a "Rent Payment" type record
+ *   is missing or if the `actualRentPaid` is less than the `lease.rentAmount`.
+ * 
+ * @param {string | undefined | null} landlordId - The ID of the landlord.
+ * @param {Date} currentSystemDate - The current system date, used for arrears calculation.
+ * @param {string} [propertyGroupId] - Optional ID of a property group to filter results.
+ * @returns {Promise<DelinquencyDashboardData>} Data for the delinquent units dashboard.
+ * @throws {Error} If landlordId is missing or if there is an error during processing.
+ */
+export const getDelinquentUnitsForDashboard = async (
+  landlordId: string | undefined | null,
+  currentSystemDate: Date,
+  propertyGroupId?: string
+): Promise<DelinquencyDashboardData> => {
+  const validLandlordId = validateLandlordId(landlordId);
+  logger.info(`firestoreUtils: Starting getDelinquentUnitsForDashboard for landlord ${validLandlordId}${propertyGroupId ? ', propertyGroup ' + propertyGroupId : ''} as of ${currentSystemDate.toISOString()}`);
+
+  try {
+    // 1. Fetch all necessary data
+    const [
+      allActiveLeases,
+      allPayments,
+      allRentalInventory,
+      allPropertyGroups,
+    ] = await Promise.all([
+      getAllActiveLeases(validLandlordId),
+      getAllPayments(validLandlordId), // Fetches all payment types
+      getAllRentalInventory(validLandlordId),
+      getAllPropertyGroups(validLandlordId),
+    ]);
+
+    logger.debug(`Fetched ${allActiveLeases.length} active leases, ${allPayments.length} payments, ${allRentalInventory.length} inventory items, ${allPropertyGroups.length} property groups.`);
+
+    // Create maps for efficient lookup
+    const inventoryMap = new Map<string, RentalInventory>(allRentalInventory.map(inv => [inv.id!, inv]));
+    const propertyGroupMap = new Map<string, PropertyGroup>(allPropertyGroups.map(pg => [pg.id!, pg]));
+    
+    // Filter payments to only include "Rent Payment" type
+    const rentPayments = allPayments.filter(p => p.paymentType === "Rent Payment");
+    logger.debug(`Filtered to ${rentPayments.length} payments of type "Rent Payment".`);
+
+    // 2. Determine relevant leases
+    let relevantLeases = allActiveLeases;
+    if (propertyGroupId) {
+      const unitIdsInGroup = allRentalInventory
+        .filter(inv => inv.groupName === propertyGroupMap.get(propertyGroupId)?.groupName) // Match by groupName as inventory stores groupName
+        .map(inv => inv.id!);
+      relevantLeases = allActiveLeases.filter(lease => unitIdsInGroup.includes(lease.unitId));
+      logger.debug(`Filtered to ${relevantLeases.length} leases for property group ${propertyGroupId}.`);
+    }
+
+    const delinquentUnitsDisplay: DelinquentUnitDisplayInfo[] = [];
+    const hardStopDate = new Date(2025, 2, 1); // March 1, 2025 (month is 0-indexed)
+
+    // 3. Iterate through each relevant active lease
+    for (const lease of relevantLeases) {
+      if (!lease.id) continue; // Should not happen with fetched data
+
+      const unitInventory = inventoryMap.get(lease.unitId);
+      if (!unitInventory) {
+        logger.warn(`Skipping lease ${lease.id} as its unit ${lease.unitId} was not found in rental inventory.`);
+        continue;
+      }
+
+      const propertyName = unitInventory.groupName 
+                           ? (propertyGroupMap.get(allPropertyGroups.find(pg => pg.groupName === unitInventory.groupName)?.id || '')?.groupName || unitInventory.groupName) // Prefer full group name from PropertyGroup if available
+                           : "Default";
+
+
+      const leaseStartDate = new Date(lease.leaseStartDate);
+      const delinquentRentalPeriods: string[] = [];
+      
+      // Determine the first rental period to check: max(leaseStartDate, March 2025)
+      let currentCheckPeriod = new Date(Math.max(leaseStartDate.getTime(), hardStopDate.getTime()));
+      currentCheckPeriod.setDate(1); // Start from the 1st of the month
+
+      // Determine the last rental period to check: the month *before* currentSystemDate's month
+      // Example: if currentSystemDate is May 15, 2025, last period to check is April 2025.
+      const oneMonthBeforeSystemDate = new Date(currentSystemDate);
+      oneMonthBeforeSystemDate.setMonth(oneMonthBeforeSystemDate.getMonth() - 1);
+      oneMonthBeforeSystemDate.setDate(1);
+
+
+      // Loop through each month from currentCheckPeriod up to oneMonthBeforeSystemDate
+      while (currentCheckPeriod <= oneMonthBeforeSystemDate) {
+        const rentalPeriodYear = currentCheckPeriod.getFullYear();
+        const rentalPeriodMonth = currentCheckPeriod.getMonth(); // 0-indexed
+        const rentalPeriodString = `${rentalPeriodYear}-${(rentalPeriodMonth + 1).toString().padStart(2, '0')}`;
+
+        // Apply Arrears Logic (PRD 3.1.4)
+        // Delinquency for rentalPeriodString (Month Y) is checked if currentSystemDate is in Month Y+2 or later.
+        // Example: Rental for Jan 2025 (Month Y). Payment expected Feb 2025.
+        // Delinquent if not paid by end of Feb 2025, so check if currentSystemDate is March 1, 2025 or later.
+        const firstDayOfDelinquencyCheckMonth = new Date(rentalPeriodYear, rentalPeriodMonth + 2, 1); // Month Y+2, Day 1
+
+        if (currentSystemDate < firstDayOfDelinquencyCheckMonth) {
+          // Too early to consider this rentalPeriod delinquent due to arrears
+          // logger.debug(`Lease ${lease.id}, Period ${rentalPeriodString}: Too early for arrears check (current: ${currentSystemDate.toISOString()}, check starts: ${firstDayOfDelinquencyCheckMonth.toISOString()}).`);
+          currentCheckPeriod.setMonth(currentCheckPeriod.getMonth() + 1);
+          continue;
+        }
+        
+        // Check for payment
+        const paymentRecord = rentPayments.find(p => 
+          p.unitId === lease.unitId && 
+          p.rentalPeriod === rentalPeriodString
+        );
+
+        let isDelinquentThisMonth = false;
+        if (!paymentRecord) {
+          isDelinquentThisMonth = true;
+          // logger.debug(`Lease ${lease.id}, Period ${rentalPeriodString}: Delinquent - No payment record found.`);
+        } else if (paymentRecord.actualRentPaid < lease.rentAmount) {
+          isDelinquentThisMonth = true;
+          // logger.debug(`Lease ${lease.id}, Period ${rentalPeriodString}: Delinquent - Partial payment (paid ${paymentRecord.actualRentPaid}, expected ${lease.rentAmount}).`);
+        }
+
+        if (isDelinquentThisMonth) {
+          delinquentRentalPeriods.push(rentalPeriodString);
+        }
+
+        // Move to the next month
+        currentCheckPeriod.setMonth(currentCheckPeriod.getMonth() + 1);
+      }
+
+      if (delinquentRentalPeriods.length > 0) {
+        const totalRentBehindForUnit = delinquentRentalPeriods.length * lease.rentAmount;
+        delinquentUnitsDisplay.push({
+          unitId: lease.unitId,
+          leaseId: lease.id,
+          unitNumber: unitInventory.unitNumber,
+          propertyName: propertyName,
+          activeLeaseRentAmount: lease.rentAmount,
+          delinquentRentalPeriods: delinquentRentalPeriods,
+          numberOfDelinquentMonths: delinquentRentalPeriods.length,
+          totalRentBehindForUnit: totalRentBehindForUnit,
+          tenantName: lease.tenantName 
+        });
+        logger.debug(`Lease ${lease.id} (Unit ${unitInventory.unitNumber}) identified as delinquent for ${delinquentRentalPeriods.length} months. Total behind: ${totalRentBehindForUnit}. Periods: ${delinquentRentalPeriods.join(', ')}`);
+      }
+    }
+
+    // 4. Aggregate results
+    const grandTotalRentBehind = delinquentUnitsDisplay.reduce((sum, unit) => sum + unit.totalRentBehindForUnit, 0);
+    const totalDelinquentUnitsCount = delinquentUnitsDisplay.length;
+
+    // Sort units for consistent display, e.g., by property name, then unit number
+    delinquentUnitsDisplay.sort((a, b) => {
+      if (a.propertyName.toLowerCase() < b.propertyName.toLowerCase()) return -1;
+      if (a.propertyName.toLowerCase() > b.propertyName.toLowerCase()) return 1;
+      return compareUnitNumbers(a.unitNumber, b.unitNumber); // Using existing helper
+    });
+    
+    logger.info(`getDelinquentUnitsForDashboard completed. Found ${totalDelinquentUnitsCount} delinquent units. Grand total rent behind: ${grandTotalRentBehind}.`);
+
+    return {
+      totalDelinquentUnitsCount,
+      grandTotalRentBehind,
+      units: delinquentUnitsDisplay,
+    };
+
+  } catch (error: any) {
+    logger.error(`firestoreUtils: Error in getDelinquentUnitsForDashboard: ${error.message}`, { stack: error.stack });
+    throw new Error(error.message || 'Failed to get delinquent units data.');
+  }
+};
+
+// Make sure this new function is placed before other utility function groups or at a logical position.
+// For example, if 'groupLeasesByProperty' is the next major function:
