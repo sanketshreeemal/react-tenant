@@ -1,8 +1,76 @@
-## Firebase Firestore Utility Functions Documentation
+# Firebase Firestore Utility Functions Documentation
 
-This document outlines the utility functions available in `src/lib/firebase/firestoreUtils.ts` for interacting with Firebase Firestore.
+This document outlines the utility functions for interacting with Firebase Firestore.
 
 ---
+## Location: 'src/lib/utils/analyticsUtils.ts'
+
+
+### 1. `getRentalPeriodForTargetMonth`
+
+*   **Function Parameters:**
+    *   `targetMonthYear: string` - The month and year payments are recorded, in "YYYY-MM" format.
+*   **Function Output:** `string` - The rental period in "YYYY-MM" format.
+*   **Explanation:** Calculates the rental period for a given target month and year, assuming rent is paid in arrears. For example, if payments are recorded in May 2025 (target month), the rental period would be April 2025. This function handles year transitions correctly (e.g., January 2025 target month returns December 2024 rental period).
+
+---
+
+### 2. `isLeaseActiveAtMonthEnd`
+
+*   **Function Parameters:**
+    *   `lease: Lease` - The lease object to check.
+    *   `targetMonthYear: string` - The target month in "YYYY-MM" format.
+*   **Function Output:** `boolean` - True if the lease is active at the end of the target month, false otherwise.
+*   **Explanation:** Determines if a lease is active at the end of a specific month by checking if the lease's start date is before or on the month-end and its end date is after or on the month-end. This is useful for point-in-time occupancy analysis.
+
+---
+
+### 3. `isLeaseActiveDuringRentalPeriod`
+
+*   **Function Parameters:**
+    *   `lease: Lease` - The lease object to check.
+    *   `rentalPeriod: string` - The rental period in "YYYY-MM" format.
+*   **Function Output:** `boolean` - True if the lease is active during any part of the rental period, false otherwise.
+*   **Explanation:** Checks if a lease period overlaps with any part of a given rental period month. A lease is considered active if its start date is before or on the rental period's end and its end date is after or on the rental period's start. This is crucial for determining rent responsibility during a specific period.
+
+---
+
+### 4. `filterPaymentsForRentalPeriodAndLeases`
+
+*   **Function Parameters:**
+    *   `allPayments: RentPayment[]` - Array of all RentPayment objects.
+    *   `targetLeaseIds: string[]` - Array of lease IDs to filter payments for.
+    *   `rentalPeriod: string` - The rental period in "YYYY-MM" format to match against payment.rentalPeriod.
+*   **Function Output:** `RentPayment[]` - Filtered array of RentPayment objects.
+*   **Explanation:** Filters payment records to return only rent payments that match both the specified rental period and belong to the provided lease IDs. This is useful for analyzing rent collection status for specific units or property groups.
+
+---
+
+### 5. `calculateYtdRentCollected`
+
+*   **Function Parameters:**
+    *   `allPayments: RentPayment[]` - Array of all RentPayment objects for the landlord.
+    *   `groupLeaseIds: string[]` - Array of lease IDs belonging to the specific property group.
+    *   `targetMonthYear: string` - The target month and year in "YYYY-MM" format defining the end of the YTD period.
+*   **Function Output:** `number` - The total YTD rent collected as a number.
+*   **Explanation:** Calculates the Year-to-Date (YTD) rent collected for a specific group of leases. The fiscal year starts in April, so YTD is defined as payments recorded from April of the fiscal year up to and including the target month. For example, if the target is February 2025, it will sum payments from April 2024 through February 2025.
+
+---
+
+### 6. `identifyAllPastDelinquencies`
+
+*   **Function Parameters:**
+    *   `groupLeases: (Lease & { id: string })[]` - Array of leases belonging to the specific property group.
+    *   `allInventory: RentalInventory[]` - Array of all rental inventory to find unit numbers.
+    *   `allPayments: RentPayment[]` - Array of all RentPayment objects for the landlord.
+    *   `currentTargetMonthYear: string` - The current target month for analysis in "YYYY-MM" format.
+*   **Function Output:** `MultiMonthDelinquentUnitInfo[]` - An array of objects detailing all delinquent periods for each lease.
+*   **Explanation:** Identifies all past delinquent rental periods for leases within a group. A unit is considered delinquent if rent for any active rental period was not fully paid. The function tracks delinquencies from March 2025 onwards or from the lease start date (whichever is later) up to the current target month. For each delinquent unit, it provides details including unit number, tenant name, lease details, all delinquent periods, total overdue amount, and count of delinquent months.
+
+-------------------------
+
+
+## Location: `src/lib/firebase/firestoreUtils.ts`
 
 ### 1. `addTenant`
 
@@ -412,3 +480,4 @@ This document outlines the utility functions available in `src/lib/firebase/fire
 *   **Explanation:** Identifies active leases that are set to expire within a specified number of days (`daysThreshold`). It calculates the number of days left for each lease and returns a list of these leases, their total rental value, and their count, sorted by days left (ascending).
 
 ---
+

@@ -286,4 +286,203 @@ For each property group, and based on the globally selected `targetMonthYear` (e
     *   **Elegance & Modernity:** Use of space, typography, and subtle animations can enhance the feel. `recharts` or a similar library can be used for any mini-trends or future detailed charts.
     *   **Completeness (for this phase):** This design covers the requested metrics (occupancy, rent collected MTD/YTD, delinquency) at the property group level effectively.
 
-This detailed build-out plan should provide a strong foundation for development. The key will be efficient data fetching and client-side processing, or considering backend aggregation if performance becomes an issue with very large datasets. 
+
+
+--------------------------------------------------------------------------
+
+
+## Phased Implementation Plan for Property Level Analytics
+
+This plan breaks down the development of the Property Level Analytics dashboard into three distinct phases. Each phase is designed to be implementable independently and chronologically, leveraging existing components (conceptually, from `src/components/ui/`) and styling from `src/theme/theme.ts`.
+
+**Core Assumptions & Definitions:**
+
+*   **`targetMonthYear`**: The month and year selected by the user in the UI (e.g., "2025-05" for May 2025). This is the month *payments are recorded*.
+*   **`rentalPeriodInFocus`**: The actual rental period being analyzed for rent collection and delinquency. Due to rent paid in arrears, if `targetMonthYear` is May 2025, then `rentalPeriodInFocus` is April 2025.
+*   **Earliest Data**: Rent payments exist from March 2025 onwards. This means the earliest `targetMonthYear` for rent-related metrics will be March 2025, covering the February 2025 `rentalPeriodInFocus`. Occupancy can be calculated for earlier `targetMonthYear` if inventory/lease data exists. The month selector should be constrained accordingly.
+
+### Phase 1: Setup, Data Foundation, and Basic Property Group Display
+
+**Goal:** Establish the page structure, implement the global month selector, fetch foundational data, and display basic information for each property group.
+
+**Status: COMPLETED**
+
+**Steps & Implementation Details:**
+
+1.  **Page Structure & Month Selector:**
+    *   [x] Create the main analytics page component (`src/app/dashboard/analytics/page.tsx`).
+    *   [x] Add a global month/year selector component (`<MonthYearPicker />` in `src/components/ui/MonthYearPicker.tsx`).
+        *   [x] This component manages the `targetMonthYear` state.
+        *   [x] Defaults to the last fully completed month.
+        *   [x] Constrains selectable months (Earliest March 2025, latest current month).
+        *   [x] Styling concepts noted for future theme integration.
+2.  **Data Fetching Hook/Service (Initial):**
+    *   [x] Create a custom React hook (`usePropertyAnalyticsData` in `src/hooks/usePropertyAnalyticsData.ts`).
+    *   [x] In this phase, the hook fetches:
+        *   [x] `propertyGroups = await getAllPropertyGroups(landlordId)`
+        *   [x] `allInventory = await getAllRentalInventory(landlordId)`
+    *   [x] Implemented basic loading states and error handling.
+3.  **Property Group Cards (Basic):**
+    *   [x] For each `propertyGroup` fetched, render a "Property Group Card" (`<PropertyGroupCard />` in `src/components/analytics/PropertyGroupCard.tsx`).
+    *   [x] Layout concepts noted for future grid/list components.
+    *   [x] Styling concepts noted.
+    *   [x] Display on each card:
+        *   [x] Property Group Name.
+        *   [x] Total Units in Group (calculated by filtering `allInventory` based on `propertyGroup.groupName` matching `inventoryItem.groupName`).
+            *   *Note: This deviates from the plan's `inv.propertyGroupId === group.id` due to current `RentalInventory` type structure. Future phases/refactors might involve updating `RentalInventory` to include `propertyGroupId` for more direct linking if desired.*
+4.  **Helper: Date Conversion Logic:**
+    *   [x] Create a utility function `getRentalPeriodForTargetMonth(targetMonthYear: string): string` (in `src/lib/utils/analyticsUtils.ts`).
+        *   [x] Example: If `targetMonthYear` is "2025-05", it returns "2025-04".
+
+**Key Functions Used/Implemented:**
+
+*   **Existing Firestore:**
+    *   [x] `getAllPropertyGroups(landlordId)`
+    *   [x] `getAllRentalInventory(landlordId)`
+*   **New (Utility):**
+    *   [x] `getRentalPeriodForTargetMonth(targetMonthYear: string): string`
+*   **New (Hooks):**
+    *   [x] `usePropertyAnalyticsData(landlordId)`
+*   **New (Components):**
+    *   [x] `src/app/dashboard/analytics/property/page.tsx`
+    *   [x] `src/components/ui/MonthYearPicker.tsx`
+    *   [x] `src/components/analytics/PropertyGroupCard.tsx`
+
+**UI Components (Conceptual - to be built or mapped to existing in `src/components/ui/`):**
+
+*   [x] `<PageLayout>` (basic structure in `page.tsx`)
+*   [x] `<MonthYearPicker>`
+*   [x] `<Grid>` or `<Flex>` (using Tailwind CSS grid for now)
+*   [x] `<Card>` (basic div structure in `PropertyGroupCard.tsx`)
+*   [x] `<Heading>` (using `h1`, `h3`)
+*   [x] `<Text>` (using `p`)
+*   [x] `<LoadingSpinner>` / `<ErrorMessage>` (basic text/div placeholders in `page.tsx`)
+
+**Outcome of Phase 1:** A functional page at `src/app/dashboard/analytics/page.tsx` displaying a list of property groups with their names and total unit counts. A month selector allows changing the `targetMonthYear`. The page fetches data using the new hook and handles loading/error states for data fetching and auth. This sets a solid foundation for Phase 2.
+
+---
+
+### Phase 2: Single-Month Metrics (Occupancy, Rent Collection, Delinquency)
+
+**Goal:** Calculate and display key monthly performance metrics for each property group based on the selected `targetMonthYear` and the derived `rentalPeriodInFocus`. Implement drill-down for delinquent units for the focused rental period.
+
+**Status: COMPLETED**
+
+**Steps & Implementation Details:**
+
+1.  **Extend Data Fetching:**
+    *   [x] Modified `usePropertyAnalyticsData` to also fetch:
+        *   [x] `allLeases = await getAllLeases(landlordId)`
+        *   [x] `allPayments = await getAllPayments(landlordId)`
+    *   [x] Updated return type and object from the hook.
+2.  **Calculate & Display Monthly Occupancy:**
+    *   [x] For each `PropertyGroupCard` and the selected `targetMonthYear`:
+        *   [x] Determined active leases at the *end* of `targetMonthYear` using `isLeaseActiveAtMonthEnd`.
+        *   [x] Formula: `(Number of Occupied Units in Group at end of targetMonthYear / Total Units in Group) * 100` implemented.
+        *   [x] Display: "XX% Occupied (as of end of [targetMonthYear])" in `PropertyGroupCard`.
+3.  **Calculate & Display Monthly Rent Collected:**
+    *   [x] For each `PropertyGroupCard` and the selected `targetMonthYear`:
+        *   [x] `rentalPeriodInFocus = getRentalPeriodForTargetMonth(targetMonthYear)` used.
+        *   [x] Filtered `allPayments` recorded in `targetMonthYear` for leases within the current property group and for `rentalPeriodInFocus`.
+        *   [x] Summed these payments.
+        *   [x] Display: "$X,XXX Collected (in [targetMonthYear] for [rentalPeriodInFocus] Rent)" in `PropertyGroupCard`.
+4.  **Calculate & Display Monthly Delinquency Rate:**
+    *   [x] For each `PropertyGroupCard` and `targetMonthYear`:
+        *   [x] Used `rentalPeriodInFocus`.
+        *   [x] Identified leases active during `rentalPeriodInFocus` for the group using `isLeaseActiveDuringRentalPeriod`.
+        *   [x] `expectedRentForPeriod = Sum of rentAmount for these active leases`.
+        *   [x] `collectedRentForPeriod = Sum of payments (actualRentPaid) recorded in targetMonthYear attributed to these leases for rentalPeriodInFocus`.
+        *   [x] Formula: `((expectedRentForPeriod - collectedRentForPeriod) / expectedRentForPeriod) * 100` implemented.
+        *   [x] Display: "Z% Delinquent (for [rentalPeriodInFocus] Rent)" in `PropertyGroupCard`, with conditional text color for high rates.
+5.  **Delinquent Units Drill-Down (Single Month):**
+    *   [x] On each `PropertyGroupCard`, added a "View Delinquent Units" `<Button>`.
+    *   [x] Action opens a `<DelinquencyModal />` (`src/components/analytics/DelinquencyModal.tsx`).
+    *   [x] Modal state (visibility, data) managed in `analytics/page.tsx`.
+    *   [x] Content: A table listing units within that property group that are delinquent for `rentalPeriodInFocus`.
+        *   [x] Columns: Unit Number, Tenant Name, Lease Rent Amount, Amount Paid, Amount Due, Lease End Date.
+        *   [x] Used `<Table>` components from `src/components/ui/table.tsx` and `<Card>` for modal structure.
+
+**Key Functions & Types Used/Implemented:**
+
+*   **Existing Firestore (via `usePropertyAnalyticsData`):**
+    *   [x] `getAllLeases(landlordId)`
+    *   [x] `getAllPayments(landlordId)`
+*   **New Types (in `src/types.d.ts`):**
+    *   [x] `DelinquentUnitInfo` interface.
+*   **New Utilities (in `src/lib/utils/analyticsUtils.ts`):**
+    *   [x] `isLeaseActiveAtMonthEnd(lease: Lease, targetMonthYear: string): boolean`
+    *   [x] `isLeaseActiveDuringRentalPeriod(lease: Lease, rentalPeriod: string): boolean`
+    *   [x] `filterPaymentsForRentalPeriodAndLeases(payments: RentPayment[], targetLeaseIds: string[], rentalPeriod: string): RentPayment[]` (Note: `PropertyGroupCard` does more specific filtering by payment date as well).
+*   **Core Logic in `PropertyGroupCard.tsx` for:**
+    *   [x] Calculating monthly occupancy.
+    *   [x] Calculating monthly rent collected (for specific rental period, with payments in target month).
+    *   [x] Calculating monthly delinquency (rate and delinquent unit list).
+*   **Modified Components:**
+    *   [x] `src/hooks/usePropertyAnalyticsData.ts` (extended to fetch leases and payments).
+    *   [x] `src/components/analytics/PropertyGroupCard.tsx` (major enhancements for Phase 2 metrics and modal trigger).
+    *   [x] `src/app/dashboard/analytics/page.tsx` (to pass new data and manage modal).
+*   **New Components:**
+    *   [x] `src/components/analytics/DelinquencyModal.tsx`
+
+**UI Components Leveraged (from `src/components/ui/`):**
+
+*   [x] `<Card>`, `<CardHeader>`, `<CardTitle>`, `<CardContent>` (used in `PropertyGroupCard` and `DelinquencyModal`).
+*   [x] `<Button>` (used in `PropertyGroupCard` and `DelinquencyModal`).
+*   [x] `<Table>`, `<TableHeader>`, `<TableBody>`, `<TableRow>`, `<TableHead>`, `<TableCell>` (used in `DelinquencyModal`).
+
+**Outcome of Phase 2:** Property group cards now display dynamic monthly occupancy, rent collected (clarifying payment month vs. rental period), and delinquency rates for the selected `targetMonthYear`. Users can drill down via a modal to see specific units delinquent for the `rentalPeriodInFocus`. The UI for cards is more structured using existing Card components.
+
+---
+
+### Phase 3: YTD Metrics, Multi-Month Delinquency Tracking & UI Polish
+
+**Goal:** Add Year-to-Date financial metrics, implement tracking for units with multiple consecutive months of non-payment, and refine the overall UI/UX.
+
+**Status: COMPLETED**
+
+**Steps & Implementation Details:**
+
+1.  **Calculate & Display YTD Rent Collected:**
+    *   [x] For each `PropertyGroupCard`:
+        *   [x] Calculate sum of all `RentPayment` amounts for leases within the group, where `paymentDate` is between March of `targetMonthYear`'s year and the current `targetMonthYear` (inclusive), using `calculateYtdRentCollected` utility.
+        *   [x] **Display:** "$Y,YYY YTD Collected (Payments Mar YYYY - [targetMonthYear])" in `PropertyGroupCard.tsx`.
+        *   [x] Utility function `calculateYtdRentCollected` added to `src/lib/utils/analyticsUtils.ts`.
+2.  **Identify Multi-Month Delinquent Units:**
+    *   [x] This is the most complex part of this phase. For each unit in each property group:
+        *   [x] Determine its payment status for `rentalPeriodInFocus`.
+        *   [x] Determine its payment status for `getRentalPeriodForTargetMonth(targetMonthYear - 1 month)` (and further back as configured).
+        *   [x] A unit is "multi-month delinquent" if it has outstanding rent for a configurable number (e.g., 2) of consecutive rental periods up to `rentalPeriodInFocus`.
+    *   [x] **Display:**
+        *   [x] On the `PropertyGroupCard`, add an indicator and button for "X Units with Multi-Month Delinquency."
+        *   [x] Clicking this opens a new dedicated modal (`MultiMonthDelinquencyModal.tsx`) to display these units.
+    *   [x] **Data for Drill-Down:** Unit Number, Tenant Name, Rent Amount, Months Delinquent (e.g., "Feb & Mar 2025"), Total Amount Overdue across these months - handled by `MultiMonthDelinquentUnitInfo` and the new modal.
+    *   [x] **New Type:** `MultiMonthDelinquentUnitInfo` in `src/types.d.ts`.
+    *   [x] **New Utility:** `identifyMultiMonthDelinquentUnits` in `src/lib/utils/analyticsUtils.ts`.
+    *   [x] `page.tsx` updated to handle state and props for the new modal.
+3.  **UI Polish & Enhancements:**
+    *   [ ] **Mini-Trends (Optional):** Consider adding small, embedded line charts within each `PropertyGroupCard` for occupancy rate over the last 3-6 `targetMonthYear`s (data permitting since March 2025). Use `recharts` or a similar library.
+        *   [ ] **Styling**: Subtle lines, `theme.colors.primary` or `secondary`.
+    *   [x] **Visual Cues:** Enhance visual cues for delinquency rates (e.g., more distinct color progression based on severity using `theme.colors.error` and potentially yellow/orange shades). 
+        *   [x] Implemented a three-tier color system (gray, amber, red) for delinquency rate text in `PropertyGroupCard.tsx`.
+    *   [ ] **Loading/Empty States:** Ensure all data points and drill-downs have graceful loading and empty state representations.
+    *   [ ] **Accessibility & Responsiveness:** Review and ensure the dashboard is accessible and performs well on different screen sizes.
+    *   [ ] **Tooltips:** Add tooltips to explain complex metrics or date interpretations if needed (e.g., `<Tooltip text="...">`).
+
+**Key Functions to Use/Implement:**
+
+*   **New (Core Logic / Utilities):**
+    *   `calculateYTDRentCollectedForGroup(groupLeaseIds: string[], allPayments: RentPayment[], targetMonthYear: string): number`
+    *   `identifyMultiMonthDelinquentUnits(groupLeases: Lease[], allPayments: RentPayment[], currentTargetMonth: string, consecutiveMonthsThreshold: number = 2): MultiMonthDelinquentUnitInfo[]`
+        *   This function will need to iterate back through previous rental periods.
+*   **Libraries:**
+    *   `recharts` (optional, for mini-trends).
+
+**UI Components (Conceptual):**
+
+*   `<LineChart>` (from `recharts`, if used for mini-trends).
+*   `<Tooltip>`: For hover information.
+
+**Outcome of Phase 3:** The analytics dashboard is feature-complete for this initial property-level view. It includes YTD financial data, a critical system for flagging repeatedly delinquent tenants, and a more polished user experience. The system is robust and provides highly actionable insights.
+
+This phased approach should guide a junior developer systematically, ensuring clarity at each step and leveraging the project's existing theme and component concepts.
+

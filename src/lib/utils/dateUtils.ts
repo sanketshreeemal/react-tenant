@@ -12,6 +12,28 @@ export const formatDisplayDate = (date: Date | Timestamp | string | null): strin
 };
 
 /**
+ * Formats a YYYY-MM string into a localized month-year format
+ * Example: "2025-03" becomes "March 2025"
+ */
+export const formatMonthYear = (dateStr: string): string => {
+  const [year, month] = dateStr.split('-');
+  const date = new Date(parseInt(year), parseInt(month) - 1);
+  return date.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+};
+
+/**
+ * Formats a number as Indian currency with ₹ symbol
+ * Example: 100000 becomes "₹1,00,000"
+ */
+export const formatIndianCurrency = (amount: number): string => {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
+
+/**
  * Normalizes different date formats into a consistent Date object
  * Uses noon time to avoid timezone boundary issues
  */

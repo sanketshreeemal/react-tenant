@@ -113,3 +113,30 @@ export interface AllUser {
   role: 'admin' | 'user' | 'tenant'; // User role within their landlord organization
   updatedAt: Date; // Last update timestamp
 }
+
+// Analytics-specific types
+export interface DelinquentUnitInfo {
+  unitId: string;
+  unitNumber: string;
+  tenantName?: string;
+  leaseId: string;
+  leaseRentAmount: number;
+  amountPaidThisMonth: number;
+  amountDueThisMonth: number;
+  leaseEndDate?: Date;
+}
+
+// Interface for multi-month delinquent units (Phase 3 Analytics)
+export interface MultiMonthDelinquentUnitInfo {
+  unitId: string;
+  unitNumber: string;
+  tenantName?: string;
+  leaseId: string;
+  leaseRentAmount: number;
+  delinquentPeriods: Array<{ period: string; amountDue: number }>; // e.g., [{ period: "2025-03", amountDue: 500 }, { period: "2025-04", amountDue: 500 }]
+  totalOverdueAmount: number;
+  countDelinquentMonths: number; // Represents total count of delinquent months, not necessarily consecutive
+  lastLeaseEndDate?: Date; 
+}
+
+// Ensure this is the last part of the file if no other specific ordering is present
