@@ -201,39 +201,40 @@ The implementation will primarily interact with the following data structures (c
 ## 8. Next Steps for Feature Completion
 
 1.  **Data Fetching Integration in Frontend Component:**
-    *   In the new frontend component/page for the "Delinquent Units" dashboard section, import the `getDelinquentUnitsForDashboard` utility function from `src/lib/firebase/firestoreUtils.ts`.
-    *   Use React hooks (`useEffect`, `useState`, `useCallback` as per existing patterns in files like `src/app/dashboard/page.tsx`) to call `getDelinquentUnitsForDashboard`.
-    *   Pass the necessary `landlordId`, `currentSystemDate` (this can be `new Date()` generated on the client or passed consistently), and the optional `propertyGroupId` (from the dashboard's property selection toggle) to the function.
-    *   Manage loading and error states during the data fetching process.
+    *   In the new frontend component/page for the "Delinquent Units" dashboard section, import the `getDelinquentUnitsForDashboard` utility function from `src/lib/firebase/firestoreUtils.ts`. (Already imported)
+    *   Use React hooks (`useEffect`, `useState`, `useCallback` as per existing patterns in files like `src/app/dashboard/page.tsx`) to call `getDelinquentUnitsForDashboard`. (Initial `useEffect` and `useCallback` structure in place for placeholder data; needs to be connected to actual function call using `selectedPropertyGroupId` from the new dropdown).
+    *   Pass the necessary `landlordId`, `currentSystemDate` (this can be `new Date()` generated on the client or passed consistently), and the optional `propertyGroupId` (from the dashboard's property selection toggle/dropdown) to the function. (Partially implemented with `selectedPropertyGroupId` state available).
+    *   Manage loading and error states during the data fetching process. (Basic loading/error state management in place for the delinquent units section).
 
 2.  **Frontend UI Development (Dashboard Card/Tab):**
-    *   Design and implement the new "Delinquent Units" card/tab on the dashboard UI as per PRD 3.1.1, 3.1.2, and 4.1.
-    *   Ensure UI/UX consistency with existing dashboard elements (PRD 3.2.2).
+    *   **COMPLETED (Initial Structure):** Design and implement the new "Delinquent Units" card/tab on the dashboard UI as per PRD 3.1.1, 3.1.2, and 4.1. The card is positioned centrally on desktop (3-column layout) and as the middle tab on mobile (3-tab layout).
+    *   **COMPLETED (Initial Structure):** Ensure UI/UX consistency with existing dashboard elements (PRD 3.2.2). Card structure, scroll areas, and placeholder content adhere to existing patterns.
+    *   **NEW (UI Implemented):** Implemented the property group filter dropdown next to the dashboard title, populated with property groups fetched from Firestore. The dashboard title and filter are now within a styled Card.
 
 3.  **Data Display (Frontend):**
     *   Once data is successfully fetched into the component's state, display it as required:
-        *   Total count of delinquent units.
-        *   Grand total rent behind.
-        *   A list or table view showing each delinquent unit, indicating the property name, unit number, tenant name, number of delinquent months, and the total rent behind for that specific unit (PRD 3.1.1, 4.3).
-    *   When the Aggregate/Property Specific toggle/dropdown changes (PRD 4.2), re-fetch data by calling `getDelinquentUnitsForDashboard` again with the appropriate `propertyGroupId` (or `undefined` for aggregate view).
-    *   Consider how to present the specific delinquent months (e.g., a tooltip, an expandable row, or a concatenated string).
+        *   Total count of delinquent units. (Placeholder display implemented)
+        *   Grand total rent behind. (Placeholder display implemented)
+        *   A list or table view showing each delinquent unit, indicating the property name, unit number, tenant name, number of delinquent months, and the total rent behind for that specific unit (PRD 3.1.1, 4.3). (Placeholder structure for list and nested cards implemented)
+    *   **NEXT KEY STEP:** Connect the `selectedPropertyGroupId` state (from the new dropdown) to the `fetchDelinquentUnits` (or `getDelinquentUnitsForDashboard`) function call. When the Aggregate/Property Specific dropdown changes (PRD 4.2), re-fetch data by calling `getDelinquentUnitsForDashboard` again with the appropriate `propertyGroupId` (or `undefined` for aggregate view - "all" value in dropdown).
+    *   Consider how to present the specific delinquent months (e.g., a tooltip, an expandable row, or a concatenated string). (Placeholder in place, can be refined).
 
 4.  **Testing:**
     *   **Unit Tests:** Write unit tests for the `getDelinquentUnitsForDashboard` function in `firestoreUtils.ts` (as previously outlined, covering various scenarios like arrears, hard stop, partial payments, property filtering, edge cases).
     *   **Component Tests (Frontend):**
-        *   Test the React component responsible for displaying the delinquent units.
+        *   Test the React component responsible for displaying the delinquent units with actual data.
         *   Mock the `getDelinquentUnitsForDashboard` function to provide various data responses (empty, single/multiple delinquencies, errors) and verify the component renders correctly.
-        *   Test UI interactions, such as the property filter changing and triggering a re-fetch (with mocked function calls).
+        *   Test UI interactions, such as the property filter changing and triggering a re-fetch (with mocked function calls), and verify the data displayed updates correctly.
     *   **End-to-End (E2E) Tests (Optional but Recommended):** If your project has an E2E testing setup, create tests to simulate user interaction with the live dashboard to verify:
-        *   Correct data display in aggregate and property-specific views against a test dataset in Firebase.
-        *   Correct filtering when property selection changes.
+        *   Correct data display in aggregate and property-specific views against a test dataset in Firebase when the new property filter is used.
+        *   Correct filtering when property selection changes via the new dropdown.
 
 5.  **Performance Review:**
-    *   Assess the performance of `getDelinquentUnitsForDashboard` with representative data amounts (PRD 3.2.1). While Firestore handles much of the query performance, the amount of data fetched and processed client-side (or server-side if using Server Components later) should be reasonable.
-    *   Evaluate frontend rendering performance, especially when the list of delinquent units is long or when switching between aggregate and property views.
+    *   Assess the performance of `getDelinquentUnitsForDashboard` with representative data amounts (PRD 3.2.1), especially when filtering by property group.
+    *   Evaluate frontend rendering performance, especially when the list of delinquent units is long or when switching between aggregate and property views using the new dropdown.
 
 6.  **Code Review and Refinement:**
-    *   Conduct thorough code reviews for both the utility function and the frontend component changes.
+    *   Conduct thorough code reviews for both the utility function and the frontend component changes, especially the integration of the property filter and data fetching logic.
     *   Refine code for clarity, efficiency, and adherence to coding standards.
 
 7.  **Documentation Update (if any further changes):**

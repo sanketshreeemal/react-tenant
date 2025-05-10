@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../lib/hooks/useAuth";
 import { useLandlordId } from "../../lib/hooks/useLandlordId";
@@ -12,14 +12,23 @@ import {
   getAllLeases,
   getAllPayments,
   getRentCollectionStatus,
-  getLeaseExpirations
+  getLeaseExpirations,
+  getDelinquentUnitsForDashboard,
+  getAllPropertyGroups
 } from "../../lib/firebase/firestoreUtils";
-import { RentalInventory, Lease, RentPayment } from "../../types";
+import { 
+  RentalInventory, 
+  Lease, 
+  RentPayment, 
+  PropertyGroup,
+  DelinquencyDashboardData,
+  DelinquentUnitDisplayInfo
+} from "../../types";
 import { formatCurrency, formatDate } from "../../lib/utils/formatters";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { theme } from "@/theme/theme";
 import { StatCard } from "@/components/ui/statcard";
-import { Building, DollarSign, FileText, Key, ArrowUp, ArrowDown, Search, AlertCircle, Send } from "lucide-react";
+import { Building, DollarSign, FileText, Key, ArrowUp, ArrowDown, Search, AlertCircle, Send, LayoutDashboard } from "lucide-react";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -28,6 +37,7 @@ import { Input } from "@/components/ui/input";
 import { Timestamp } from 'firebase/firestore';
 import logger from '@/lib/logger';
 import { Button } from "@/components/ui/button";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -37,6 +47,8 @@ export default function Dashboard() {
   const [activeLeases, setActiveLeases] = useState<Lease[]>([]);
   const [allLeases, setAllLeases] = useState<Lease[]>([]);
   const [rentPayments, setRentPayments] = useState<RentPayment[]>([]);
+  const [propertyGroups, setPropertyGroups] = useState<PropertyGroup[]>([]);
+  const [selectedPropertyGroupId, setSelectedPropertyGroupId] = useState<string>("all");
   const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentMonth, setCurrentMonth] = useState<string>("");
@@ -44,6 +56,11 @@ export default function Dashboard() {
   const [sortColumn, setSortColumn] = useState<string>('rentalPeriod');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [searchTerm, setSearchTerm] = useState<string>("");
+
+  // State for Delinquent Units
+  const [delinquentUnitsData, setDelinquentUnitsData] = useState<DelinquencyDashboardData | null>(null);
+  const [delinquentDataLoading, setDelinquentDataLoading] = useState(true);
+  const [delinquentError, setDelinquentError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user && landlordId) {
@@ -86,11 +103,12 @@ export default function Dashboard() {
         try {
           logger.info(`Dashboard Fetch: Starting fetch with Landlord ID = ${landlordId}`);
 
-          const [propertiesData, activeLeaseData, allLeasesData, paymentsData] = await Promise.all([
+          const [propertiesData, activeLeaseData, allLeasesData, paymentsData, fetchedPropertyGroups] = await Promise.all([
             getAllRentalInventory(landlordId),
             getAllActiveLeases(landlordId),
             getAllLeases(landlordId),
-            getAllPayments(landlordId)
+            getAllPayments(landlordId),
+            getAllPropertyGroups(landlordId)
           ]);
 
           logger.info(`Dashboard Fetch: Raw payments received count = ${paymentsData.length}`);
@@ -102,6 +120,7 @@ export default function Dashboard() {
           setActiveLeases(activeLeaseData);
           setAllLeases(allLeasesData);
           setRentPayments(paymentsData);
+          setPropertyGroups(fetchedPropertyGroups);
         } catch (err: any) {
           logger.error(`Dashboard Fetch Error: ${err.message}`, err);
           if (err instanceof Error && err.message.includes("permission")) {
@@ -118,6 +137,11 @@ export default function Dashboard() {
     } else if (!loading && user && !landlordId) {
        setDataLoading(true);
        setError(null);
+       setProperties([]);
+       setActiveLeases([]);
+       setAllLeases([]);
+       setRentPayments([]);
+       setPropertyGroups([]);
     } else if (!loading && !user) {
        setDataLoading(false);
        setError(null);
@@ -125,8 +149,43 @@ export default function Dashboard() {
        setActiveLeases([]);
        setAllLeases([]);
        setRentPayments([]);
+       setPropertyGroups([]);
     }
   }, [user, landlordId, loading]);
+
+  const fetchDelinquentUnits = useCallback(async (currentLandlordId: string, propertyId?: string) => {
+    setDelinquentDataLoading(true);
+    setDelinquentError(null);
+    try {
+      logger.info(`Dashboard Delinquent Fetch: Initiated for Landlord ID = ${currentLandlordId}, Property Group ID = ${propertyId || 'all'}`);
+      await new Promise(resolve => setTimeout(resolve, 500)); 
+      const placeholderData: DelinquencyDashboardData = {
+        totalDelinquentUnitsCount: propertyId && propertyId !== "all" ? Math.floor(Math.random() * 5) : Math.floor(Math.random() * 10),
+        grandTotalRentBehind: propertyId && propertyId !== "all" ? Math.random() * 5000 : Math.random() * 10000,
+        units: [],
+      };
+      setDelinquentUnitsData(placeholderData);
+    } catch (err: any) {
+      logger.error(`Dashboard Delinquent Fetch Error: ${err.message}`, err);
+      setDelinquentError("Failed to load delinquent units data.");
+    } finally {
+      setDelinquentDataLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user && landlordId) {
+      fetchDelinquentUnits(landlordId, selectedPropertyGroupId);
+    } else if (!loading && user && !landlordId) {
+      setDelinquentDataLoading(false); 
+      setDelinquentError(null);
+      setDelinquentUnitsData(null);
+    } else if (!loading && !user) {
+      setDelinquentDataLoading(false);
+      setDelinquentError(null);
+      setDelinquentUnitsData(null);
+    }
+  }, [user, landlordId, loading, selectedPropertyGroupId, fetchDelinquentUnits]);
 
   const calculateDashboardMetrics = () => {
     const totalProperties = properties.length;
@@ -291,9 +350,29 @@ export default function Dashboard() {
       <div className="md:pl-64 w-full transition-all duration-300">
         <div className="p-4 md:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
-            <div className="flex justify-between items-center mb-4 md:mb-6">
-              <h1 className="text-xl md:text-2xl font-bold">Dashboard</h1>
-            </div>
+            <Card className="mb-4 md:mb-6">
+              <CardContent className="p-4 flex justify-between items-center">
+                <div className="flex items-center">
+                  <LayoutDashboard className="h-6 w-6 mr-2 text-blue-600" />
+                  <h1 className="text-xl md:text-2xl font-bold">Dashboard</h1>
+                </div>
+                <div className="w-full md:w-auto md:max-w-xs">
+                  <Select value={selectedPropertyGroupId} onValueChange={setSelectedPropertyGroupId}>
+                    <SelectTrigger className="w-full md:w-[200px]">
+                      <SelectValue placeholder="Select Property" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Properties</SelectItem>
+                      {propertyGroups.map((group) => (
+                        <SelectItem key={group.id} value={group.id!}>
+                          {group.groupName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <StatCard 
@@ -321,11 +400,11 @@ export default function Dashboard() {
               />
             </div>
             
-            <div className="hidden lg:grid lg:grid-cols-2 gap-4">
+            <div className="hidden lg:grid lg:grid-cols-3 gap-4">
               <Card>
                 <CardHeader>
                   <div className="flex justify-between items-center">
-                    <CardTitle>{currentMonthName} Rent Collection Status</CardTitle>
+                    <CardTitle>{currentMonthName} Rent Collection</CardTitle>
                     <Button
                       onClick={() => router.push("/dashboard/comms?tab=late-rent")}
                       style={{
@@ -400,10 +479,87 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
 
+              {/* Delinquent Units Card - Desktop */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Delinquent Units</CardTitle>
+                  {/* No button specified for this card in PRD */}
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[400px]">
+                    <div className="space-y-4">
+                      {delinquentDataLoading ? (
+                        <div className="flex items-center justify-center h-full">
+                          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+                        </div>
+                      ) : delinquentError ? (
+                        <AlertMessage variant="error" message={delinquentError} />
+                      ) : delinquentUnitsData && (delinquentUnitsData.totalDelinquentUnitsCount > 0 || delinquentUnitsData.units.length > 0) ? (
+                        <>
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-medium text-gray-900">Total Delinquent Units</span>
+                            <span className="text-sm font-medium text-gray-900">
+                              {delinquentUnitsData.totalDelinquentUnitsCount}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center mb-4">
+                            <span className="text-sm font-medium text-gray-900">Grand Total Rent Behind</span>
+                            <span className="text-sm font-medium text-gray-900">
+                              {formatCurrency(delinquentUnitsData.grandTotalRentBehind)}
+                            </span>
+                          </div>
+                          
+                          {delinquentUnitsData.units.length > 0 && (
+                            <div className="mt-6">
+                              <h3 className="font-medium text-gray-900 mb-3 flex items-center justify-center gap-2">
+                                <AlertCircle className="h-5 w-5 text-orange-500" /> {/* Use orange or similar for warning */}
+                                <span>Details</span>
+                              </h3>
+                              <div className="space-y-3">
+                                {delinquentUnitsData.units.map((unit) => (
+                                  <Card key={unit.unitId}>
+                                    <CardContent className="p-4">
+                                      <div className="flex justify-between items-start">
+                                        <div>
+                                          <p className="font-medium text-gray-900">{unit.tenantName} (Unit {unit.unitNumber})</p>
+                                          <p className="text-sm text-gray-500">Property: {unit.propertyName}</p>
+                                          <p className="text-xs text-gray-500 mt-1">
+                                            {unit.numberOfDelinquentMonths} month(s) delinquent
+                                          </p>
+                                        </div>
+                                        <div className="text-right">
+                                          <p className="font-medium text-red-600">{formatCurrency(unit.totalRentBehindForUnit)}</p>
+                                          <p className="text-xs text-gray-500 mt-1">
+                                            Periods: {unit.delinquentRentalPeriods.join(', ')}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="bg-green-50 text-green-700 p-4 rounded-lg mt-4">
+                          <p className="font-medium flex items-center">
+                            <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            No delinquent units found.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <div className="flex justify-between items-center">
-                    <CardTitle>Upcoming Lease Expirations</CardTitle>
+                    <CardTitle>Lease Expirations</CardTitle>
                     <Button
                       onClick={() => router.push("/dashboard/comms?tab=expired-lease")}
                       style={{
@@ -472,14 +628,15 @@ export default function Dashboard() {
                     </div>
                   </ScrollArea>
                 </CardContent>
-              </Card>
+              </Card>  
             </div>
 
             <div className="lg:hidden mt-4">
               <Tabs defaultValue="rent" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="rent">Rent Collection</TabsTrigger>
-                  <TabsTrigger value="leases">Lease Expirations</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="rent">Rent</TabsTrigger>
+                  <TabsTrigger value="delinquent">Delinqueny</TabsTrigger>
+                  <TabsTrigger value="leases">Expirations</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="rent">
@@ -543,6 +700,83 @@ export default function Dashboard() {
                   </Card>
                 </TabsContent>
                 
+                <TabsContent value="delinquent">
+                  <Card>
+                    <CardHeader className="p-4">
+                      <CardTitle>Delinquent Units</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4">
+                      <ScrollArea className="h-[400px]">
+                        <div className="space-y-4">
+                          {delinquentDataLoading ? (
+                            <div className="flex items-center justify-center h-full">
+                              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+                            </div>
+                          ) : delinquentError ? (
+                            <AlertMessage variant="error" message={delinquentError} />
+                          ) : delinquentUnitsData && (delinquentUnitsData.totalDelinquentUnitsCount > 0 || delinquentUnitsData.units.length > 0) ? (
+                            <>
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm font-medium text-gray-900">Total Delinquent Units</span>
+                                <span className="text-sm font-medium text-gray-900">
+                                  {delinquentUnitsData.totalDelinquentUnitsCount}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center mb-4">
+                                <span className="text-sm font-medium text-gray-900">Grand Total Rent Behind</span>
+                                <span className="text-sm font-medium text-gray-900">
+                                  {formatCurrency(delinquentUnitsData.grandTotalRentBehind)}
+                                </span>
+                              </div>
+
+                              {delinquentUnitsData.units.length > 0 && (
+                                <div className="mt-6">
+                                  <h3 className="font-medium text-gray-900 mb-3 flex items-center justify-center gap-2">
+                                    <AlertCircle className="h-5 w-5 text-orange-500" />
+                                    <span>Details</span>
+                                  </h3>
+                                  <div className="space-y-3">
+                                    {delinquentUnitsData.units.map((unit) => (
+                                      <Card key={unit.unitId}>
+                                        <CardContent className="p-4">
+                                          <div className="flex justify-between items-start">
+                                            <div>
+                                              <p className="font-medium text-gray-900">{unit.tenantName} (Unit {unit.unitNumber})</p>
+                                              <p className="text-sm text-gray-500">Property: {unit.propertyName}</p>
+                                              <p className="text-xs text-gray-500 mt-1">
+                                                {unit.numberOfDelinquentMonths} month(s) delinquent
+                                              </p>
+                                            </div>
+                                            <div className="text-right">
+                                              <p className="font-medium text-red-600">{formatCurrency(unit.totalRentBehindForUnit)}</p>
+                                               <p className="text-xs text-gray-500 mt-1">
+                                                Periods: {unit.delinquentRentalPeriods.join(', ')}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        </CardContent>
+                                      </Card>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                             <div className="bg-green-50 text-green-700 p-4 rounded-lg mt-4">
+                               <p className="font-medium flex items-center">
+                                 <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                 </svg>
+                                 No delinquent units found.
+                               </p>
+                             </div>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
                 <TabsContent value="leases">
                   <Card>
                     <CardContent className="p-4">
