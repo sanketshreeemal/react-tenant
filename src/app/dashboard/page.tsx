@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../lib/hooks/useAuth";
 import { useLandlordId } from "../../lib/hooks/useLandlordId";
@@ -186,17 +186,45 @@ export default function Dashboard() {
     }
   }, [user, landlordId, loading, selectedPropertyGroupId, fetchDelinquentUnits]);
 
-  const calculateDashboardMetrics = () => {
-    const totalProperties = properties.length;
+  // Memoized filtered data sources based on selectedPropertyGroupId
+  const filteredProperties = useMemo(() => {
+    if (selectedPropertyGroupId === "all" || !propertyGroups.length) {
+      return properties;
+    }
+    const selectedGroup = propertyGroups.find(pg => pg.id === selectedPropertyGroupId);
+    if (!selectedGroup) {
+      return []; // No properties if selected group is not found
+    }
+    return properties.filter(p => p.groupName === selectedGroup.groupName);
+  }, [properties, propertyGroups, selectedPropertyGroupId]);
 
-    const occupiedUnits = activeLeases.length;
+  const filteredActiveLeases = useMemo(() => {
+    if (selectedPropertyGroupId === "all") {
+      return activeLeases;
+    }
+    const unitIdsInFilteredProperties = filteredProperties.map(p => p.id!);
+    return activeLeases.filter(l => unitIdsInFilteredProperties.includes(l.unitId));
+  }, [activeLeases, filteredProperties, selectedPropertyGroupId]);
+
+  const filteredRentPayments = useMemo(() => {
+    if (selectedPropertyGroupId === "all") {
+      return rentPayments;
+    }
+    const unitIdsInFilteredProperties = filteredProperties.map(p => p.id!);
+    return rentPayments.filter(p => unitIdsInFilteredProperties.includes(p.unitId));
+  }, [rentPayments, filteredProperties, selectedPropertyGroupId]);
+
+  const calculateDashboardMetrics = () => {
+    // Use filtered data for calculations
+    const totalProperties = filteredProperties.length;
+    const occupiedUnits = filteredActiveLeases.length;
     const occupancyRate = totalProperties > 0 
       ? Math.round((occupiedUnits / totalProperties) * 100) 
       : 0;
 
-    logger.info(`Dashboard Calc: Calculating metrics. Payments in state = ${rentPayments.length}, Filtering month = ${currentMonth}`);
+    logger.info(`Dashboard Calc: Calculating metrics. Filtered Payments count = ${filteredRentPayments.length}, Filtering month = ${currentMonth}`);
 
-    const currentMonthPayments = rentPayments.filter(
+    const currentMonthPayments = filteredRentPayments.filter(
       payment => {
          const isMatch = payment.rentalPeriod === currentMonth &&
                        (payment.paymentType === "Rent Payment" || !payment.paymentType);
@@ -204,15 +232,15 @@ export default function Dashboard() {
       }
     );
 
-    logger.info(`Dashboard Calc: Filtered payments count for ${currentMonth} = ${currentMonthPayments.length}`);
+    logger.info(`Dashboard Calc: Filtered payments count for ${currentMonth} (after property filter) = ${currentMonthPayments.length}`);
 
     const totalRentCollected = currentMonthPayments.reduce(
       (sum, payment) => sum + payment.actualRentPaid, 0
     );
 
-    logger.info(`Dashboard Calc: Final totalRentCollected = ${totalRentCollected}`);
+    logger.info(`Dashboard Calc: Final totalRentCollected (after property filter) = ${totalRentCollected}`);
 
-    const totalExpectedRent = activeLeases.reduce(
+    const totalExpectedRent = filteredActiveLeases.reduce(
       (sum, lease) => sum + lease.rentAmount, 0
     );
 
@@ -224,10 +252,15 @@ export default function Dashboard() {
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(today.getDate() + 30);
     
-    const upcomingExpirations = activeLeases.filter(lease => {
+    const upcomingExpirationsCount = filteredActiveLeases.filter(lease => {
       const endDate = new Date(lease.leaseEndDate);
       return endDate >= today && endDate <= thirtyDaysFromNow;
     }).length;
+
+    // Calculate property type split using filteredProperties
+    const commercial = filteredProperties.filter(p => p.propertyType === 'Commercial').length;
+    const residential = filteredProperties.filter(p => p.propertyType === 'Residential').length;
+    const propertyTypeSplitData = { commercial, residential };
 
     return {
       totalProperties,
@@ -235,20 +268,15 @@ export default function Dashboard() {
       totalRentCollected,
       totalExpectedRent,
       collectionRate,
-      upcomingExpirations,
-      occupiedUnits
+      upcomingExpirations: upcomingExpirationsCount,
+      occupiedUnits,
+      propertyTypeSplit: propertyTypeSplitData,
     };
   };
 
-  const rentStatus = getRentCollectionStatus(activeLeases, rentPayments, currentMonth);
+  const rentStatus = getRentCollectionStatus(filteredActiveLeases, filteredRentPayments, currentMonth);
 
-  const upcomingExpirations = getLeaseExpirations(activeLeases);
-
-  const calculatePropertyTypeSplit = (properties: RentalInventory[]) => {
-    const commercial = properties.filter(p => p.propertyType === 'Commercial').length;
-    const residential = properties.filter(p => p.propertyType === 'Residential').length;
-    return { commercial, residential };
-  };
+  const upcomingExpirations = getLeaseExpirations(filteredActiveLeases);
 
   const handleSort = (column: string) => {
     if (sortColumn === column) {
@@ -347,7 +375,6 @@ export default function Dashboard() {
   }
 
   const metrics = calculateDashboardMetrics();
-  const propertyTypeSplit = calculatePropertyTypeSplit(properties);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -392,7 +419,7 @@ export default function Dashboard() {
                 title="Occupancy Rate" 
                 value={`${Math.round(metrics.occupancyRate)}%`}
                 icon={Key}
-                subtitle={`${metrics.occupiedUnits}/${properties.length} units occupied`}
+                subtitle={`${metrics.occupiedUnits}/${metrics.totalProperties} units occupied`}
                 href="/dashboard/tenants"
               />
 
@@ -400,7 +427,7 @@ export default function Dashboard() {
                 title="Properties" 
                 value={metrics.totalProperties.toString()}
                 icon={Building}
-                subtitle={`${propertyTypeSplit.residential} Residential • ${propertyTypeSplit.commercial} Commercial`}
+                subtitle={`${metrics.propertyTypeSplit.residential} Residential • ${metrics.propertyTypeSplit.commercial} Commercial`}
                 href="/dashboard/property-mgmt"
               />
             </div>
