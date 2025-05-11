@@ -228,7 +228,8 @@ function CommsPageContent() {
 
     initializeData();
     }
-  }, [landlordId, landlordLoading, isLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [landlordId, landlordLoading, isLoading, user]);
 
   // Helper to get selectedRowIds for a given table type and data
   const getSelectedRowIds = (type: 'tenant' | 'user', data: any[]) => {

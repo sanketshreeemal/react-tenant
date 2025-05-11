@@ -235,8 +235,8 @@ The implementation will primarily interact with the following data structures (c
 
 ### Remaining Tasks Checklist:
 
-- [ ] **Data Fetching Optimization:**
-    - [ ] Consider a better data fetching structure when the `propertyGroupId` state changes - ideally no new data should be called, only filtering of the existing comprehensive data for the specific property (see end of PRD section 3.2.1 & 8.3).
+- [X] **Data Fetching Optimization:**
+    - [X] Consider a better data fetching structure when the `propertyGroupId` state changes - ideally no new data should be called, only filtering of the existing comprehensive data for the specific property (see end of PRD section 3.2.1 & 8.3).
 - [ ] **Testing:**
     - [ ] **Unit Tests:** Write unit tests for the `getDelinquentUnitsForDashboard` function in `firestoreUtils.ts` (as previously outlined, covering various scenarios like arrears, hard stop, partial payments, property filtering, edge cases).
     - [ ] **Component Tests (Frontend):**

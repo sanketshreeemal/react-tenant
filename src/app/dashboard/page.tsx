@@ -58,7 +58,7 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState<string>("");
 
   // State for Delinquent Units
-  const [delinquentUnitsData, setDelinquentUnitsData] = useState<DelinquencyDashboardData | null>(null);
+  const [allDelinquentUnitsData, setAllDelinquentUnitsData] = useState<DelinquencyDashboardData | null>(null);
   const [delinquentDataLoading, setDelinquentDataLoading] = useState(true);
   const [delinquentError, setDelinquentError] = useState<string | null>(null);
 
@@ -153,20 +153,18 @@ export default function Dashboard() {
     }
   }, [user, landlordId, loading]);
 
-  const fetchDelinquentUnits = useCallback(async (currentLandlordId: string, propertyId?: string) => {
+  const fetchAndSetAllDelinquentUnits = useCallback(async (currentLandlordId: string) => {
     setDelinquentDataLoading(true);
     setDelinquentError(null);
     try {
-      logger.info(`Dashboard Delinquent Fetch: Initiated for Landlord ID = ${currentLandlordId}, Property Group ID = ${propertyId || 'all'}`);
-      
-      const actualPropertyId = propertyId === "all" ? undefined : propertyId;
-      const data = await getDelinquentUnitsForDashboard(currentLandlordId, new Date(), actualPropertyId);
-      
-      setDelinquentUnitsData(data);
+      logger.info(`Dashboard Delinquent Fetch (All): Initiated for Landlord ID = ${currentLandlordId}`);
+      // Always fetch for all properties initially by passing undefined for propertyGroupId
+      const data = await getDelinquentUnitsForDashboard(currentLandlordId, new Date(), undefined);
+      setAllDelinquentUnitsData(data);
     } catch (err: any) {
-      logger.error(`Dashboard Delinquent Fetch Error: ${err.message}`, err);
+      logger.error(`Dashboard Delinquent Fetch (All) Error: ${err.message}`, err);
       setDelinquentError("Failed to load delinquent units data.");
-      setDelinquentUnitsData(null); // Clear data on error
+      setAllDelinquentUnitsData(null);
     } finally {
       setDelinquentDataLoading(false);
     }
@@ -174,17 +172,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user && landlordId) {
-      fetchDelinquentUnits(landlordId, selectedPropertyGroupId);
-    } else if (!loading && user && !landlordId) {
-      setDelinquentDataLoading(false); 
-      setDelinquentError(null);
-      setDelinquentUnitsData(null);
-    } else if (!loading && !user) {
+      fetchAndSetAllDelinquentUnits(landlordId);
+    } else if ((!loading && user && !landlordId) || (!loading && !user)) {
       setDelinquentDataLoading(false);
       setDelinquentError(null);
-      setDelinquentUnitsData(null);
+      setAllDelinquentUnitsData(null);
     }
-  }, [user, landlordId, loading, selectedPropertyGroupId, fetchDelinquentUnits]);
+  }, [user, landlordId, loading, fetchAndSetAllDelinquentUnits]);
 
   // Memoized filtered data sources based on selectedPropertyGroupId
   const filteredProperties = useMemo(() => {
@@ -213,6 +207,42 @@ export default function Dashboard() {
     const unitIdsInFilteredProperties = filteredProperties.map(p => p.id!);
     return rentPayments.filter(p => unitIdsInFilteredProperties.includes(p.unitId));
   }, [rentPayments, filteredProperties, selectedPropertyGroupId]);
+
+  const displayedDelinquentUnitsData = useMemo(() => {
+    if (!allDelinquentUnitsData) {
+      return null;
+    }
+    if (selectedPropertyGroupId === "all" || !propertyGroups.length) {
+      return allDelinquentUnitsData;
+    }
+
+    const selectedGroup = propertyGroups.find(pg => pg.id === selectedPropertyGroupId);
+    if (!selectedGroup) {
+      // If the selected group is not found (e.g., inconsistent data or "all" was just deselected but not yet processed)
+      // return an empty structure for safety, or allDelinquentUnitsData if that's preferred default.
+      // Returning empty structure aligns with how other filters might behave if a selection is invalid.
+      return {
+        totalDelinquentUnitsCount: 0,
+        grandTotalRentBehind: 0,
+        units: [],
+      };
+    }
+    
+    const filteredUnits = allDelinquentUnitsData.units.filter(unit => 
+      unit.propertyName === selectedGroup.groupName
+    );
+
+    const grandTotalRentBehindFiltered = filteredUnits.reduce(
+      (sum, unit) => sum + unit.totalRentBehindForUnit,
+      0
+    );
+
+    return {
+      totalDelinquentUnitsCount: filteredUnits.length,
+      grandTotalRentBehind: grandTotalRentBehindFiltered,
+      units: filteredUnits,
+    };
+  }, [allDelinquentUnitsData, selectedPropertyGroupId, propertyGroups]);
 
   const calculateDashboardMetrics = () => {
     // Use filtered data for calculations
@@ -526,22 +556,22 @@ export default function Dashboard() {
                         </div>
                       ) : delinquentError ? (
                         <AlertMessage variant="error" message={delinquentError} />
-                      ) : delinquentUnitsData && (delinquentUnitsData.totalDelinquentUnitsCount > 0 || delinquentUnitsData.units.length > 0) ? (
+                      ) : displayedDelinquentUnitsData && (displayedDelinquentUnitsData.totalDelinquentUnitsCount > 0 || displayedDelinquentUnitsData.units.length > 0) ? (
                         <>
                           <div className="mb-4">
                             <p className="text-sm" style={{ color: theme.colors.textPrimary }}>
-                              Total Behind: <span className="text-lg font-semibold text-red-600">{formatCurrency(delinquentUnitsData.grandTotalRentBehind)}</span>
+                              Total Behind: <span className="text-lg font-semibold text-red-600">{formatCurrency(displayedDelinquentUnitsData.grandTotalRentBehind)}</span>
                             </p>
                           </div>
                           
-                          {delinquentUnitsData.units.length > 0 ? (
+                          {displayedDelinquentUnitsData.units.length > 0 ? (
                             <div className="mt-4">
                               <h3 className="font-medium text-gray-900 mb-3 flex items-center justify-center gap-2">
                                 <AlertCircle className="h-5 w-5 text-red-600" />
-                                <span>Details: {delinquentUnitsData.totalDelinquentUnitsCount} Delinquent Units</span>
+                                <span>Details: {displayedDelinquentUnitsData.totalDelinquentUnitsCount} Delinquent Units</span>
                               </h3>
                               <div className="space-y-3">
-                                {delinquentUnitsData.units.map((unit) => (
+                                {displayedDelinquentUnitsData.units.map((unit) => (
                                   <Card key={unit.unitId}>
                                     <CardContent className="p-4">
                                       <div className="flex justify-between items-start mb-2">
@@ -756,22 +786,22 @@ export default function Dashboard() {
                             </div>
                           ) : delinquentError ? (
                             <AlertMessage variant="error" message={delinquentError} />
-                          ) : delinquentUnitsData && (delinquentUnitsData.totalDelinquentUnitsCount > 0 || delinquentUnitsData.units.length > 0) ? (
+                          ) : displayedDelinquentUnitsData && (displayedDelinquentUnitsData.totalDelinquentUnitsCount > 0 || displayedDelinquentUnitsData.units.length > 0) ? (
                             <>
                               <div className="mb-4">
                                 <p className="text-sm" style={{ color: theme.colors.textPrimary }}>
-                                  Total Behind: <span className="text-lg font-semibold text-red-600">{formatCurrency(delinquentUnitsData.grandTotalRentBehind)}</span>
+                                  Total Behind: <span className="text-lg font-semibold text-red-600">{formatCurrency(displayedDelinquentUnitsData.grandTotalRentBehind)}</span>
                                 </p>
                               </div>
                               
-                              {delinquentUnitsData.units.length > 0 ? (
+                              {displayedDelinquentUnitsData.units.length > 0 ? (
                                 <div className="mt-4">
                                   <h3 className="font-medium text-gray-900 mb-3 flex items-center justify-center gap-2">
                                     <AlertCircle className="h-5 w-5 text-red-600" />
-                                    <span>Details: {delinquentUnitsData.totalDelinquentUnitsCount} Delinquent Units</span>
+                                    <span>Details: {displayedDelinquentUnitsData.totalDelinquentUnitsCount} Delinquent Units</span>
                                   </h3>
                                   <div className="space-y-3">
-                                    {delinquentUnitsData.units.map((unit) => (
+                                    {displayedDelinquentUnitsData.units.map((unit) => (
                                       <Card key={unit.unitId}>
                                         <CardContent className="p-4">
                                           <div className="flex justify-between items-start mb-2">
