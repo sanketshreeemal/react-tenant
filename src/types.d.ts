@@ -116,13 +116,21 @@ export interface AllUser {
 
 // --- Interfaces for Delinquent Units Dashboard Feature ---
 
+export interface DelinquentPeriodDetail {
+  rentalPeriod: string;
+  status: 'unpaid' | 'shortpaid';
+  amountDue: number;        // Full lease.rentAmount for this period
+  amountPaid?: number;       // Actual amount paid if status is 'shortpaid'
+  amountShort?: number;      // Calculated shortfall if status is 'shortpaid' (amountDue - amountPaid)
+}
+
 export interface DelinquentUnitDisplayInfo {
   unitId: string;
   leaseId: string;
   unitNumber: string;
   propertyName: string; // From PropertyGroup or RentalInventory.groupName
   activeLeaseRentAmount: number; // rentAmount from the active lease
-  delinquentRentalPeriods: string[]; // e.g., ["2025-03", "2025-05"]
+  delinquentDetails: DelinquentPeriodDetail[]; // Replaces delinquentRentalPeriods
   numberOfDelinquentMonths: number;
   totalRentBehindForUnit: number;
   tenantName: string; // For display purposes

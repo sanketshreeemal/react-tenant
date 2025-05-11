@@ -3,7 +3,7 @@
 import { db } from './firebase'; // Assuming you have firebase.ts to initialize Firebase
 import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, addDoc, getDocs, query, where, orderBy, DocumentData, QuerySnapshot, Timestamp, serverTimestamp } from 'firebase/firestore';
 import { User } from 'firebase/auth';
-import { Tenant, Lease, RentPayment, RentalInventory, PropertyGroup, UserProfile, AllUser, DelinquentUnitDisplayInfo, DelinquencyDashboardData } from '@/types'; // Import our TypeScript interfaces
+import { Tenant, Lease, RentPayment, RentalInventory, PropertyGroup, UserProfile, AllUser, DelinquentUnitDisplayInfo, DelinquencyDashboardData, DelinquentPeriodDetail } from '@/types'; // Import our TypeScript interfaces
 import logger from '@/lib/logger'; // Assuming you have a logger utility
 import { normalizeDate, dateToTimestamp } from '../utils/dateUtils';
 
@@ -2091,9 +2091,9 @@ export const getDelinquentUnitsForDashboard = async (
                            ? (propertyGroupMap.get(allPropertyGroups.find(pg => pg.groupName === unitInventory.groupName)?.id || '')?.groupName || unitInventory.groupName) // Prefer full group name from PropertyGroup if available
                            : "Default";
 
-
       const leaseStartDate = new Date(lease.leaseStartDate);
-      const delinquentRentalPeriods: string[] = [];
+      const delinquentDetails: DelinquentPeriodDetail[] = []; // Changed from delinquentRentalPeriods
+      let calculatedTotalRentBehindForUnit = 0;
       
       // Determine the first rental period to check: max(leaseStartDate, March 2025)
       let currentCheckPeriod = new Date(Math.max(leaseStartDate.getTime(), hardStopDate.getTime()));
@@ -2132,36 +2132,53 @@ export const getDelinquentUnitsForDashboard = async (
         );
 
         let isDelinquentThisMonth = false;
+        let periodDetail: DelinquentPeriodDetail | null = null;
+
         if (!paymentRecord) {
           isDelinquentThisMonth = true;
-          // logger.debug(`Lease ${lease.id}, Period ${rentalPeriodString}: Delinquent - No payment record found.`);
+          periodDetail = {
+            rentalPeriod: rentalPeriodString,
+            status: 'unpaid',
+            amountDue: lease.rentAmount,
+          };
+          calculatedTotalRentBehindForUnit += lease.rentAmount;
+          // logger.debug(`Lease ${lease.id}, Period ${rentalPeriodString}: Delinquent - No payment record found. Adding ${lease.rentAmount} to total due for unit.`);
         } else if (paymentRecord.actualRentPaid < lease.rentAmount) {
           isDelinquentThisMonth = true;
-          // logger.debug(`Lease ${lease.id}, Period ${rentalPeriodString}: Delinquent - Partial payment (paid ${paymentRecord.actualRentPaid}, expected ${lease.rentAmount}).`);
-        }
+          const amountShort = lease.rentAmount - paymentRecord.actualRentPaid;
+          periodDetail = {
+            rentalPeriod: rentalPeriodString,
+            status: 'shortpaid',
+            amountDue: lease.rentAmount,
+            amountPaid: paymentRecord.actualRentPaid,
+            amountShort: amountShort,
+          };
+          calculatedTotalRentBehindForUnit += amountShort;
+          // logger.debug(`Lease ${lease.id}, Period ${rentalPeriodString}: Delinquent - Partial payment (paid ${paymentRecord.actualRentPaid}, expected ${lease.rentAmount}, short by ${amountShort}). Adding ${amountShort} to total due for unit.`);
+        } 
 
-        if (isDelinquentThisMonth) {
-          delinquentRentalPeriods.push(rentalPeriodString);
+        if (isDelinquentThisMonth && periodDetail) {
+          delinquentDetails.push(periodDetail);
         }
 
         // Move to the next month
         currentCheckPeriod.setMonth(currentCheckPeriod.getMonth() + 1);
       }
 
-      if (delinquentRentalPeriods.length > 0) {
-        const totalRentBehindForUnit = delinquentRentalPeriods.length * lease.rentAmount;
+      if (delinquentDetails.length > 0) {
+        // const totalRentBehindForUnit = delinquentRentalPeriods.length * lease.rentAmount; // Old calculation
         delinquentUnitsDisplay.push({
           unitId: lease.unitId,
           leaseId: lease.id,
           unitNumber: unitInventory.unitNumber,
           propertyName: propertyName,
           activeLeaseRentAmount: lease.rentAmount,
-          delinquentRentalPeriods: delinquentRentalPeriods,
-          numberOfDelinquentMonths: delinquentRentalPeriods.length,
-          totalRentBehindForUnit: totalRentBehindForUnit,
+          delinquentDetails: delinquentDetails, // Changed from delinquentRentalPeriods
+          numberOfDelinquentMonths: delinquentDetails.length,
+          totalRentBehindForUnit: calculatedTotalRentBehindForUnit, // Use new calculation
           tenantName: lease.tenantName 
         });
-        logger.debug(`Lease ${lease.id} (Unit ${unitInventory.unitNumber}) identified as delinquent for ${delinquentRentalPeriods.length} months. Total behind: ${totalRentBehindForUnit}. Periods: ${delinquentRentalPeriods.join(', ')}`);
+        logger.debug(`Lease ${lease.id} (Unit ${unitInventory.unitNumber}) identified as delinquent for ${delinquentDetails.length} months. Total behind: ${calculatedTotalRentBehindForUnit}. Details: ${JSON.stringify(delinquentDetails)}`);
       }
     }
 

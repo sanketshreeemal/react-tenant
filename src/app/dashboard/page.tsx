@@ -158,16 +158,15 @@ export default function Dashboard() {
     setDelinquentError(null);
     try {
       logger.info(`Dashboard Delinquent Fetch: Initiated for Landlord ID = ${currentLandlordId}, Property Group ID = ${propertyId || 'all'}`);
-      await new Promise(resolve => setTimeout(resolve, 500)); 
-      const placeholderData: DelinquencyDashboardData = {
-        totalDelinquentUnitsCount: propertyId && propertyId !== "all" ? Math.floor(Math.random() * 5) : Math.floor(Math.random() * 10),
-        grandTotalRentBehind: propertyId && propertyId !== "all" ? Math.random() * 5000 : Math.random() * 10000,
-        units: [],
-      };
-      setDelinquentUnitsData(placeholderData);
+      
+      const actualPropertyId = propertyId === "all" ? undefined : propertyId;
+      const data = await getDelinquentUnitsForDashboard(currentLandlordId, new Date(), actualPropertyId);
+      
+      setDelinquentUnitsData(data);
     } catch (err: any) {
       logger.error(`Dashboard Delinquent Fetch Error: ${err.message}`, err);
       setDelinquentError("Failed to load delinquent units data.");
+      setDelinquentUnitsData(null); // Clear data on error
     } finally {
       setDelinquentDataLoading(false);
     }
@@ -314,6 +313,12 @@ export default function Dashboard() {
       formattedDate.includes(searchLower)
     );
   });
+
+  const formatRentalPeriod = (period: string) => {
+    const [year, month] = period.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return date.toLocaleString('default', { month: 'long', year: 'numeric' });
+  };
 
   if (loading || dataLoading) {
     return (
@@ -496,49 +501,62 @@ export default function Dashboard() {
                         <AlertMessage variant="error" message={delinquentError} />
                       ) : delinquentUnitsData && (delinquentUnitsData.totalDelinquentUnitsCount > 0 || delinquentUnitsData.units.length > 0) ? (
                         <>
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="text-sm font-medium text-gray-900">Total Delinquent Units</span>
-                            <span className="text-sm font-medium text-gray-900">
-                              {delinquentUnitsData.totalDelinquentUnitsCount}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center mb-4">
-                            <span className="text-sm font-medium text-gray-900">Grand Total Rent Behind</span>
-                            <span className="text-sm font-medium text-gray-900">
-                              {formatCurrency(delinquentUnitsData.grandTotalRentBehind)}
-                            </span>
+                          <div className="mb-4">
+                            <p className="text-sm" style={{ color: theme.colors.textPrimary }}>
+                              Total Behind: <span className="text-lg font-semibold text-red-600">{formatCurrency(delinquentUnitsData.grandTotalRentBehind)}</span>
+                            </p>
                           </div>
                           
-                          {delinquentUnitsData.units.length > 0 && (
-                            <div className="mt-6">
+                          {delinquentUnitsData.units.length > 0 ? (
+                            <div className="mt-4">
                               <h3 className="font-medium text-gray-900 mb-3 flex items-center justify-center gap-2">
-                                <AlertCircle className="h-5 w-5 text-orange-500" /> {/* Use orange or similar for warning */}
-                                <span>Details</span>
+                                <AlertCircle className="h-5 w-5 text-red-600" />
+                                <span>Details: {delinquentUnitsData.totalDelinquentUnitsCount} Delinquent Units</span>
                               </h3>
                               <div className="space-y-3">
                                 {delinquentUnitsData.units.map((unit) => (
                                   <Card key={unit.unitId}>
                                     <CardContent className="p-4">
-                                      <div className="flex justify-between items-start">
+                                      <div className="flex justify-between items-start mb-2">
                                         <div>
-                                          <p className="font-medium text-gray-900">{unit.tenantName} (Unit {unit.unitNumber})</p>
-                                          <p className="text-sm text-gray-500">Property: {unit.propertyName}</p>
-                                          <p className="text-xs text-gray-500 mt-1">
-                                            {unit.numberOfDelinquentMonths} month(s) delinquent
-                                          </p>
+                                          <p className="text-sm font-medium text-gray-900">{unit.tenantName} ({unit.unitNumber})</p>
+                                          <p className="text-sm text-gray-500 mt-1">Rent: {formatCurrency(unit.activeLeaseRentAmount)}</p>
                                         </div>
                                         <div className="text-right">
-                                          <p className="font-medium text-red-600">{formatCurrency(unit.totalRentBehindForUnit)}</p>
-                                          <p className="text-xs text-gray-500 mt-1">
-                                            Periods: {unit.delinquentRentalPeriods.join(', ')}
-                                          </p>
+                                          <p className="text-sm font-semibold text-red-600">{formatCurrency(unit.totalRentBehindForUnit)}</p>
                                         </div>
                                       </div>
+
+                                      {unit.delinquentDetails.map((period) => (
+                                        <div key={period.rentalPeriod} className="text-xs border-t border-gray-200 py-2">
+                                          <div className="flex justify-between items-center">
+                                            <span className="font-medium text-gray-700">{formatRentalPeriod(period.rentalPeriod)}</span>
+                                            {period.status === 'unpaid' && (
+                                              <span className="text-xs px-2 py-0.5 rounded-full" style={{
+                                                backgroundColor: "rgba(220, 38, 38, 0.08)",
+                                                color: theme.colors.error
+                                              }}>
+                                                Unpaid: {formatCurrency(period.amountDue)}
+                                              </span>
+                                            )}
+                                            {period.status === 'shortpaid' && (
+                                              <span className="text-sm px-2 py-0.5 rounded-full" style={{
+                                                backgroundColor: "rgba(245, 158, 11, 0.08)",
+                                                color: "#B45309"
+                                              }}>
+                                                Short: {formatCurrency(period.amountShort || 0)}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
                                     </CardContent>
                                   </Card>
                                 ))}
                               </div>
                             </div>
+                          ) : (
+                            null 
                           )}
                         </>
                       ) : (
@@ -582,7 +600,7 @@ export default function Dashboard() {
                       {upcomingExpirations.count > 0 ? (
                         <div className="mt-2">
                           <h3 className="font-medium text-gray-900 mb-3 flex items-center justify-center gap-2">
-                            <AlertCircle className="h-5 w-5 text-amber-500" />
+                            <AlertCircle className="h-5 w-5 text-red-500" />
                             <span>{upcomingExpirations.count} leases worth {formatCurrency(upcomingExpirations.totalLeaseValue)}</span>
                           </h3>
                           <div className="space-y-3">
@@ -702,9 +720,6 @@ export default function Dashboard() {
                 
                 <TabsContent value="delinquent">
                   <Card>
-                    <CardHeader className="p-4">
-                      <CardTitle>Delinquent Units</CardTitle>
-                    </CardHeader>
                     <CardContent className="p-4">
                       <ScrollArea className="h-[400px]">
                         <div className="space-y-4">
@@ -716,49 +731,62 @@ export default function Dashboard() {
                             <AlertMessage variant="error" message={delinquentError} />
                           ) : delinquentUnitsData && (delinquentUnitsData.totalDelinquentUnitsCount > 0 || delinquentUnitsData.units.length > 0) ? (
                             <>
-                              <div className="flex justify-between items-center mb-2">
-                                <span className="text-sm font-medium text-gray-900">Total Delinquent Units</span>
-                                <span className="text-sm font-medium text-gray-900">
-                                  {delinquentUnitsData.totalDelinquentUnitsCount}
-                                </span>
+                              <div className="mb-4">
+                                <p className="text-sm" style={{ color: theme.colors.textPrimary }}>
+                                  Total Behind: <span className="text-lg font-semibold text-red-600">{formatCurrency(delinquentUnitsData.grandTotalRentBehind)}</span>
+                                </p>
                               </div>
-                              <div className="flex justify-between items-center mb-4">
-                                <span className="text-sm font-medium text-gray-900">Grand Total Rent Behind</span>
-                                <span className="text-sm font-medium text-gray-900">
-                                  {formatCurrency(delinquentUnitsData.grandTotalRentBehind)}
-                                </span>
-                              </div>
-
-                              {delinquentUnitsData.units.length > 0 && (
-                                <div className="mt-6">
+                              
+                              {delinquentUnitsData.units.length > 0 ? (
+                                <div className="mt-4">
                                   <h3 className="font-medium text-gray-900 mb-3 flex items-center justify-center gap-2">
-                                    <AlertCircle className="h-5 w-5 text-orange-500" />
-                                    <span>Details</span>
+                                    <AlertCircle className="h-5 w-5 text-red-600" />
+                                    <span>Details: {delinquentUnitsData.totalDelinquentUnitsCount} Delinquent Units</span>
                                   </h3>
                                   <div className="space-y-3">
                                     {delinquentUnitsData.units.map((unit) => (
                                       <Card key={unit.unitId}>
                                         <CardContent className="p-4">
-                                          <div className="flex justify-between items-start">
+                                          <div className="flex justify-between items-start mb-2">
                                             <div>
-                                              <p className="font-medium text-gray-900">{unit.tenantName} (Unit {unit.unitNumber})</p>
-                                              <p className="text-sm text-gray-500">Property: {unit.propertyName}</p>
-                                              <p className="text-xs text-gray-500 mt-1">
-                                                {unit.numberOfDelinquentMonths} month(s) delinquent
-                                              </p>
+                                              <p className="text-sm font-medium text-gray-900">{unit.tenantName} ({unit.unitNumber})</p>
+                                              <p className="text-sm text-gray-500 mt-1">Rent: {formatCurrency(unit.activeLeaseRentAmount)}</p>
                                             </div>
                                             <div className="text-right">
-                                              <p className="font-medium text-red-600">{formatCurrency(unit.totalRentBehindForUnit)}</p>
-                                               <p className="text-xs text-gray-500 mt-1">
-                                                Periods: {unit.delinquentRentalPeriods.join(', ')}
-                                              </p>
+                                              <p className="text-sm font-semibold text-red-600">{formatCurrency(unit.totalRentBehindForUnit)}</p>
                                             </div>
                                           </div>
+
+                                          {unit.delinquentDetails.map((period) => (
+                                            <div key={period.rentalPeriod} className="text-sm border-t border-gray-200 py-2">
+                                              <div className="flex justify-between items-center">
+                                                <span className="font-medium text-gray-700">{formatRentalPeriod(period.rentalPeriod)}</span>
+                                                {period.status === 'unpaid' && (
+                                                  <span className="text-xs px-2 py-0.5 rounded-full" style={{
+                                                    backgroundColor: "rgba(220, 38, 38, 0.08)",
+                                                    color: theme.colors.error
+                                                  }}>
+                                                    Unpaid: {formatCurrency(period.amountDue)}
+                                                  </span>
+                                                )}
+                                                {period.status === 'shortpaid' && (
+                                                  <span className="text-xs px-2 py-0.5 rounded-full" style={{
+                                                    backgroundColor: "rgba(245, 158, 11, 0.08)",
+                                                    color: "#B45309"
+                                                  }}>
+                                                    Short: {formatCurrency(period.amountShort || 0)}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                          ))}
                                         </CardContent>
                                       </Card>
                                     ))}
                                   </div>
                                 </div>
+                              ) : (
+                                null 
                               )}
                             </>
                           ) : (
@@ -785,7 +813,7 @@ export default function Dashboard() {
                           {upcomingExpirations.count > 0 ? (
                             <div className="mt-2">
                               <h3 className="font-medium text-gray-900 mb-3 flex items-center justify-center gap-2">
-                                <AlertCircle className="h-5 w-5 text-amber-500" />
+                                <AlertCircle className="h-5 w-5 text-red-500" />
                                 <span>{upcomingExpirations.count} leases worth {formatCurrency(upcomingExpirations.totalLeaseValue)}</span>
                               </h3>
                               <div className="space-y-3">

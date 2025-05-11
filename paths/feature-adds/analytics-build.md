@@ -53,8 +53,8 @@ This document covers the addition of a new section (card/tab) on the dashboard s
     * If there is an active lease, determine the period of expected occupancy based on the lease's `start_date` up to the current month, inclusive. For leases that have expired but are marked `active` (indicating month-to-month), the expected occupancy period extends from the `start_date` through the current month.
     * Identify the months within this expected occupancy period for which a `Rent Payment` document should exist, considering the "Rent in Arrears" rule (see Requirement 3.1.4).
     * For each identified month where a `Rent Payment` is expected, check the database for a payment document for that specific unit and that specific `rentalPeriod` with `paymentType` equal to `Rent Payment`.
-    * **CRITICAL LOGIC:** A unit is delinquent if, for any month within the expected occupancy period (adjusted for arrears and the hard stop), there is *no* `Rent Payment` document found for that unit and the corresponding `rentalPeriod`. (Note: As per clarification Q4, partial payments resulting in a `Rent Payment` document with an amount less than the full expected rent also constitute delinquency for that month. The primary check should be the *absence* of a full rent payment record for the `rentalPeriod`).
-    * Compile a list of the specific `rentalPeriod`s (months) for which the unit is delinquent.
+    * **CRITICAL LOGIC:** A unit is delinquent if, for any month within the expected occupancy period (adjusted for arrears and the hard stop), there is *no* `Rent Payment` document found for that unit and the corresponding `rentalPeriod`, **OR** a `RentPayment` document exists for that `unitId` and `rentalPeriod` but its `actualRentPaid` is less than the `lease.rentAmount` for the active lease.
+    * Compile a list of the specific `rentalPeriod`s (months) for which the unit is delinquent, noting for each period whether it was `unpaid` or `shortpaid`, and the amount of any shortfall.
 
 #### 3.1.4 Handling Rent Arrears in Calculation
 * **CRITICAL LOGIC:** When checking for delinquency for a given `rentalPeriod` (Month Y), the system must check for a `Rent Payment` document with the `rentalPeriod` field set to Month Y. However, due to rent in arrears, the *absence* of this payment should only flag delinquency if the current month is *two months or more* past Month Y.
@@ -65,8 +65,10 @@ This document covers the addition of a new section (card/tab) on the dashboard s
     * Example: If a lease started in January 2025, the system should only look for missing `Rent Payment` documents with `rentalPeriod` from March 2025 onwards, applying the arrears logic. Missing payments for `rentalPeriod`s Jan 2025 or Feb 2025 should not be flagged as delinquent because data before March 2025 is not available.
 
 #### 3.1.6 Calculating Total Rent Behind
-* For each delinquent unit, the total rent behind shall be calculated by summing the `rentAmount` specified on the unit's *active lease* document for each month identified as delinquent for that unit.
-    * Example: If a unit with an `active` lease stating a `rentAmount` of $1000 is found to be delinquent for the `rentalPeriod`s of March 2025, May 2025, and July 2025, the total rent behind for that unit is $1000 + $1000 + $1000 = $3000.
+* For each delinquent unit, the total rent behind shall be calculated by summing:
+    * The full `rentAmount` specified on the unit's *active lease* document for each month identified as `unpaid` for that unit.
+    * The difference between the `lease.rentAmount` and the `actualRentPaid` (the shortfall) for each month identified as `shortpaid` for that unit.
+    * Example: If a unit with an `active` lease stating a `rentAmount` of $1000 is found to be `unpaid` for March 2025, and `shortpaid` for May 2025 (paid $600 instead of $1000), the total rent behind for that unit is $1000 (for March) + $400 (for May shortfall) = $1400.
 
 #### 3.1.7 Filtering by Property
 * The system must use the property selected via the dashboard toggle/dropdown to filter the units considered for the delinquency calculation and display.
@@ -98,8 +100,13 @@ This document covers the addition of a new section (card/tab) on the dashboard s
 ### 4.3 Information Display
 * Within the Delinquent Units section, clearly display:
     * The count of delinquent units.
-    * The total rent behind.
-    * A detailed breakdown per delinquent unit, including property (in aggregate view), unit number, the number of delinquent months, and the total rent behind for that unit. Consider how the specific delinquent months will be presented (e.g., a list of month/year).
+    * The total rent behind (calculated as per updated 3.1.6).
+    * A detailed breakdown per delinquent unit, including property (in aggregate view), unit number, tenant name, the total rent behind for that unit, and the number of delinquent months.
+    * For each delinquent month/period within a unit's details:
+        * The rental period (e.g., "YYYY-MM").
+        * The status: "Unpaid" or "Short-paid".
+        * If "Unpaid": The full rent amount due for that period.
+        * If "Short-paid": The full rent amount due, the amount paid, and the calculated shortfall for that period.
 
 ---
 
@@ -155,15 +162,23 @@ The implementation will primarily interact with the following data structures (c
             *   `propertyGroupId?: string` (optional): If provided, filters results for a specific property group (for "Property View"). If omitted, calculates for all properties ("Aggregate View").
         *   **Returns:** `Promise<DelinquencyDashboardData>`, with a structure like:
             ```typescript
+            interface DelinquentPeriodDetail {
+              rentalPeriod: string;
+              status: 'unpaid' | 'shortpaid';
+              amountDue: number;        // Full lease.rentAmount for this period
+              amountPaid?: number;       // Actual amount paid if status is 'shortpaid'
+              amountShort?: number;      // Calculated shortfall if status is 'shortpaid' (amountDue - amountPaid)
+            }
+
             interface DelinquentUnitDisplayInfo {
               unitId: string;
               leaseId: string;
               unitNumber: string;
               propertyName: string; // From PropertyGroup or RentalInventory.groupName
               activeLeaseRentAmount: number; // rentAmount from the active lease
-              delinquentRentalPeriods: string[]; // e.g., ["2025-03", "2025-05"]
+              delinquentDetails: DelinquentPeriodDetail[]; // List of detailed delinquent periods
               numberOfDelinquentMonths: number;
-              totalRentBehindForUnit: number;
+              totalRentBehindForUnit: number; // Sum of (amountDue for 'unpaid' OR amountShort for 'shortpaid')
               tenantName: string; // For display purposes
             }
 
@@ -183,10 +198,10 @@ The implementation will primarily interact with the following data structures (c
                     i.  **Applies Arrears Logic (PRD 3.1.4):** A `rentalPeriod` is only considered for delinquency if `currentSystemDate` is on or after the first day of the month that is *two months after* the `rentalPeriod`.
                     ii. **Applies Historical Hard Stop (PRD 3.1.5):** Ensures `rentalPeriod` is March 2025 or later.
                     iii. **Checks for Delinquency (PRD 3.1.3):** Queries the fetched payments. The unit is delinquent for this `rentalPeriod` if:
-                        *   No `RentPayment` document exists for this `unitId` and `rentalPeriod` with `paymentType: "Rent Payment"`.
-                        *   OR, a `RentPayment` document exists, but its `actualRentPaid` is less than the `lease.rentAmount`.
-                c.  If the unit is found delinquent for one or more `rentalPeriod`s, compiles the list of these `rentalPeriod`s. Calculates `totalRentBehindForUnit` by summing `lease.rentAmount` for each delinquent `rentalPeriod` (PRD 3.1.6).
-                d.  Stores details for display (unit number, property name, delinquent months, total behind, etc.).
+                        *   No `RentPayment` document exists for this `unitId` and `rentalPeriod` with `paymentType: "Rent Payment"` (status: `unpaid`).
+                        *   OR, a `RentPayment` document exists, but its `actualRentPaid` is less than the `lease.rentAmount` (status: `shortpaid`).
+                c.  If the unit is found delinquent for one or more `rentalPeriod`s, compiles the list of these `DelinquentPeriodDetail` objects. Calculates `totalRentBehindForUnit` by summing `lease.rentAmount` for each `unpaid` `rentalPeriod` and the `amountShort` for each `shortpaid` `rentalPeriod` (PRD 3.1.6).
+                d.  Stores details for display (unit number, property name, delinquent details, total behind, etc.).
             5.  Aggregates results: Sums counts and total amounts to populate `DelinquencyDashboardData`.
             6.  Sorts the resulting list of delinquent units for consistent display.
 
@@ -201,10 +216,10 @@ The implementation will primarily interact with the following data structures (c
 ## 8. Next Steps for Feature Completion
 
 1.  **Data Fetching Integration in Frontend Component:**
-    *   In the new frontend component/page for the "Delinquent Units" dashboard section, import the `getDelinquentUnitsForDashboard` utility function from `src/lib/firebase/firestoreUtils.ts`. (Already imported)
-    *   Use React hooks (`useEffect`, `useState`, `useCallback` as per existing patterns in files like `src/app/dashboard/page.tsx`) to call `getDelinquentUnitsForDashboard`. (Initial `useEffect` and `useCallback` structure in place for placeholder data; needs to be connected to actual function call using `selectedPropertyGroupId` from the new dropdown).
-    *   Pass the necessary `landlordId`, `currentSystemDate` (this can be `new Date()` generated on the client or passed consistently), and the optional `propertyGroupId` (from the dashboard's property selection toggle/dropdown) to the function. (Partially implemented with `selectedPropertyGroupId` state available).
-    *   Manage loading and error states during the data fetching process. (Basic loading/error state management in place for the delinquent units section).
+    *   **Done** In the new frontend component/page for the "Delinquent Units" dashboard section, import the `getDelinquentUnitsForDashboard` utility function from `src/lib/firebase/firestoreUtils.ts`. (Already imported)
+    *   **Done** Use React hooks (`useEffect`, `useState`, `useCallback` as per existing patterns in files like `src/app/dashboard/page.tsx`) to call `getDelinquentUnitsForDashboard`. (Placeholder data removed, actual function call implemented using `selectedPropertyGroupId` from the new dropdown).
+    *   **Done** Pass the necessary `landlordId`, `currentSystemDate` (this can be `new Date()` generated on the client or passed consistently), and the optional `propertyGroupId` (from the dashboard's property selection toggle/dropdown) to the function. (`selectedPropertyGroupId` state is connected and correctly passed as `propertyGroupId`).
+    *   **Done** Manage loading and error states during the data fetching process. (Basic loading/error state management maintained and improved for the delinquent units section).
 
 2.  **Frontend UI Development (Dashboard Card/Tab):**
     *   **COMPLETED (Initial Structure):** Design and implement the new "Delinquent Units" card/tab on the dashboard UI as per PRD 3.1.1, 3.1.2, and 4.1. The card is positioned centrally on desktop (3-column layout) and as the middle tab on mobile (3-tab layout).
@@ -213,32 +228,32 @@ The implementation will primarily interact with the following data structures (c
 
 3.  **Data Display (Frontend):**
     *   Once data is successfully fetched into the component's state, display it as required:
-        *   Total count of delinquent units. (Placeholder display implemented)
-        *   Grand total rent behind. (Placeholder display implemented)
-        *   A list or table view showing each delinquent unit, indicating the property name, unit number, tenant name, number of delinquent months, and the total rent behind for that specific unit (PRD 3.1.1, 4.3). (Placeholder structure for list and nested cards implemented)
-    *   **NEXT KEY STEP:** Connect the `selectedPropertyGroupId` state (from the new dropdown) to the `fetchDelinquentUnits` (or `getDelinquentUnitsForDashboard`) function call. When the Aggregate/Property Specific dropdown changes (PRD 4.2), re-fetch data by calling `getDelinquentUnitsForDashboard` again with the appropriate `propertyGroupId` (or `undefined` for aggregate view - "all" value in dropdown).
-    *   Consider how to present the specific delinquent months (e.g., a tooltip, an expandable row, or a concatenated string). (Placeholder in place, can be refined).
+        *   **Done** Total count of delinquent units. (Display implemented with actual data).
+        *   **Done** Grand total rent behind. (Display implemented with actual data reflecting updated calculation logic).
+        *   **Done** A list view through individual cards for each delinquent unit, displaying property name, unit number, tenant name, total rent behind for unit, and number of delinquent months. For each delinquent period within a unit, display its status (unpaid/short-paid), amount due, amount paid (if short-paid), and shortfall (if short-paid), consistent with PRD 4.3. (Display implemented with actual data, styled nested cards, and detailed period breakdown).
+    *   **Done** Connect the `selectedPropertyGroupId` state (from the new dropdown) to the `fetchDelinquentUnits` (or `getDelinquentUnitsForDashboard`) function call. When the Aggregate/Property Specific dropdown changes (PRD 4.2), re-fetch data by calling `getDelinquentUnitsForDashboard` again with the appropriate `propertyGroupId` (or `undefined` for aggregate view - "all" value in dropdown). (Re-fetching on dropdown change is implemented).
 
-4.  **Testing:**
-    *   **Unit Tests:** Write unit tests for the `getDelinquentUnitsForDashboard` function in `firestoreUtils.ts` (as previously outlined, covering various scenarios like arrears, hard stop, partial payments, property filtering, edge cases).
-    *   **Component Tests (Frontend):**
-        *   Test the React component responsible for displaying the delinquent units with actual data.
-        *   Mock the `getDelinquentUnitsForDashboard` function to provide various data responses (empty, single/multiple delinquencies, errors) and verify the component renders correctly.
-        *   Test UI interactions, such as the property filter changing and triggering a re-fetch (with mocked function calls), and verify the data displayed updates correctly.
-    *   **End-to-End (E2E) Tests (Optional but Recommended):** If your project has an E2E testing setup, create tests to simulate user interaction with the live dashboard to verify:
-        *   Correct data display in aggregate and property-specific views against a test dataset in Firebase when the new property filter is used.
-        *   Correct filtering when property selection changes via the new dropdown.
+### Remaining Tasks Checklist:
 
-5.  **Performance Review:**
-    *   Assess the performance of `getDelinquentUnitsForDashboard` with representative data amounts (PRD 3.2.1), especially when filtering by property group.
-    *   Evaluate frontend rendering performance, especially when the list of delinquent units is long or when switching between aggregate and property views using the new dropdown.
-
-6.  **Code Review and Refinement:**
-    *   Conduct thorough code reviews for both the utility function and the frontend component changes, especially the integration of the property filter and data fetching logic.
-    *   Refine code for clarity, efficiency, and adherence to coding standards.
-
-7.  **Documentation Update (if any further changes):**
-    *   Update any relevant internal documentation if the implementation details change significantly from this plan.
+- [ ] **Data Fetching Optimization:**
+    - [ ] Consider a better data fetching structure when the `propertyGroupId` state changes - ideally no new data should be called, only filtering of the existing comprehensive data for the specific property (see end of PRD section 3.2.1 & 8.3).
+- [ ] **Testing:**
+    - [ ] **Unit Tests:** Write unit tests for the `getDelinquentUnitsForDashboard` function in `firestoreUtils.ts` (as previously outlined, covering various scenarios like arrears, hard stop, partial payments, property filtering, edge cases).
+    - [ ] **Component Tests (Frontend):**
+        - [ ] Test the React component responsible for displaying the delinquent units with actual data.
+        - [ ] Mock the `getDelinquentUnitsForDashboard` function to provide various data responses (empty, single/multiple delinquencies, errors) and verify the component renders correctly.
+        - [ ] Test UI interactions, such as the property filter changing and triggering a re-fetch (with mocked function calls), and verify the data displayed updates correctly.
+    - [ ] **End-to-End (E2E) Tests (Optional but Recommended):** If your project has an E2E testing setup, create tests to simulate user interaction with the live dashboard to verify:
+        - [ ] Correct data display in aggregate and property-specific views against a test dataset in Firebase when the new property filter is used.
+        - [ ] Correct filtering when property selection changes via the new dropdown.
+- [ ] **Performance Review:**
+    - [ ] Assess the performance of `getDelinquentUnitsForDashboard` with representative data amounts (PRD 3.2.1), especially when filtering by property group.
+    - [ ] Evaluate frontend rendering performance, especially when the list of delinquent units is long or when switching between aggregate and property views using the new dropdown.
+- [ ] **Code Review and Refinement:**
+    - [ ] Conduct thorough code reviews for both the utility function and the frontend component changes, especially the integration of the property filter and data fetching logic.
+    - [ ] Refine code for clarity, efficiency, and adherence to coding standards.
+- [ ] **Documentation Update (if any further changes):**
+    - [ ] Update any relevant internal documentation if the implementation details change significantly from this plan.
 
 
 
