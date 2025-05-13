@@ -15,8 +15,7 @@ import {
   groupLeasesByProperty
 } from "@/lib/firebase/firestoreUtils";
 import { format, formatDistance, formatRelative, formatDuration, intervalToDuration } from 'date-fns';
-import { Search, Filter, CalendarIcon, CheckCircle, XCircle, FileUp, FileDown, Loader2, AlertTriangle, X, Plus, Pencil, Building, Trash2, Users, ArrowUp, ArrowDown } from "lucide-react";
-import { downloadTenantTemplate, uploadTenantExcel } from "@/lib/excelUtils";
+import { Search, Filter, CalendarIcon, XCircle, Loader2, X, Plus, Pencil, Building, Trash2, Users, ArrowUp, ArrowDown } from "lucide-react";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -42,33 +41,10 @@ export default function TenantsManagement() {
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [leaseToDelete, setLeaseToDelete] = useState<string | null>(null);
   
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadResults, setUploadResults] = useState<{
-    success: boolean;
-    successful?: number;
-    failed?: number;
-    skipped?: number;
-    errors?: string[];
-    error?: string;
-    message?: string;
-  } | null>(null);
-  const [showUploadResults, setShowUploadResults] = useState(false);
-  const [isInstructionsExpanded, setIsInstructionsExpanded] = useState(false);
   const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error' | 'info' | 'warning', message: string } | null>(null);
   
   const [sortColumn, setSortColumn] = useState<SortColumn>('unitNumber');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-  
-  useEffect(() => {
-    if (showUploadResults) {
-      const timer = setTimeout(() => {
-        setShowUploadResults(false);
-      }, 10000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [showUploadResults]);
   
   useEffect(() => {
     if (alertMessage) {
@@ -265,62 +241,6 @@ export default function TenantsManagement() {
     return unitId; // Fallback to unitId if no match found
   }, [rentalInventory]);
   
-  const handleDownloadTemplate = async () => {
-    const result = await downloadTenantTemplate();
-    if (!result.success) {
-      alert(result.error || "Failed to download template. Please try again.");
-    }
-  };
-
-  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    
-    const file = files[0];
-    handleUploadFile(file);
-  };
-
-  const triggerFileInput = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-  const handleUploadFile = async (file: File) => {
-    try {
-      setIsUploading(true);
-      setUploadResults(null);
-      
-      const result = await uploadTenantExcel(file);
-      setUploadResults(result);
-      setShowUploadResults(true);
-      
-      if (result.success && result.successful && result.successful > 0) {
-        await loadData();
-      }
-    } catch (error: any) {
-      setUploadResults({
-        success: false,
-        error: error.message || "Failed to upload file",
-        errors: [error.message || "Unknown error occurred"]
-      });
-      setShowUploadResults(true);
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
-  };
-
-  const closeUploadResults = () => {
-    setShowUploadResults(false);
-  };
-
-  const toggleInstructions = () => {
-    setIsInstructionsExpanded(!isInstructionsExpanded);
-  };
-  
   const [expandedPanelId, setExpandedPanelId] = useState<string | null>(null);
 
   const togglePanelExpansion = (panelId: string) => {
@@ -386,10 +306,10 @@ export default function TenantsManagement() {
   }
   
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       <Navigation />
       
-      <main className="md:ml-64 p-4 overflow-x-hidden">
+      <main className="md:ml-64 p-4">
         {alertMessage && (
           <div className="max-w-7xl mx-auto mb-6">
             <AlertMessage
@@ -407,31 +327,6 @@ export default function TenantsManagement() {
               </CardTitle>
               <div className="flex items-center justify-center sm:justify-end gap-2 flex-wrap">
                 <Button
-                  onClick={handleDownloadTemplate}
-                  className="bg-green-600 hover:bg-green-700"
-                  size="sm"
-                  aria-label="Download Template"
-                >
-                  <FileDown className="h-4 w-4 sm:h-5 sm:w-5" />
-                  <span className="sr-only">Download Template</span>
-                </Button>
-                
-                <Button
-                  onClick={triggerFileInput}
-                  disabled={isUploading}
-                  className="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300"
-                  size="sm"
-                  aria-label="Upload Template"
-                >
-                  {isUploading ? (
-                    <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
-                  ) : (
-                    <FileUp className="h-4 w-4 sm:h-5 sm:w-5" />
-                  )}
-                  <span className="sr-only">Upload Template</span>
-                </Button>
-                
-                <Button
                   onClick={() => router.push("/dashboard/tenants/forms")}
                   variant="default"
                   size="sm"
@@ -442,113 +337,12 @@ export default function TenantsManagement() {
                   className={"hover:bg-primary/90"}
                 >
                       <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                      <span>Manual Add</span>
+                      <span>Add Lease</span>
                 </Button>
-                
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileSelect}
-                  accept=".xlsx,.xls"
-                  className="hidden"
-                />
               </div>
             </div>
           </CardHeader>
         </Card>
-        
-        <div className="max-w-7xl mx-auto">
-          <Accordion type="single" collapsible className="mb-8">
-            <AccordionItem value="bulk-upload">
-              <AccordionTrigger>
-                <div className="flex items-center gap-2">
-                  <FileUp className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                  <span>Bulk upload tenants using Excel template</span>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="space-y-4">
-                  <p className="text-gray-600">Follow these steps to add multiple tenants at once:</p>
-                  
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-3">
-                      <FileDown className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                      <p className="text-gray-600">Click this icon above to download the Excel template</p>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <div className="w-5 flex-shrink-0" />
-                      <p className="text-gray-600">Fill in your tenant details in the template following the instructions</p>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <div className="w-5 flex-shrink-0" />
-                      <p className="text-gray-600">For <strong>Deposit Method</strong>, you must enter one of: &quot;Cash&quot;, &quot;Bank transfer&quot;, &quot;UPI&quot;, or &quot;Check&quot; exactly as shown</p>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <FileUp className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                      <p className="text-gray-600">Click this icon above to upload your completed template</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-amber-50 border border-amber-200 p-3 rounded-md text-amber-800 text-sm mt-4">
-                    <strong>Note:</strong> The template includes examples and instructions to guide you. 
-                    You don&apos;t need to delete these rows – our system will automatically detect and skip them during import.
-                  </div>
-                  
-                  <p className="text-gray-600 text-sm">
-                    Required fields are marked with an asterisk (*) in the template.
-                  </p>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-          
-          {showUploadResults && uploadResults && (
-            <div className={`bg-white shadow rounded-lg mb-6 p-4 border-l-4 ${
-              uploadResults.success ? 'border-green-500' : 'border-red-500'
-            }`}>
-              <div className="flex justify-between">
-                <div className="flex items-start">
-                  {uploadResults.success ? (
-                    <CheckCircle className="text-green-500 h-6 w-6 mr-3 flex-shrink-0 mt-0.5" />
-                  ) : (
-                    <AlertTriangle className="text-red-500 h-6 w-6 mr-3 flex-shrink-0 mt-0.5" />
-                  )}
-                  <div>
-                    <h3 className="text-md font-medium">
-                      {uploadResults.success ? 'Upload Complete' : 'Upload Failed'}
-                    </h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {uploadResults.message || 
-                       (uploadResults.success 
-                        ? `${uploadResults.successful} tenant(s) added successfully, ${uploadResults.failed} failed, ${uploadResults.skipped} skipped.` 
-                        : uploadResults.error)}
-                    </p>
-                    
-                    {uploadResults.errors && uploadResults.errors.length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-sm font-medium text-red-700">Issues:</p>
-                        <ul className="text-xs text-red-600 mt-1 list-disc pl-5 max-h-32 overflow-y-auto">
-                          {uploadResults.errors.map((error, index) => (
-                            <li key={index}>{error}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <button 
-                  onClick={closeUploadResults}
-                  className="text-gray-400 hover:text-gray-500"
-                >
-                  <XCircle className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
         
         <main className="max-w-7xl mx-auto">
           <PanelContainer className="mb-6 gap-4">

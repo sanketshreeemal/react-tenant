@@ -49,7 +49,7 @@ export default function Navigation() {
   return (
     <>
       {/* Mobile menu button */}
-      <div className="md:hidden fixed top-4 right-4 z-50">
+      <div className="md:hidden fixed top-4 right-4 z-50 max-w-screen pointer-events-auto">
         <button
           onClick={toggleMobileMenu}
           className="p-2 rounded-md bg-white shadow-md"

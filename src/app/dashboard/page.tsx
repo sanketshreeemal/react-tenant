@@ -418,9 +418,9 @@ export default function Dashboard() {
                   <LayoutDashboard className="h-6 w-6 mr-2 text-blue-600" />
                   <h1 className="text-xl md:text-2xl font-bold">Dashboard</h1>
                 </div>
-                <div className="w-full md:w-auto md:max-w-xs">
+                <div className="inline-block ml-4">
                   <Select value={selectedPropertyGroupId} onValueChange={setSelectedPropertyGroupId}>
-                    <SelectTrigger className="w-full md:w-[200px]">
+                  <SelectTrigger className="min-w-[130px] px-3 border border-[#000000">
                       <SelectValue placeholder="Select Property" />
                     </SelectTrigger>
                     <SelectContent>

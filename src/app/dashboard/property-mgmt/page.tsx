@@ -15,8 +15,7 @@ import {
   getAllPropertyGroups,
   deletePropertyGroup,
 } from "@/lib/firebase/firestoreUtils";
-import { downloadInventoryTemplate, uploadInventoryExcel } from "@/lib/excelUtils";
-import { FileUp, FileDown, Loader2, AlertTriangle, CheckCircle, X, Plus, Pencil, Trash2, Home, Building, ChevronRight, Users, Search, Filter, CalendarIcon, XCircle, ArrowUp, ArrowDown } from "lucide-react";
+import { Loader2, X, Plus, Pencil, Trash2, Home, Building, ChevronRight, Users, Search, Filter, CalendarIcon, ArrowUp, ArrowDown } from "lucide-react";
 import { AlertMessage } from "@/components/ui/alert-message";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -39,19 +38,6 @@ export default function RentalInventoryManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [expandedPanelId, setExpandedPanelId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // Excel upload state
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadResults, setUploadResults] = useState<{
-    success: boolean;
-    successful?: number;
-    failed?: number;
-    skipped?: number;
-    errors?: string[];
-    error?: string;
-    message?: string;
-  } | null>(null);
-  const [showUploadResults, setShowUploadResults] = useState(false);
   
   // Consolidated alert message state
   const [alertMessage, setAlertMessage] = useState<{
@@ -119,17 +105,6 @@ export default function RentalInventoryManagement() {
     }
   }, [user, authLoading, landlordId, landlordIdLoading, landlordIdError, router, loadInventoryData, loadPropertyGroups]);
 
-  // Hide upload results after 10 seconds
-  useEffect(() => {
-    if (showUploadResults) {
-      const timer = setTimeout(() => {
-        setShowUploadResults(false);
-      }, 10000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [showUploadResults]);
-
   const handleDelete = async (itemId: string) => {
     if (confirm("Are you sure you want to delete this inventory item? This action cannot be undone.")) {
       try {
@@ -148,56 +123,6 @@ export default function RentalInventoryManagement() {
           type: 'error',
           message: error.message || "An error occurred while deleting the inventory item"
         });
-      }
-    }
-  };
-
-  // Handle template download
-  const handleDownloadTemplate = async () => {
-    const result = await downloadInventoryTemplate();
-    if (!result.success) {
-      alert(result.error || "Failed to download template. Please try again.");
-    }
-  };
-
-  // Handle file selection for upload
-  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    
-    const file = files[0];
-    handleUploadFile(file);
-  };
-
-  // Handle file upload
-  const handleUploadFile = async (file: File) => {
-    try {
-      setIsUploading(true);
-      setUploadResults(null);
-      
-      if (!landlordId) {
-          throw new Error("Landlord ID not found for upload");
-      }
-
-      const result = await uploadInventoryExcel(file);
-      setUploadResults(result);
-      setShowUploadResults(true);
-      
-      if (result.success && result.successful && result.successful > 0) {
-        await loadInventoryData();
-      }
-    } catch (error: any) {
-      setUploadResults({
-        success: false,
-        error: error.message || "Failed to upload file",
-        errors: [error.message || "Unknown error occurred"]
-      });
-      setShowUploadResults(true);
-    } finally {
-      setIsUploading(false);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
       }
     }
   };
@@ -420,13 +345,6 @@ export default function RentalInventoryManagement() {
     );
   };
 
-  // Trigger file input click
-  const triggerFileInput = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
   // Add filtered properties logic
   const filteredInventory = inventoryItems.filter((item) => {
     if (!searchTerm.trim()) return true;
@@ -528,10 +446,10 @@ export default function RentalInventoryManagement() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       <Navigation />
       
-      <div className="md:ml-64 p-4 overflow-x-hidden">
+      <div className="md:ml-64 p-4">
         {/* Alert Messages */}
         {alertMessage && (
           <div className="max-w-7xl mx-auto mb-6">
@@ -570,42 +488,17 @@ export default function RentalInventoryManagement() {
                 Property Management
               </CardTitle>
               <div className="flex items-center justify-center sm:justify-end gap-2 flex-wrap">
-                {/* Excel Template Download Button */}
-                <Button
-                  onClick={handleDownloadTemplate}
-                  className="bg-green-600 hover:bg-green-700"
-                  size="sm"
-                  aria-label="Download Template"
-                >
-                  <FileDown className="h-4 w-4 sm:h-5 sm:w-5" />
-                  <span className="sr-only">Download Template</span>
-                </Button>
                 
-                {/* Excel Upload Button */}
-                <Button
-                  onClick={triggerFileInput}
-                  disabled={isUploading}
-                  className="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300"
-                  size="sm"
-                  aria-label="Upload Template"
-                >
-                  {isUploading ? (
-                    <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
-                  ) : (
-                    <FileUp className="h-4 w-4 sm:h-5 sm:w-5" />
-                  )}
-                  <span className="sr-only">Upload Template</span>
-                </Button>
 
                 {/* Add Property Group Button */}
                 <Button
                   onClick={() => router.push("/dashboard/property-mgmt/forms?type=group")}
-                  variant="default"
+                  variant="secondary"
                   size="sm"
-                  className="bg-[#1F2937] hover:bg-[#111827] text-white transition-colors"
+                  className="bg-[#FFFFFF] hover:bg-[#F3F4F6] text-[#1F2937] border border-[#E5E7EB] transition-colors"
                 >
                   <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                  <span>Type</span>
+                  <span>Group</span>
                 </Button>
                 
                 {/* Add Property Button */}
@@ -616,70 +509,11 @@ export default function RentalInventoryManagement() {
                   className="bg-[#1F2937] hover:bg-[#111827] text-white transition-colors"
                 >
                   <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                  <span>Manual Add</span>
+                  <span>Add Property</span>
                 </Button>
-                
-                {/* Hidden file input */}
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileSelect}
-                  accept=".xlsx,.xls"
-                  className="hidden"
-                />
               </div>
             </div>
           </CardHeader>
-
-          {/* Bulk Upload Instructions */}
-          <CardContent className="px-4 sm:px-6 lg:px-8 pb-6">
-            <Accordion type="single" collapsible>
-              <AccordionItem value="bulk-upload">
-                <AccordionTrigger>
-                  <div className="flex items-center gap-2">
-                    <FileUp className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                    <span>Bulk upload using Excel template</span>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="space-y-4">
-                    <p className="text-gray-600">Follow these steps to add multiple properties at once:</p>
-                    
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-3">
-                        <FileDown className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                        <p className="text-gray-600">Click this icon above to download the Excel template</p>
-                      </div>
-
-                      <div className="flex items-start gap-3">
-                        <div className="w-5 flex-shrink-0" /> {/* Spacer for alignment */}
-                        <p className="text-gray-600">Fill in your property details in the downloaded template</p>
-                      </div>
-
-                      <div className="flex items-start gap-3">
-                        <div className="w-5 flex-shrink-0" /> {/* Spacer for alignment */}
-                        <p className="text-gray-600">For <strong>Property Type</strong>, enter either &quot;Residential&quot; or &quot;Commercial&quot;</p>
-                      </div>
-
-                      <div className="flex items-start gap-3">
-                        <FileUp className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                        <p className="text-gray-600">Click this icon above to upload your completed template</p>
-                      </div>
-                    </div>
-
-                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-md text-amber-800 text-sm mt-4">
-                      <strong>Note:</strong> The template includes examples and instructions to guide you. 
-                      You don&apos;t need to delete these rows – our system will automatically detect and skip them during import.
-                    </div>
-                    
-                    <p className="text-gray-600 text-sm">
-                      Required fields are marked with an asterisk (*) in the template.
-                    </p>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </CardContent>
         </Card>
 
         {/* Property Group Carousel using PanelContainer */}
