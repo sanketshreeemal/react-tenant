@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/hooks/useAuth";
 import { useLandlordId } from "../../../lib/hooks/useLandlordId";
 import Navigation from "../../../components/Navigation";
-import { Users, Trash2, UserPlus, Send, Loader2 } from "lucide-react";
+import { Users, Trash2, UserPlus, Send, Loader2, Download } from "lucide-react";
 import logger from "../../../lib/logger";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
@@ -15,6 +15,7 @@ import { db } from '../../../lib/firebase/firebase';
 import { inviteUser, removeUserAccess } from '../../../lib/firebase/firestoreUtils';
 import { UserProfile, AllUser } from "@/types";
 import { collection, query, where, getDocs } from 'firebase/firestore';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 export default function ManageUsersPage() {
   const { user, loading: authLoading } = useAuth();
@@ -188,8 +189,8 @@ export default function ManageUsersPage() {
             <div className="flex items-center space-x-3">
               <Users className="h-8 w-8 text-blue-500" />
               <div>
-                <CardTitle className="text-2xl">Manage Users</CardTitle>
-                <CardDescription>Invite new users and manage access.</CardDescription>
+                <CardTitle className="text-2xl">Administration</CardTitle>
+                <CardDescription>Manage Access and Data.</CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -198,128 +199,149 @@ export default function ManageUsersPage() {
         <div className="max-w-4xl mx-auto space-y-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center space-x-3">
-                <UserPlus className="h-6 w-6 text-blue-500" />
-                <CardTitle>Invite New User</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {formError && !formSuccess && (
-                <AlertMessage
-                  variant="error"
-                  message={formError}
-                  className="mb-4"
-                />
-              )}
-              {formSuccess && (
-                 <AlertMessage
-                   variant="success"
-                   message={formSuccess}
-                   className="mb-4"
-                 />
-               )}
-
-              <form onSubmit={handleInviteUser} className="space-y-4">
-                <div className="space-y-2">
-                   <label htmlFor="newUserName" className="block text-sm font-medium text-gray-700">
-                     User Name
-                   </label>
-                   <Input
-                     type="text"
-                     id="newUserName"
-                     value={newUserName}
-                     onChange={(e) => setNewUserName(e.target.value)}
-                     placeholder="Enter user's full name"
-                     className="w-full"
-                     required
-                   />
-                 </div>
-                <div className="space-y-2">
-                   <label htmlFor="newUserEmail" className="block text-sm font-medium text-gray-700">
-                     Email Address
-                   </label>
-                   <Input
-                     type="email"
-                     id="newUserEmail"
-                     value={newUserEmail}
-                     onChange={(e) => setNewUserEmail(e.target.value)}
-                     placeholder="john@example.com"
-                     className="w-full"
-                     required
-                   />
-                 </div>
-                <Button
-                  type="submit"
-                  variant="default"
-                  size="default"
-                  className="w-full bg-[#1F2937] hover:bg-[#111827] text-white transition-colors"
-                  disabled={isInvitingUser}
-                >
-                  {isInvitingUser ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <UserPlus className="h-4 w-4 mr-2" />
-                  )}
-                  {isInvitingUser ? 'Adding User...' : 'Add User'}
-                </Button>
-                <p className="text-xs text-center text-gray-500 px-4">
-                  This user will need to sign in using the exact email address provided to gain access.
-                </p>
-              </form>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
               <CardTitle>Manage Access</CardTitle>
               <CardDescription>
                 Users who currently have access to this account.
               </CardDescription>
             </CardHeader>
             <CardContent>
+              <Accordion type="single" collapsible className="mb-6">
+                <AccordionItem value="invite-new-user">
+                  <AccordionTrigger className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-3">
+                      <UserPlus className="h-6 w-6 text-blue-500" />
+                      <span>Invite New User</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {formError && !formSuccess && (
+                      <AlertMessage
+                        variant="error"
+                        message={formError}
+                        className="mb-4"
+                      />
+                    )}
+                    {formSuccess && (
+                      <AlertMessage
+                        variant="success"
+                        message={formSuccess}
+                        className="mb-4"
+                      />
+                    )}
+
+                    <form onSubmit={handleInviteUser} className="space-y-4">
+                      <div className="space-y-2">
+                        <label htmlFor="newUserName" className="block text-sm font-medium text-gray-700">
+                          User Name
+                        </label>
+                        <Input
+                          type="text"
+                          id="newUserName"
+                          value={newUserName}
+                          onChange={(e) => setNewUserName(e.target.value)}
+                          placeholder="Enter user's full name"
+                          className="w-full"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="newUserEmail" className="block text-sm font-medium text-gray-700">
+                          Email Address
+                        </label>
+                        <Input
+                          type="email"
+                          id="newUserEmail"
+                          value={newUserEmail}
+                          onChange={(e) => setNewUserEmail(e.target.value)}
+                          placeholder="john@example.com"
+                          className="w-full"
+                          required
+                        />
+                      </div>
+                      <Button
+                        type="submit"
+                        variant="default"
+                        size="default"
+                        className="w-full bg-[#1F2937] hover:bg-[#111827] text-white transition-colors"
+                        disabled={isInvitingUser}
+                      >
+                        {isInvitingUser ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <UserPlus className="h-4 w-4 mr-2" />
+                        )}
+                        {isInvitingUser ? 'Adding User...' : 'Add User'}
+                      </Button>
+                      <p className="text-xs text-center text-gray-500 px-4">
+                        This user will need to sign in using the exact email address provided to gain access.
+                      </p>
+                    </form>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+
               {isFetchingUsers ? (
-                 <div className="flex justify-center items-center py-8">
-                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-                 </div>
-               ) : (
-                 <div className="divide-y divide-gray-200">
-                   {authorizedUsers.map((authUser) => (
-                     <div
-                       key={authUser.uid}
-                       className="py-4 flex justify-between items-center hover:bg-gray-50 px-4 -mx-4 first:hover:rounded-t-lg last:hover:rounded-b-lg"
-                     >
-                       <div>
-                         {authUser.name && <p className="text-sm font-medium text-gray-900">{authUser.name}</p>}
-                         <p className={`text-sm ${authUser.name ? 'text-gray-500' : 'font-medium text-gray-900'}`}>{authUser.email}</p>
-                         <p className="text-sm text-gray-500 capitalize">Role: {authUser.role || 'User'}</p>
-                       </div>
-                       {user.email?.toLowerCase() !== authUser.email.toLowerCase() ? (
-                         <Button
-                           variant="ghost"
-                           size="sm"
-                           onClick={() => handleRemoveUser(authUser.email)}
-                           className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                           aria-label={`Remove access for ${authUser.email}`}
-                         >
-                           <Trash2 className="h-4 w-4" />
-                         </Button>
-                       ) : (
-                         <span className="text-xs text-gray-400 pr-2">(You)</span>
-                       )}
-                     </div>
-                   ))}
-                   {authorizedUsers.length === 0 && (
-                     <div className="py-8 text-center">
-                       <Users className="mx-auto h-12 w-12 text-gray-400" />
-                       <p className="mt-2 text-sm font-medium text-gray-900">No other authorized users</p>
-                       <p className="text-sm text-gray-500">
-                         Invite users using the form above.
-                       </p>
-                     </div>
-                   )}
-                 </div>
-               )}
+                <div className="flex justify-center items-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-200">
+                  {authorizedUsers.map((authUser) => (
+                    <div
+                      key={authUser.uid}
+                      className="py-4 flex justify-between items-center hover:bg-gray-50 px-4 -mx-4 first:hover:rounded-t-lg last:hover:rounded-b-lg"
+                    >
+                      <div>
+                        {authUser.name && <p className="text-sm font-medium text-gray-900">{authUser.name}</p>}
+                        <p className={`text-sm ${authUser.name ? 'text-gray-500' : 'font-medium text-gray-900'}`}>{authUser.email}</p>
+                      </div>
+                      {user.email?.toLowerCase() !== authUser.email.toLowerCase() ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveUser(authUser.email)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          aria-label={`Remove access for ${authUser.email}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-gray-400 pr-2">(You)</span>
+                      )}
+                    </div>
+                  ))}
+                  {authorizedUsers.length === 0 && (
+                    <div className="py-8 text-center">
+                      <Users className="mx-auto h-12 w-12 text-gray-400" />
+                      <p className="mt-2 text-sm font-medium text-gray-900">No other authorized users</p>
+                      <p className="text-sm text-gray-500">
+                        Invite users using the form above.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Manage Data</CardTitle>
+                <Button 
+                  variant="default"
+                  size="default"
+                  className="bg-[#1F2937] hover:bg-[#111827] text-white transition-colors"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download Database
+                </Button>
+              </div>
+              <CardDescription>
+                Download and manage your data locally.
+              </CardDescription>
+            </CardHeader>
+
           </Card>
         </div>
       </div>

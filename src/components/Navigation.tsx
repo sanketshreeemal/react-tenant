@@ -40,10 +40,8 @@ export default function Navigation() {
     { name: "Payments", href: "/dashboard/payments", icon: Wallet },
     { name: "Tenants", href: "/dashboard/tenants", icon: Users },
     { name: "Manage Properties", href: "/dashboard/property-mgmt", icon: Building },
-    { name: "Manage Users", href: "/dashboard/manage-users", icon: UserCog },
-    // Development Phase Features
-    // { name: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
     { name: "Communication", href: "/dashboard/comms", icon: Mail },
+    { name: "Administration", href: "/dashboard/administration", icon: UserCog },
   ];
 
   return (
