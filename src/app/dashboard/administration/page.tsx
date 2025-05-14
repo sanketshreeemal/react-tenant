@@ -16,6 +16,7 @@ import { inviteUser, removeUserAccess } from '../../../lib/firebase/firestoreUti
 import { UserProfile, AllUser } from "@/types";
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { downloadAllDataAsExcel } from "../../../lib/utils/excelUtils";
 
 export default function ManageUsersPage() {
   const { user, loading: authLoading } = useAuth();
@@ -28,6 +29,8 @@ export default function ManageUsersPage() {
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [isFetchingUsers, setIsFetchingUsers] = useState(true);
   const [isInvitingUser, setIsInvitingUser] = useState(false);
+  const [isDownloadingData, setIsDownloadingData] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -164,6 +167,27 @@ export default function ManageUsersPage() {
       setFormSuccess(null);
       
       await fetchAuthorizedUsers();
+    }
+  };
+
+  const handleDownloadData = async () => {
+    if (!landlordId) {
+      setDownloadError("Cannot download data: Landlord ID is missing. Please refresh.");
+      return;
+    }
+    setIsDownloadingData(true);
+    setDownloadError(null);
+    try {
+      await downloadAllDataAsExcel(landlordId);
+    } catch (error: any) {
+      logger.error('ManageUsersPage: Failed to download data', {
+        component: 'ManageUsersPage',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        fullError: JSON.stringify(error)
+      });
+      setDownloadError(error.message || "Failed to download data. Please try again.");
+    } finally {
+      setIsDownloadingData(false);
     }
   };
 
@@ -328,20 +352,34 @@ export default function ManageUsersPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Manage Data</CardTitle>
-                <Button 
+                <Button
                   variant="default"
                   size="default"
                   className="bg-[#1F2937] hover:bg-[#111827] text-white transition-colors"
+                  onClick={handleDownloadData}
+                  disabled={isDownloadingData}
                 >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download Database
+                  {isDownloadingData ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4 mr-2" />
+                  )}
+                  {isDownloadingData ? 'Generating...' : 'Download Database'}
                 </Button>
               </div>
               <CardDescription>
                 Download and manage your data locally.
               </CardDescription>
             </CardHeader>
-
+            <CardContent>
+              {downloadError && (
+                <AlertMessage
+                  variant="error"
+                  message={downloadError}
+                  className="mt-4"
+                />
+              )}
+            </CardContent>
           </Card>
         </div>
       </div>
