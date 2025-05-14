@@ -131,7 +131,7 @@ function PropertyFormsContent() {
         propertyType,
         ownerDetails: ownerDetails.trim(),
         bankDetails: bankDetails.trim() || undefined,
-        groupName: selectedPropertyGroup === "Default" ? undefined : selectedPropertyGroup,
+        groupName: selectedPropertyGroup,
         numberOfBedrooms: propertyType === "Residential" ? numberOfBedrooms : null,
         squareFeetArea: squareFeetArea || null,
       };

@@ -170,6 +170,7 @@ function CommsPageContent() {
                 id: doc.id,
                 leaseId: data.leaseId,
                 unitId: data.unitId,
+                unitNumber: data.unitNumber || '',
                 tenantName: data.tenantName,
                 officialRent: data.officialRent,
                 actualRentPaid: data.actualRentPaid,
@@ -177,7 +178,7 @@ function CommsPageContent() {
                 collectionMethod: data.collectionMethod,
                 rentalPeriod: data.rentalPeriod,
                 paymentDate: data.paymentDate?.toDate() || new Date(),
-                landlordComments: data.landlordComments,
+                comments: data.comments,
                 createdAt: data.createdAt?.toDate() || new Date(),
                 updatedAt: data.updatedAt?.toDate() || new Date()
               };

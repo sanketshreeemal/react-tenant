@@ -55,8 +55,7 @@ interface PropertyDetailsExcelRow {
 
 // Interface for Payment Details row data (from RentPayment)
 interface PaymentDetailsExcelRow {
-  'Lease ID': string;
-  'Unit ID': string;
+  'Unit Number': string;
   'Tenant Name': string;
   'Official Rent': number | string;
   'Actual Rent Paid': number | string;
@@ -140,8 +139,7 @@ export const downloadAllDataAsExcel = async (landlordId: string): Promise<void> 
     // Process and add Payment Details sheet
     if (rentPayments && rentPayments.length > 0) {
       const paymentDetailsRows: PaymentDetailsExcelRow[] = rentPayments.map(payment => ({
-        'Lease ID': payment.leaseId || '',
-        'Unit ID': payment.unitId || '',
+        'Unit Number': payment.unitNumber || '',
         'Tenant Name': payment.tenantName || 'N/A',
         'Official Rent': payment.officialRent === undefined || payment.officialRent === null ? 'N/A' : payment.officialRent,
         'Actual Rent Paid': payment.actualRentPaid === undefined || payment.actualRentPaid === null ? '' : payment.actualRentPaid,
@@ -149,7 +147,7 @@ export const downloadAllDataAsExcel = async (landlordId: string): Promise<void> 
         'Collection Method': payment.collectionMethod || '',
         'Rental Period (YYYY-MM)': payment.rentalPeriod || '',
         'Payment Date': formatDate(payment.paymentDate),
-        'Landlord Comments': payment.landlordComments || '',
+        'Landlord Comments': payment.comments || '',
         'Created At': formatDate(payment.createdAt),
         'Updated At': formatDate(payment.updatedAt),
       }));
