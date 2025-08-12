@@ -47,7 +47,62 @@ Allow landlords to:
 
     ---
 
-### 📦 File Structure
+### File Structure
 src/lib/utils/excelutils.ts
+File structure to fetch, format and structure data from Firestore and lastly create and downloads the excel file 
 
 
+---
+
+## Flow: Step-by-Step Implementation
+
+### 1. **Click Event Handler**
+- On click, invoke a handler that:
+  - Gets the `landlordId` from auth/session
+  - Calls Firestore fetch utility
+  - Passes result to XLSX utility
+  - Triggers browser download
+
+### 2. **Fetching Data**
+- Utility: `fetchTenantLeaseData(landlordId: string): Promise<TenantRow[]>`
+- Convert timestamps using `date-fns` or similar
+- Ensure null-safety on all fields
+
+### 3. **Formatting for Excel**
+- Utility: `generateExcelFile({ tenants })`
+- Uses `xlsx`:
+  - Sheet name: `"Tenant Leases"`
+  - Column headers in friendly human-readable format
+  - Data passed as array of objects
+- Example columns:
+  - `Tenant Name`, `Phone Number`, `Lease Start Date`, `Rent Amount`, etc.
+
+### 4. **File Generation and Download**
+- Uses `xlsx.utils.book_new`, `xlsx.utils.json_to_sheet`, and `xlsx.writeFile`
+- File name: `data_{YYYYMMDD}.xlsx`
+
+### 5. **UI Feedback**
+- While downloading:
+  - Disable button
+  - Show `Spinner`
+- On success:
+  - Download triggers automatically
+- On failure:
+  - Show Alert Message Component: `"Failed to generate file. Please try again."`
+
+---
+
+## 🧱 Implementation Guidelines
+To fetch firestore data
+    Function: fetchTenantLeaseData(landlordId: string): Promise<TenantRow[]>
+    Use getDocs(collection(db, landlords/${landlordId}/leases))
+    Format timestamps and fallback to "" for missing fields
+To Export data into excel workbook and download 
+    Function: exportTenantDataToExcel(tenantRows: any[])
+    Use xlsx to: Create workbook
+    Add "Tenant Leases" sheet
+    Call writeFile(workbook, 'data_20250512.xlsx')
+
+For Next integration to add data from other collections (should be able to specify which collections)- 
+    Add each dataset using xlsx.utils.json_to_sheet(data, options)
+    Append to workbook with XLSX.utils.book_append_sheet(wb, sheet, sheetName)
