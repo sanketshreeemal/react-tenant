@@ -16,30 +16,13 @@
 
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions/v1";
-import * as functionsConfig from "firebase-functions";
-import nodemailer from "nodemailer";
 import { z } from "zod";
+import { generateMonthlyReport, MonthlyReportData } from "./templates/monthlyReportTemplate";
+import { sendEmail, logSentEmail } from "./services/emailService";
 
 // Initialize Firebase Admin exactly once (Cloud Functions cold start)
 if (!admin.apps.length) {
   admin.initializeApp();
-}
-
-/**
- * Shared date utilities for consistent range filtering across the file.
- */
-function toDate(value: any): Date | null {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (typeof value?.toDate === "function") return value.toDate(); // Firestore Timestamp
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function isInRangeInclusive(value: any, start: Date, end: Date): boolean {
-  const d = toDate(value);
-  if (!d) return false;
-  return d >= start && d <= end;
 }
 
 /**
@@ -66,65 +49,15 @@ function getPreviousMonthRange(now: Date = new Date()): { start: Date; end: Date
  */
 const summaryReportSchema = z.object({
   period: z.string(),
+  rentPeriodMonth: z.string(),
   totalRentCollected: z.number(),
-  newLeases: z.number(),
-  endedLeases: z.number(),
   occupancyRate: z.number(),
 });
 
 type SummaryReportData = z.infer<typeof summaryReportSchema>;
 
-const summaryReportTemplate = {
-  id: "summary-report",
-  name: "Summary Report",
-  description: "Sends a summary report of key statistics for the period.",
-  schema: summaryReportSchema,
-  generate: (data: SummaryReportData) => ({
-    subject: `Summary Report: ${data.period}`,
-    html: `
-      <p>Hello,</p>
-      <p>Here is your summary report for <strong>${data.period}</strong>:</p>
-      <ul>
-        <li>Total Rent Collected: ₹${data.totalRentCollected.toLocaleString("en-IN")}</li>
-        <li>New Leases: ${data.newLeases}</li>
-        <li>Ended Leases: ${data.endedLeases}</li>
-        <li>Occupancy Rate: ${data.occupancyRate}%</li>
-      </ul>
-      <p>See your dashboard for more details.</p>
-    `.trim(),
-  }),
-};
-
-type MailAttachment = { filename: string; content: string };
-
-async function sendEmail({ to, subject, html, attachments }: { to: string; subject: string; html: string; attachments?: MailAttachment[] }) {
-  const user = (functionsConfig as any).config()?.gmail?.user as string | undefined;
-  const pass = (functionsConfig as any).config()?.gmail?.pass as string | undefined;
-  if (!user || !pass) {
-    throw new Error("Missing gmail.user or gmail.pass in functions config");
-  }
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: { user, pass },
-  });
-  return transporter.sendMail({ from: `Property Management <${user}>`, to, subject, html, attachments });
-}
-
-async function logSentEmail(
-  landlordId: string,
-  emailData: {
-    recipients: string[];
-    subject: string;
-    content: string;
-    sentAt: Date;
-    status: "sent" | "failed" | "pending";
-    templateId?: string;
-    error?: string;
-  }
-) {
-  const db = admin.firestore();
-  await db.collection("landlords").doc(landlordId).collection("emails").add(emailData);
-}
+// Template ID constant for logging
+const SUMMARY_REPORT_TEMPLATE_ID = "summary-report";
 
 async function getSummaryReportData(
   landlordId: string,
@@ -140,24 +73,39 @@ async function getSummaryReportData(
   const leases = leasesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as any));
   const payments = paymentsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as any));
   const inventory = inventorySnap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as any));
-  // Period helpers for base KPIs: reuse shared isInRangeInclusive
-  const newLeases = leases.filter((l) => isInRangeInclusive(l.createdAt, periodStart, periodEnd)).length;
-  const endedLeases = leases.filter(
-    (l) => l.leaseEndDate && isInRangeInclusive(l.leaseEndDate, periodStart, periodEnd)
-  ).length;
+
+  // Calculate rentalPeriodKey for rent collection (arrears model)
+  // If report period is March (periodStart = March 1), we want February rent (rentalPeriod = "2025-02")
+  // which was paid in March. So rentalPeriodKey is the previous month of periodStart.
+  const periodYear = periodStart.getUTCFullYear();
+  const periodMonth = periodStart.getUTCMonth(); // 0-indexed (0 = January, 11 = December)
+  const rentalPeriodMonth = periodMonth === 0 ? 11 : periodMonth - 1;
+  const rentalPeriodYear = periodMonth === 0 ? periodYear - 1 : periodYear;
+  const rentalPeriodKey = `${rentalPeriodYear}-${String(rentalPeriodMonth + 1).padStart(2, "0")}`;
+
+  // Calculate rent period month name for display (arrears model explanation)
+  const rentPeriodDate = new Date(Date.UTC(rentalPeriodYear, rentalPeriodMonth, 1));
+  const rentPeriodMonthName = rentPeriodDate.toLocaleString("en-US", { month: "long", year: "numeric" });
+
+  // Total Rent Collected: Use rentalPeriod (not paymentDate) and filter by Rent Payment type
+  // This aligns with arrears model where rent for Month Y is paid in Month Y+1
   const totalRentCollected = payments
-    .filter((p) => isInRangeInclusive(p.paymentDate, periodStart, periodEnd))
+    .filter((p) => {
+      const isRentPayment = (p.paymentType || "Rent Payment") === "Rent Payment";
+      const matchesRentalPeriod = p.rentalPeriod === rentalPeriodKey;
+      return isRentPayment && matchesRentalPeriod;
+    })
     .reduce((sum, p) => sum + (Number(p.actualRentPaid) || 0), 0);
-  const activeLeases = leases.filter(
-    (l) => l.isActive !== false && (!l.leaseEndDate || (l.leaseEndDate.toDate?.() ?? new Date(l.leaseEndDate)) > periodEnd)
-  );
+
+  // Occupancy Rate: Use isActive === true (strict) and do NOT check leaseEndDate
+  // Many properties have expired leases (end date in past) but tenants still pay rent and should be counted as occupied
+  const activeLeases = leases.filter((l) => l.isActive === true);
   const totalUnits = inventory.length;
   const occupancyRate = totalUnits > 0 ? Math.round((activeLeases.length / totalUnits) * 100) : 0;
   return {
     period: `${periodStart.toISOString().slice(0, 10)} to ${periodEnd.toISOString().slice(0, 10)}`,
+    rentPeriodMonth: rentPeriodMonthName,
     totalRentCollected,
-    newLeases,
-    endedLeases,
     occupancyRate,
   };
 }
@@ -196,15 +144,18 @@ async function buildMonthlyReport(
 
   // Period checks below use either rentalPeriod keys or explicit comparisons; shared helper available above if needed
 
-  // Active leases at period end
-  const activeAtEnd = leases.filter(
-    (l) => l.isActive !== false && (!l.leaseEndDate || (l.leaseEndDate.toDate?.() ?? new Date(l.leaseEndDate)) > periodEnd)
-  );
+  // Active leases: Use isActive === true (strict) and do NOT check leaseEndDate
+  // Many properties have expired leases (end date in past) but tenants still pay rent and should be counted as occupied
+  const activeAtEnd = leases.filter((l) => l.isActive === true);
 
-  // Month key (rentalPeriod)
-  const yyyy = periodStart.getUTCFullYear();
-  const mm = String(periodStart.getUTCMonth() + 1).padStart(2, "0");
-  const rentalPeriodKey = `${yyyy}-${mm}`;
+  // Calculate rentalPeriodKey for rent collection (arrears model)
+  // If report period is March (periodStart = March 1), we want February rent (rentalPeriod = "2025-02")
+  // which was paid in March. So rentalPeriodKey is the previous month of periodStart.
+  const periodYear = periodStart.getUTCFullYear();
+  const periodMonth = periodStart.getUTCMonth(); // 0-indexed (0 = January, 11 = December)
+  const rentalPeriodMonth = periodMonth === 0 ? 11 : periodMonth - 1;
+  const rentalPeriodYear = periodMonth === 0 ? periodYear - 1 : periodYear;
+  const rentalPeriodKey = `${rentalPeriodYear}-${String(rentalPeriodMonth + 1).padStart(2, "0")}`;
 
   const monthPayments = payments.filter(
     (p) => p.rentalPeriod === rentalPeriodKey && ((p.paymentType || "Rent Payment") === "Rent Payment")
@@ -227,7 +178,8 @@ async function buildMonthlyReport(
 
   // Expired and expiring soon (30 days) — based on all leases still marked active
   const today = new Date();
-  const activeNow = leases.filter((l) => l.isActive !== false);
+  // Use isActive === true (strict) to match occupancy calculation
+  const activeNow = leases.filter((l) => l.isActive === true);
   const expirations = activeNow.map((l) => {
     const endDate = l.leaseEndDate ? (l.leaseEndDate.toDate?.() ?? new Date(l.leaseEndDate)) : null;
     const daysLeft = endDate ? Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : 99999;
@@ -236,7 +188,7 @@ async function buildMonthlyReport(
   const expiredLeases = expirations.filter((e) => e.daysLeft < 0).sort((a, b) => a.daysLeft - b.daysLeft);
   const expiringSoon = expirations.filter((e) => e.daysLeft >= 0 && e.daysLeft <= 30).sort((a, b) => a.daysLeft - b.daysLeft);
 
-  // Vacancies aligned with dashboard: units without a currently active lease (isActive !== false)
+  // Vacancies aligned with dashboard: units without a currently active lease (isActive === true)
   const activeUnitIdSet = new Set(activeNow.map((l) => l.unitId));
   const vacantUnits = inventory.filter((inv) => !activeUnitIdSet.has(inv.id));
   const paymentsByUnitDesc = new Map<string, Array<{ paymentDate?: any; actualRentPaid?: number }>>();
@@ -315,6 +267,9 @@ export const summaryReportMonthly = functions.pubsub
     // Identify the previous month range
     const { start, end, label } = getPreviousMonthRange(new Date());
 
+    // Calculate period month name for header (e.g., "January 2026")
+    const periodMonthName = start.toLocaleString("en-US", { month: "long", year: "numeric" });
+
     try {
       // Aggregate landlord report data (base KPIs)
       const rawData = await getSummaryReportData(landlordId, start, end);
@@ -323,55 +278,23 @@ export const summaryReportMonthly = functions.pubsub
       // Enriched sections and CSV
       const details = await buildMonthlyReport(landlordId, start, end, label);
 
-      const currency = (n: number | undefined) => (typeof n === "number" ? `₹${n.toLocaleString("en-IN")}` : "-");
-      const groupTable = Object.entries(details.rentCollectedByGroup)
-        .sort((a, b) => b[1] - a[1])
-        .map(([group, amount]) => `<tr><td>${group}</td><td>${currency(amount)}</td></tr>`)
-        .join("");
-      const delinquentRows = details.periodDelinquencies
-        .map((d) => `<tr><td>${d.unitNumber}</td><td>${d.tenantName || ""}</td><td>${currency(d.expectedRent)}</td></tr>`)
-        .join("");
-      const expiredRows = details.expiredLeases
-        .map((e) => `<tr><td>${e.unitNumber}</td><td>${e.tenantName || ""}</td><td>${currency(e.rentAmount)}</td><td>${e.daysLeft}</td></tr>`)
-        .join("");
-      const expSoonRows = details.expiringSoon
-        .map((e) => `<tr><td>${e.unitNumber}</td><td>${e.tenantName || ""}</td><td>${currency(e.rentAmount)}</td><td>${e.daysLeft}</td></tr>`)
-        .join("");
-      const vacancyRows = details.vacancyRows
-        .map((v) => `<tr><td>${v.unitNumber}</td><td>${v.groupName}</td><td>${v.lastRent !== undefined ? currency(v.lastRent) : "No rent data"}</td></tr>`)
-        .join("");
+      // Prepare data for monthly report template
+      const monthlyReportData: MonthlyReportData = {
+        period: data.period,
+        periodLabel: label,
+        periodMonthName: periodMonthName,
+        rentPeriodMonth: data.rentPeriodMonth,
+        totalRentCollected: data.totalRentCollected,
+        occupancyRate: data.occupancyRate,
+        rentCollectedByGroup: details.rentCollectedByGroup,
+        periodDelinquencies: details.periodDelinquencies,
+        expiredLeases: details.expiredLeases,
+        expiringSoon: details.expiringSoon,
+        vacancyRows: details.vacancyRows,
+      };
 
-      const subject = `Monthly Report: ${label}`;
-      const html = `
-        <div>
-          <p>Hello,</p>
-          <p>Here is your summary report for <strong>${label}</strong>.</p>
-          <h3>Portfolio Snapshot</h3>
-          <ul>
-            <li>Total Rent Collected: ${currency(data.totalRentCollected)}</li>
-            <li>New Leases: ${data.newLeases}</li>
-            <li>Ended Leases: ${data.endedLeases}</li>
-            <li>Occupancy Rate: ${data.occupancyRate}%</li>
-          </ul>
-
-          <h3>Rent Collection by Property</h3>
-          <table border="1" cellpadding="6" cellspacing="0"><thead><tr><th>Property</th><th>Collected</th></tr></thead><tbody>${groupTable || "<tr><td colspan=\"2\">No payments this period</td></tr>"}</tbody></table>
-
-          <h3>Delinquencies (This Month)</h3>
-          <table border="1" cellpadding="6" cellspacing="0"><thead><tr><th>Unit</th><th>Tenant</th><th>Expected Rent</th></tr></thead><tbody>${delinquentRows || "<tr><td colspan=\"3\">No delinquencies this month</td></tr>"}</tbody></table>
-
-          <h3>Leases</h3>
-          <h4>Expired</h4>
-          <table border="1" cellpadding="6" cellspacing="0"><thead><tr><th>Unit</th><th>Tenant</th><th>Rent</th><th>Days Since Expiry</th></tr></thead><tbody>${expiredRows || "<tr><td colspan=\"4\">None</td></tr>"}</tbody></table>
-          <h4>Expiring in Next 30 Days</h4>
-          <table border="1" cellpadding="6" cellspacing="0"><thead><tr><th>Unit</th><th>Tenant</th><th>Rent</th><th>Days Left</th></tr></thead><tbody>${expSoonRows || "<tr><td colspan=\"4\">None</td></tr>"}</tbody></table>
-
-          <h3>Vacancies</h3>
-          <table border="1" cellpadding="6" cellspacing="0"><thead><tr><th>Unit</th><th>Property</th><th>Last recorded Rent</th></tr></thead><tbody>${vacancyRows || "<tr><td colspan=\"3\">None</td></tr>"}</tbody></table>
-          <p style="font-size:12px;color:#555;margin-top:6px;">Note: "Last recorded Rent" reflects the unit's rent before it went vacant.</p>
-          <p>See your dashboard for more details.</p>
-        </div>
-      `;
+      // Generate email using template
+      const { subject, html } = generateMonthlyReport(monthlyReportData);
 
       // Parse recipients and send individually (comma or semicolon separated)
       const recipients = to
@@ -386,14 +309,19 @@ export const summaryReportMonthly = functions.pubsub
 
       const results = await Promise.allSettled(
         recipients.map(async (recipient) => {
-          await sendEmail({ to: recipient, subject, html, attachments: [{ filename: details.csv.filename, content: details.csv.content }] });
+          await sendEmail({
+            to: recipient,
+            subject,
+            html,
+            attachments: [{ filename: details.csv.filename, content: details.csv.content }],
+          });
           await logSentEmail(landlordId, {
             recipients: [recipient],
             subject,
             content: html,
             sentAt: new Date(),
             status: "sent",
-            templateId: summaryReportTemplate.id,
+            templateId: SUMMARY_REPORT_TEMPLATE_ID,
           });
           return recipient;
         })
@@ -425,7 +353,7 @@ export const summaryReportMonthly = functions.pubsub
           content: "Failed to render or send email. See logs for details.",
           sentAt: new Date(),
           status: "failed",
-          templateId: summaryReportTemplate.id,
+          templateId: SUMMARY_REPORT_TEMPLATE_ID,
           error: error?.message || String(error),
         });
       } catch (logErr: any) {
