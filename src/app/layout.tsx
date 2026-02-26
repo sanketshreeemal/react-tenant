@@ -4,8 +4,8 @@ import type { Metadata } from "next";
 import React from "react";
 
 export const metadata: Metadata = {
-  title: "Tenant Management System",
-  description: "A comprehensive system for managing tenants, leases, and rent payments",
+  title: "Urban Leases — Property Management for Modern Landlords",
+  description: "Real-time portfolio visibility, automated tenant communication, and smart reporting. Urban Leases turns offline rental assets into a live, manageable dashboard.",
 };
 
 export default function RootLayout({

@@ -23,7 +23,7 @@
 }
 
 /* Import fonts needed for the theme */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Roboto+Mono:wght@400;500&display=swap');
 
 @layer base {
   :root {
@@ -53,6 +53,7 @@
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
   }
+
   .dark {
     --background: 20 14.3% 4.1%;
     --foreground: 60 9.1% 97.8%;
@@ -83,51 +84,223 @@
 
 /* Custom theme utility classes for easier styling */
 @layer utilities {
+
   /* Text styling utilities */
   .text-primary-theme {
     color: var(--textPrimary, theme('colors.theme-text-primary'));
   }
+
   .text-secondary-theme {
     color: var(--textSecondary, theme('colors.theme-text-secondary'));
   }
-  
+
   /* Background styling utilities */
   .bg-surface {
     background-color: var(--surface, theme('colors.theme-surface'));
   }
-  
+
   /* Border styling utilities */
   .border-theme {
     border-color: var(--border-color, theme('colors.theme-border'));
   }
-  
+
   /* Shadow utilities */
   .shadow-theme-sm {
     box-shadow: var(--shadow-sm, theme('boxShadow.theme-sm'));
   }
+
   .shadow-theme-md {
     box-shadow: var(--shadow-md, theme('boxShadow.theme-md'));
   }
-  
+
   /* Spacing helper classes */
-  .p-theme-xs { padding: var(--spacing-xs, theme('spacing.theme-xs')); }
-  .p-theme-sm { padding: var(--spacing-sm, theme('spacing.theme-sm')); }
-  .p-theme-md { padding: var(--spacing-md, theme('spacing.theme-md')); }
-  .p-theme-lg { padding: var(--spacing-lg, theme('spacing.theme-lg')); }
-  .p-theme-xl { padding: var(--spacing-xl, theme('spacing.theme-xl')); }
-  
-  .m-theme-xs { margin: var(--spacing-xs, theme('spacing.theme-xs')); }
-  .m-theme-sm { margin: var(--spacing-sm, theme('spacing.theme-sm')); }
-  .m-theme-md { margin: var(--spacing-md, theme('spacing.theme-md')); }
-  .m-theme-lg { margin: var(--spacing-lg, theme('spacing.theme-lg')); }
-  .m-theme-xl { margin: var(--spacing-xl, theme('spacing.theme-xl')); }
+  .p-theme-xs {
+    padding: var(--spacing-xs, theme('spacing.theme-xs'));
+  }
+
+  .p-theme-sm {
+    padding: var(--spacing-sm, theme('spacing.theme-sm'));
+  }
+
+  .p-theme-md {
+    padding: var(--spacing-md, theme('spacing.theme-md'));
+  }
+
+  .p-theme-lg {
+    padding: var(--spacing-lg, theme('spacing.theme-lg'));
+  }
+
+  .p-theme-xl {
+    padding: var(--spacing-xl, theme('spacing.theme-xl'));
+  }
+
+  .m-theme-xs {
+    margin: var(--spacing-xs, theme('spacing.theme-xs'));
+  }
+
+  .m-theme-sm {
+    margin: var(--spacing-sm, theme('spacing.theme-sm'));
+  }
+
+  .m-theme-md {
+    margin: var(--spacing-md, theme('spacing.theme-md'));
+  }
+
+  .m-theme-lg {
+    margin: var(--spacing-lg, theme('spacing.theme-lg'));
+  }
+
+  .m-theme-xl {
+    margin: var(--spacing-xl, theme('spacing.theme-xl'));
+  }
 }
 
 @layer base {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* ============================
+   Landing Page Design System
+   ============================ */
+
+html {
+  scroll-behavior: smooth;
+}
+
+:root {
+  /* Landing page earth-tone palette */
+  --lp-brown-900: #3E2723;
+  --lp-brown-800: #4E342E;
+  --lp-brown-700: #5D4037;
+  --lp-brown-100: #F5F0EB;
+  --lp-brown-50: #FAF7F4;
+
+  --lp-emerald-600: #059669;
+  --lp-emerald-500: #10B981;
+  --lp-emerald-400: #34D399;
+  --lp-emerald-50: #ECFDF5;
+
+  --lp-amber-500: #F59E0B;
+  --lp-amber-400: #FBBF24;
+  --lp-amber-50: #FFFBEB;
+
+  --lp-sand-100: #F5F1EC;
+  --lp-sand-200: #E8E0D6;
+  --lp-sand-50: #FAFAF7;
+
+  --lp-text-dark: #1C1917;
+  --lp-text-medium: #44403C;
+  --lp-text-light: #78716C;
+  --lp-text-white: #FAFAF9;
+}
+
+/* Hero gradient mesh animation */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes floatUp {
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes floatUpSlow {
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseGlow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);
+  }
+
+  50% {
+    box-shadow: 0 0 40px rgba(16, 185, 129, 0.25);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.lp-gradient-mesh {
+  background: linear-gradient(135deg,
+      #FFFBF5 0%,
+      #FFF8EE 20%,
+      #FEF3E2 45%,
+      #FFF6E9 65%,
+      #FFFBF5 85%,
+      #FFF9F0 100%);
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+}
+
+.lp-float {
+  animation: floatUp 6s ease-in-out infinite;
+}
+
+.lp-float-slow {
+  animation: floatUpSlow 8s ease-in-out infinite;
+}
+
+.lp-pulse-glow {
+  animation: pulseGlow 3s ease-in-out infinite;
+}
+
+.lp-section {
+  @apply w-full;
+}
+
+.lp-container {
+  @apply max-w-7xl mx-auto px-6 md:px-8 lg:px-12;
 }
