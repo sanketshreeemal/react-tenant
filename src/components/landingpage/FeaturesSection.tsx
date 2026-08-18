@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { motion, useInView } from "framer-motion";
+import Image from "next/image";
 import {
     LayoutDashboard,
     Bell,
@@ -15,7 +16,8 @@ const features = [
         subtitle: "Every property. Every unit. Every lease. At a glance.",
         description:
             "Drill into each asset's performance — from occupancy and rent rolls to lease expirations and payment history. No more spreadsheets, no more guesswork.",
-        screenshotLabel: "Dashboard Screenshot",
+        screenshotLabel: "Dashboard Illustration",
+        imageSrc: "/images/command-center.png",
         gradient: "from-amber-50 to-orange-50/50",
         iconBg: "bg-amber-100",
         iconColor: "text-amber-700",
@@ -27,7 +29,8 @@ const features = [
         subtitle: "Rent reminders, maintenance alerts, tenant messaging — on autopilot.",
         description:
             "Customizable automated messages keep tenants informed about due rent, upcoming renewals, and maintenance. Fewer missed payments, happier tenants.",
-        screenshotLabel: "Communication Screenshot",
+        screenshotLabel: "Communication Illustration",
+        imageSrc: "/images/communication.png",
         gradient: "from-amber-50 to-amber-100/50",
         iconBg: "bg-amber-100",
         iconColor: "text-amber-600",
@@ -39,7 +42,8 @@ const features = [
         subtitle: "Portfolio performance, delivered to your inbox.",
         description:
             "Frequent, customizable reports surface key metrics — vacancies, delinquencies, rent adjustments — so you're always ahead. What gets measured, gets done.",
-        screenshotLabel: "Reporting Screenshot",
+        screenshotLabel: "Reporting Illustration",
+        imageSrc: "/images/reporting.png",
         gradient: "from-stone-50 to-stone-100/50",
         iconBg: "bg-stone-100",
         iconColor: "text-stone-600",
@@ -62,6 +66,49 @@ const itemVariants = {
         transition: { duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] },
     },
 };
+
+function FeatureCardImage({ feature }: { feature: typeof features[0] }) {
+    const [imageError, setImageError] = useState(false);
+    const Icon = feature.icon;
+
+    return (
+        <div
+            className={`relative w-full aspect-[4/3] rounded-2xl bg-gradient-to-br ${feature.gradient} border ${feature.accentBorder} shadow-lg overflow-hidden group`}
+        >
+            {!imageError ? (
+                <Image
+                    src={feature.imageSrc}
+                    alt={feature.title}
+                    fill
+                    className="object-cover transition-transform duration-500 group-hover:scale-105"
+                    onError={() => setImageError(true)}
+                />
+            ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-8">
+                    <div className="w-16 h-16 rounded-2xl bg-white/80 backdrop-blur-sm shadow-sm flex items-center justify-center mb-4 group-hover:scale-105 transition-transform duration-300">
+                        <Icon className={`w-8 h-8 ${feature.iconColor}`} />
+                    </div>
+                    <p className="text-sm font-medium text-stone-600">
+                        {feature.screenshotLabel}
+                    </p>
+                    <p className="text-xs text-stone-400 mt-1">
+                        Upload to {feature.imageSrc}
+                    </p>
+                </div>
+            )}
+
+            {/* Decorative grid pattern */}
+            <div
+                className="absolute inset-0 opacity-[0.03] pointer-events-none"
+                style={{
+                    backgroundImage:
+                        "linear-gradient(90deg, #1C1917 1px, transparent 1px), linear-gradient(#1C1917 1px, transparent 1px)",
+                    backgroundSize: "24px 24px",
+                }}
+            />
+        </div>
+    );
+}
 
 export default function FeaturesSection() {
     const ref = useRef(null);
@@ -128,33 +175,9 @@ export default function FeaturesSection() {
                                     </p>
                                 </div>
 
-                                {/* Screenshot placeholder */}
+                                {/* Feature illustration asset */}
                                 <div className={`${isReversed ? "lg:order-1" : ""}`}>
-                                    <div
-                                        className={`relative w-full aspect-[4/3] rounded-2xl bg-gradient-to-br ${feature.gradient} border ${feature.accentBorder} shadow-lg overflow-hidden group`}
-                                    >
-                                        {/* Placeholder content */}
-                                        <div className="absolute inset-0 flex flex-col items-center justify-center p-8">
-                                            <div className="w-16 h-16 rounded-2xl bg-white/80 backdrop-blur-sm shadow-sm flex items-center justify-center mb-4 group-hover:scale-105 transition-transform duration-300">
-                                                <Icon className={`w-8 h-8 ${feature.iconColor}`} />
-                                            </div>
-                                            <p className="text-sm font-medium text-stone-400">
-                                                {feature.screenshotLabel}
-                                            </p>
-                                            <p className="text-xs text-stone-300 mt-1">
-                                                Product screenshot placeholder
-                                            </p>
-                                        </div>
-
-                                        {/* Decorative grid pattern */}
-                                        <div className="absolute inset-0 opacity-[0.03]"
-                                            style={{
-                                                backgroundImage:
-                                                    "linear-gradient(90deg, #1C1917 1px, transparent 1px), linear-gradient(#1C1917 1px, transparent 1px)",
-                                                backgroundSize: "24px 24px",
-                                            }}
-                                        />
-                                    </div>
+                                    <FeatureCardImage feature={feature} />
                                 </div>
                             </motion.div>
                         );
