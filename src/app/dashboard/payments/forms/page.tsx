@@ -140,17 +140,7 @@ function PaymentFormsContent() {
   
   const uniquePaymentTypes = getUniquePaymentTypes();
 
-  // Generate rental period options (4 months before and after current month)
-  const rentalPeriodOptions = [];
-  const currentDate = new Date();
-  
-  for (let i = -4; i <= 4; i++) {
-    const date = i < 0 ? subMonths(currentDate, Math.abs(i)) : addMonths(currentDate, i);
-    const value = format(date, "yyyy-MM");
-    const label = format(date, "MMMM yyyy");
-    
-    rentalPeriodOptions.push({ value, label });
-  }
+
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -818,26 +808,18 @@ function PaymentFormsContent() {
                     </div>
                     
                     <div>
-                      <label htmlFor="rentalPeriod" className="block text-sm font-medium" style={{ color: theme.colors.textSecondary }}>
+                      <label htmlFor="rentalPeriod" className="block text-sm font-medium mb-1" style={{ color: theme.colors.textSecondary }}>
                         Payment Period <span className="text-red-500">*</span>
                       </label>
-                      <Select
+                      <Input
+                        type="month"
+                        id="rentalPeriod"
                         name="rentalPeriod"
                         value={formData.rentalPeriod}
-                        onValueChange={(value) => handleInputChange({ target: { name: "rentalPeriod", value } } as any)}
-                        disabled={!!viewingPaymentId}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select period" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {rentalPeriodOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onChange={handleInputChange}
+                        readOnly={!!viewingPaymentId}
+                        required
+                      />
                     </div>
                     
                     <div>

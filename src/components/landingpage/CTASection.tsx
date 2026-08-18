@@ -2,9 +2,10 @@
 
 import React, { useRef } from "react";
 import { motion, useInView } from "framer-motion";
-import Link from "next/link";
+import { useAuth } from "@/lib/hooks/useAuth";
 
 export default function CTASection() {
+    const { signInWithGoogle } = useAuth();
     const ref = useRef(null);
     const isInView = useInView(ref, { once: true, margin: "-80px" });
 
@@ -56,9 +57,10 @@ export default function CTASection() {
                             animate={isInView ? { opacity: 1, y: 0 } : {}}
                             transition={{ duration: 0.6, delay: 0.4 }}
                         >
-                            <Link
-                                href="/dashboard"
-                                className="inline-flex items-center gap-2 px-8 py-4 text-base font-semibold rounded-full bg-amber-400 text-stone-900 hover:bg-amber-300 transition-all duration-200 shadow-lg shadow-amber-400/20 hover:shadow-xl hover:-translate-y-0.5"
+                            <button
+                                onClick={signInWithGoogle}
+                                type="button"
+                                className="inline-flex items-center gap-2 px-8 py-4 text-base font-semibold rounded-full bg-amber-400 text-stone-900 hover:bg-amber-300 transition-all duration-200 shadow-lg shadow-amber-400/20 hover:shadow-xl hover:-translate-y-0.5 cursor-pointer"
                             >
                                 Get Started Free
                                 <svg
@@ -74,7 +76,7 @@ export default function CTASection() {
                                     <path d="M5 12h14" />
                                     <path d="m12 5 7 7-7 7" />
                                 </svg>
-                            </Link>
+                            </button>
                         </motion.div>
                     </div>
                 </motion.div>

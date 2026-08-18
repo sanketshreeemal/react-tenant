@@ -3,8 +3,10 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { useAuth } from "@/lib/hooks/useAuth";
 
 export default function Navbar() {
+    const { signInWithGoogle } = useAuth();
     const [scrolled, setScrolled] = useState(false);
 
     useEffect(() => {
@@ -49,9 +51,10 @@ export default function Navbar() {
                 </Link>
 
                 {/* Login Button */}
-                <Link
-                    href="/dashboard"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-full bg-stone-800 text-white hover:bg-stone-900 transition-all duration-200 shadow-sm hover:shadow-md"
+                <button
+                    onClick={signInWithGoogle}
+                    type="button"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-full bg-stone-800 text-white hover:bg-stone-900 transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer"
                 >
                     Login
                     <svg
@@ -67,7 +70,7 @@ export default function Navbar() {
                         <path d="M5 12h14" />
                         <path d="m12 5 7 7-7 7" />
                     </svg>
-                </Link>
+                </button>
             </div>
         </motion.nav>
     );
